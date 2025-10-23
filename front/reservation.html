@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Réservation d'Hôtel</title>
+  <link rel="stylesheet" href="public/styles.css" />
+</head>
+<body>
+  <h1>🔍 Recherche d’Hôtels</h1>
+
+  <form id="searchForm">
+  <label>Check-in:
+    <input type="date" id="checkin" required />
+  </label>
+  <label>Check-out:
+    <input type="date" id="checkout" required />
+  </label>
+  <label>Adultes:
+    <input type="number" id="adults" min="1" value="2" required />
+  </label>
+  <label>Enfants:
+    <input type="number" id="children" min="0" value="0" />
+  </label>
+
+  <label>Langue:
+    <select id="language">
+      <option value="fr">Français</option>
+      <option value="en">Anglais</option>
+    </select>
+  </label>
+  <label>Devise:
+    <select id="currency">
+      <option value="EUR">EUR</option>
+      <option value="USD">USD</option>
+    </select>
+  </label>
+
+  <fieldset style="border:1px solid #ccc;padding:1rem;border-radius:8px;">
+    <legend>Type de recherche</legend>
+    <label><input type="radio" name="mode" value="region" checked /> Par région</label>
+    <label><input type="radio" name="mode" value="geo" /> Par localisation (lat/lon)</label>
+
+    <div id="regionFields" style="margin-top:.8rem;">
+      <label>Region ID:
+        <input type="text" id="region_id" placeholder="ex: 12345" />
+      </label>
+    </div>
+
+    <div id="geoFields" style="display:none;margin-top:.8rem;">
+      <label>Latitude:
+        <input type="number" step="0.000001" id="latitude" placeholder="48.8566" />
+      </label>
+      <label>Longitude:
+        <input type="number" step="0.000001" id="longitude" placeholder="2.3522" />
+      </label>
+      <label>Rayon (mètres):
+        <input type="number" id="radius" value="1500" min="100" max="5000" />
+      </label>
+    </div>
+  </fieldset>
+
+  <button type="submit">Chercher</button>
+</form>
+
+<div id="results"></div>
+
+
+  <div id="results"></div>
+
+  <script>
+  const form = document.getElementById('searchForm');
+  const resultsDiv = document.getElementById('results');
+
+  // Toggle fields based on mode
+  const modeRadios = document.querySelectorAll('input[name="mode"]');
+  const regionFields = document.getElementById('regionFields');
+  const geoFields = document.getElementById('geoFields');
+  modeRadios.forEach(r => {
+    r.addEventListener('change', () => {
+      if (document.querySelector('input[name="mode"]:checked').value === 'region') {
+        regionFields.style.display = '';
+        geoFields.style.display = 'none';
+      } else {
+        regionFields.style.display = 'none';
+        geoFields.style.display = '';
+      }
+    });
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    resultsDiv.innerHTML = '<p>Recherche en cours...</p>';
+
+    const body = {
+      checkin: document.getElementById('checkin').value,
+      checkout: document.getElementById('checkout').value,
+      currency: document.getElementById('currency').value,
+      language: document.getElementById('language').value,
+      guests: [{ adults: Number(document.getElementById('adults').value) }],
+    };
+
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+    if (mode === 'region') {
+      const regionId = document.getElementById('region_id').value.trim();
+      if (!regionId) {
+        resultsDiv.innerHTML = '<p style="color:red;">Veuillez entrer un region_id.</p>';
+        return;
+      }
+      body.region_id = isNaN(Number(regionId)) ? regionId : Number(regionId);
+    } else {
+      const lat = parseFloat(document.getElementById('latitude').value);
+      const lon = parseFloat(document.getElementById('longitude').value);
+      const rad = parseInt(document.getElementById('radius').value, 10);
+      if (isNaN(lat) || isNaN(lon) || isNaN(rad)) {
+        resultsDiv.innerHTML = '<p style="color:red;">Veuillez entrer latitude, longitude et rayon.</p>';
+        return;
+      }
+      body.latitude = lat;
+      body.longitude = lon;
+      body.radius = rad;
+    }
+
+    const res = await fetch('/api/search/serp?limit=10', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (data.error) {
+      resultsDiv.innerHTML = `<p style="color:red;">Erreur: ${data.error}</p>`;
+      return;
+    }
+
+    const hotels = data.results?.hotels || data.results || [];
+    if (!hotels.length) {
+      resultsDiv.innerHTML = '<p>Aucun hôtel trouvé pour ces critères.</p>';
+      return;
+    }
+
+    resultsDiv.innerHTML = hotels
+      .map((h, i) => {
+        const name = h.name || 'Hôtel';
+        return `<div class="hotel"><strong>${i + 1}. ${name}</strong></div>`;
+      })
+      .join('');
+  });
+</script>
+
+</body>
+</html>

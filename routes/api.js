@@ -1,3 +1,4 @@
+"use strict";
 /**
  * FILE: routes/api.js
  * DEPENDENCIES:
@@ -8,23 +9,33 @@
  *   Emerging Travel Group (RateHawk) B2B v3 endpoints.
  *   Uses Basic Auth via .env credentials and a helper (callETG).
  */
-
-"use strict";
-
 const express = require("express");
 const router = express.Router();
 const dotenv = require("dotenv");
+function trimSerpPayload(data, limitHotels = 20, limitOffers = 50) {
+  if (Array.isArray(data)) return data.slice(0, limitHotels);
+
+  const copy = typeof data === "object" && data !== null ? { ...data } : data;
+
+  if (copy?.hotels && Array.isArray(copy.hotels)) {
+    copy.hotels = copy.hotels.slice(0, limitHotels);
+  }
+  if (copy?.offers && Array.isArray(copy.offers)) {
+    copy.offers = copy.offers.slice(0, limitOffers);
+  }
+  if (copy?.results && Array.isArray(copy.results)) {
+    copy.results = copy.results.slice(0, limitHotels);
+  }
+
+  return copy;
+}
 dotenv.config();
 
-const { callETG } = require("../utils/etg"); // helper created in utils/etg.js
+const { callETG, BASE } = require("../utils/etg"); // helper created in utils/etg.js
 
 // ========== HEALTH CHECK ==========
 router.get("/health", (_req, res) => {
-  res.json({
-    ok: true,
-    env: process.env.ETG_ENV,
-    base: process.env.ETG_BASE_PROD || "https://api.worldota.net/api/b2b/v3",
-  });
+  res.json({ ok: true, env: process.env.ETG_ENV, base: BASE });
 });
 
 // ========== OVERVIEW ==========
@@ -52,7 +63,8 @@ router.get("/etg/overview", async (_req, res) => {
  *   "geo": { "latitude": 48.8566, "longitude": 2.3522, "radius": 5000 }
  * }
  */
-// [routes/api.js] — remplace l’ancienne route /search/serp/hotels par celle-ci
+// POST /api/search/serp  (dispatches to /search/serp/{hotels|region|geo} on ETG)
+
 router.post("/search/serp", async (req, res) => {
   const p = req.body || {};
 
@@ -99,10 +111,37 @@ router.post("/search/serp", async (req, res) => {
         "You must provide either ids/hids (for /hotels), region_id (for /region), or latitude/longitude/radius (for /geo)."
     });
   }
+  const checkinDate = new Date(p.checkin);
+const checkoutDate = new Date(p.checkout);
+
+if (checkoutDate <= checkinDate) {
+  return res.status(400).json({ error: "checkout must be after checkin" });
+}
+
+if (p.radius && p.radius > 5000) {
+  return res.status(400).json({ error: "radius too large (max 5000 meters)" });
+}
+
+if (p.guests && p.guests.length > 4) {
+  return res.status(400).json({ error: "too many rooms/guests for one request" });
+}
+
+    // Coerce region_id to number if it's a string containing numeric characters
+    if (typeof p.region_id === "string" && /^\d+$/.test(p.region_id)) {
+      body.region_id = Number(p.region_id);
+    }
+
+    const isValid = (d) => d instanceof Date && !isNaN(d.getTime());
+if (!isValid(checkinDate) || !isValid(checkoutDate)) {
+  return res.status(400).json({ error: "invalid date format (use YYYY-MM-DD)" });
+}
 
   try {
     const data = await callETG("POST", endpoint, body);
-    res.json({ status: "ok", endpoint, results: data });
+    const limit = Number(req.query.limit) || 20;
+const trimmed = trimSerpPayload(data, limit, 50);
+res.json({ status: "ok", endpoint, results: trimmed });
+
   } catch (e) {
     res.status(400).json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
   }
@@ -246,6 +285,22 @@ router.post("/webhook/stripe", async (req, res) => {
   } catch (e) {
     res.status(500).send("Internal Server Error");
   }
+});
+
+router.use((err, req, res, _next) => {
+  console.error("[API Error]", err);
+
+  const status = err.status || "error";
+  const http = err.http || 500;
+  const request_id = err?.debug?.request_id || null;
+
+  res.status(400).json({
+    error: err.message || "Unexpected error",
+    status,
+    http,
+    request_id,
+    debug: err.debug || null
+  });
 });
 
 module.exports = router;
