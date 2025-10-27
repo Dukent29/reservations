@@ -12,6 +12,7 @@
 const express = require("express");
 const router = express.Router();
 const dotenv = require("dotenv");
+const { saveSerpSearch, savePrebook } = require("../utils/repo");
 function trimSerpPayload(data, limitHotels = 20, limitOffers = 50) {
   if (Array.isArray(data)) return data.slice(0, limitHotels);
 
@@ -136,12 +137,42 @@ if (!isValid(checkinDate) || !isValid(checkoutDate)) {
   return res.status(400).json({ error: "invalid date format (use YYYY-MM-DD)" });
 }
 
+  // normalization to match doc behavior
+  if (body.residency && typeof body.residency === "string") {
+    body.residency = body.residency.toLowerCase(); // "gb"
+  }
+  if (body.region_id && typeof body.region_id === "string" && /^\d+$/.test(body.region_id)) {
+    body.region_id = Number(body.region_id);
+  }
+  if (Array.isArray(body.guests)) {
+    body.guests = body.guests.map(g => {
+      const cleaned = { ...g };
+      if (Array.isArray(cleaned.children) && cleaned.children.length === 0) {
+        delete cleaned.children; // omit empty array
+      }
+      return cleaned;
+    });
+  }
+
   try {
     const data = await callETG("POST", endpoint, body);
-    const limit = Number(req.query.limit) || 20;
-const trimmed = trimSerpPayload(data, limit, 50);
-res.json({ status: "ok", endpoint, results: trimmed });
 
+    const limit = Number(req.query.limit) || 20;
+    const trimmed = trimSerpPayload(data, limit, 50);
+
+    // 🧩 get ETG request-id if your callETG returns it; if not, skip (null is fine)
+    const etgRequestId = (data && data.debug && data.debug.request_id) ? data.debug.request_id : null;
+
+    // save a lightweight trace (payload/body is what you sent to ETG)
+    await saveSerpSearch({
+      endpoint,
+      payload: body,
+      resultsSample: trimmed, // small snippet you returned (already trimmed)
+      requestId: etgRequestId,
+      ip: req.ip
+    });
+
+    res.json({ status: "ok", endpoint, results: trimmed });
   } catch (e) {
     res.status(400).json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
   }
@@ -149,23 +180,49 @@ res.json({ status: "ok", endpoint, results: trimmed });
 
 
 // ========== PREBOOK ==========
-/**
- * POST /api/prebook
- * Body: { "offer_id": "..." }
- */
+// Accept BOTH flows:
+// - SERP flow:  { "search_hash": "<hash from /search/serp/...>" }  -> POST /serp/prebook/
+// - HOTEL flow: { "book_hash":   "<hash from /hotel/info/>" }      -> POST /hotel/prebook/
+//
+// Also keep backward-compat for { "offer_id": "<book_hash>" }.
+
 router.post("/prebook", async (req, res) => {
-  const { offer_id } = req.body || {};
-  if (!offer_id) return res.status(400).json({ error: "offer_id is required" });
+  const { search_hash, book_hash, offer_id, price_increase_percent = 0 } = req.body || {};
+  const hash = search_hash || book_hash || offer_id; // offer_id may be an h- hash
+
+  // Reject obvious bad hashes (match_hash m- is NOT valid)
+  if (!hash || typeof hash !== "string" || hash.length < 20 || /^m-/.test(hash)) {
+    return res.status(400).json({ error: "invalid hash: provide search_hash (sr-...) or hotel hash (h-...)" });
+  }
+
+  let endpoint, payload;
+
+  if (search_hash) {
+    // SERP prebook
+    endpoint = "/serp/prebook/";
+    payload  = { hash: search_hash, price_increase_percent };
+  } else {
+    // HOTEL page prebook (expects h-... hash)
+    endpoint = "/hotel/prebook/";
+    payload  = { hash, price_increase_percent };
+  }
 
   try {
-    const token = await callETG("POST", "/hotel/prebook/", { id: offer_id });
-    res.json({ status: "ok", prebook_token: token });
+    const token = await callETG("POST", endpoint, payload);
+
+    // optional persistence
+    try {
+      const { savePrebook } = require("../utils/repo");
+      await savePrebook({ offerId: hash, token, requestId: null });
+    } catch (_) {}
+
+    return res.json({ status: "ok", endpoint, prebook_token: token });
   } catch (e) {
-    res
-      .status(400)
-      .json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
+    return res.status(400).json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
   }
 });
+
+
 
 // ========== BOOKING FORM ==========
 /**
@@ -265,6 +322,26 @@ router.post("/hotel/info", async (req, res) => {
     res
       .status(400)
       .json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
+  }
+});
+// ========== HOTEL PAGE SEARCH ==========
+router.post("/search/hp", async (req, res) => {
+  const p = req.body || {};
+  if (!p.id && !p.hid) return res.status(400).json({ error: "id (hid) is required" });
+  if (!p.checkin || !p.checkout) return res.status(400).json({ error: "checkin/checkout required" });
+  if (!p.guests || !Array.isArray(p.guests) || !p.guests.length) {
+    return res.status(400).json({ error: "guests is required (e.g., [{ adults: 2 }])" });
+  }
+  if (!p.language) p.language = "en";
+  if (!p.currency) p.currency = "EUR";
+  if (p.residency) p.residency = String(p.residency).toLowerCase();
+
+  try {
+    // ETG HP endpoint expects top-level id/hid + search params
+    const data = await callETG("POST", "/search/hp/", p);
+    res.json({ status: "ok", results: data });
+  } catch (e) {
+    res.status(400).json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
   }
 });
 
