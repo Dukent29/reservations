@@ -187,40 +187,117 @@ if (!isValid(checkinDate) || !isValid(checkoutDate)) {
 // Also keep backward-compat for { "offer_id": "<book_hash>" }.
 
 router.post("/prebook", async (req, res) => {
-  const { search_hash, book_hash, offer_id, price_increase_percent = 0 } = req.body || {};
-  const hash = search_hash || book_hash || offer_id; // offer_id may be an h- hash
+  const {
+    // accepted inputs
+    search_hash,            // sr-... (SERP)
+    book_hash,              // h-... from hotelpage
+    hash,                   // alias (can be sr- or h-)
+    offer_id,               // alias
+    price_increase_percent = 0,
 
-  // Reject obvious bad hashes (match_hash m- is NOT valid)
-  if (!hash || typeof hash !== "string" || hash.length < 20 || /^m-/.test(hash)) {
-    return res.status(400).json({ error: "invalid hash: provide search_hash (sr-...) or hotel hash (h-...)" });
+    // optional auto-refresh context (REQUIRED for refresh to work)
+    hp_context              // { id|hid, checkin, checkout, guests, residency, currency, language, meal, room_name }
+  } = req.body || {};
+
+  // normalize
+  const h = search_hash || book_hash || hash || offer_id;
+  if (!h || typeof h !== "string" || /^m-/.test(h)) {
+    return res.status(400).json({ error: "invalid hash: provide sr-... (SERP) or h-... (hotelpage)" });
   }
 
-  let endpoint, payload;
+  // decide endpoint/payload
+  const isSerp = /^sr-/.test(h);
+  let endpoint = isSerp ? "/serp/prebook/" : "/hotel/prebook/";
+  let payload  = isSerp ? { hash: h, price_increase_percent } : { hash: h, price_increase_percent };
 
-  if (search_hash) {
-    // SERP prebook
-    endpoint = "/serp/prebook/";
-    payload  = { hash: search_hash, price_increase_percent };
-  } else {
-    // HOTEL page prebook (expects h-... hash)
-    endpoint = "/hotel/prebook/";
-    payload  = { hash, price_increase_percent };
-  }
+  // helper: single attempt
+  const doPrebook = async () => {
+    return callETG("POST", endpoint, payload);
+  };
 
   try {
-    const token = await callETG("POST", endpoint, payload);
-
-    // optional persistence
-    try {
-      const { savePrebook } = require("../utils/repo");
-      await savePrebook({ offerId: hash, token, requestId: null });
-    } catch (_) {}
-
+    const token = await doPrebook();
     return res.json({ status: "ok", endpoint, prebook_token: token });
   } catch (e) {
-    return res.status(400).json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
+    // Only try auto-refresh when:
+    // - we used an h- hash (hotelpage), AND
+    // - ETG says the rate is stale, AND
+    // - we have hp_context to re-fetch the hotelpage
+    const stale = e?.debug?.error === "no_available_rates" || e?.message === "no_available_rates";
+    const isHotelHash = /^h-/.test(h);
+    if (!stale || !isHotelHash || !hp_context) {
+      return res.status(400).json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
+    }
+
+    // -------------- AUTO-REFRESH --------------
+    try {
+      // Re-fetch hotelpage
+      const {
+        id, hid, checkin, checkout, guests, residency, currency, language,
+        meal: desiredMeal, room_name: desiredRoomName
+      } = hp_context || {};
+
+      if (!(id || hid) || !checkin || !checkout || !Array.isArray(guests) || !guests.length) {
+        return res.status(400).json({
+          error: "hp_context is incomplete; need id|hid, checkin, checkout, guests at minimum"
+        });
+      }
+
+      const hpRequest = {
+        id: id || hid, // ETG accepts numeric HID as "id"
+        checkin, checkout, guests,
+        residency: residency ? String(residency).toLowerCase() : undefined,
+        currency:  currency || "EUR",
+        language:  language || "en"
+      };
+
+      const hp = await callETG("POST", "/search/hp/", hpRequest);
+      const hotels = Array.isArray(hp?.hotels) ? hp.hotels : [];
+      const rates  = hotels[0]?.rates || [];
+
+      if (!rates.length) {
+        return res.status(400).json({ error: "no fresh rates available after refresh" });
+      }
+
+      // Try to pick same meal + room_name first
+      let candidate =
+        rates.find(r =>
+          (!desiredMeal || r.meal === desiredMeal) &&
+          (!desiredRoomName || r.room_name === desiredRoomName)
+        )
+        || rates[0];
+
+      if (!candidate?.hash || !/^h-/.test(candidate.hash)) {
+        return res.status(400).json({ error: "no valid h- hash in refreshed rates" });
+      }
+
+      // retry prebook with new h- hash
+      endpoint = "/hotel/prebook/";
+      payload  = { hash: candidate.hash, price_increase_percent };
+      const token2 = await callETG("POST", endpoint, payload);
+
+      return res.json({
+        status: "ok",
+        endpoint,
+        prebook_token: token2,
+        refreshed: true,
+        picked: {
+          meal: candidate.meal,
+          room_name: candidate.room_name,
+          hash: candidate.hash
+        }
+      });
+    } catch (e2) {
+      return res.status(400).json({
+        error: e2.message || "refresh_failed",
+        status: e2.status,
+        http: e2.http,
+        debug: e2.debug
+      });
+    }
   }
 });
+
 
 
 
@@ -234,53 +311,75 @@ router.post("/prebook", async (req, res) => {
  *   "tourists": [{ "first_name": "KEVIN", "last_name": "MULINDA" }]
  * }
  */
+// BOOKING FORM — accepts prebook_token (preferred) or book_hash fallback
+// [routes/api.js] — Create booking process (booking form) per docs
+const { randomUUID } = require("crypto");
+
 router.post("/booking/form", async (req, res) => {
-  const { prebook_token, customer, tourists } = req.body || {};
-  if (!prebook_token)
-    return res.status(400).json({ error: "prebook_token is required" });
-  if (!customer || !customer.email)
-    return res.status(400).json({ error: "customer.email is required" });
-  if (!tourists || !Array.isArray(tourists) || tourists.length === 0) {
-    return res
-      .status(400)
-      .json({ error: "tourists is required (non-empty array)" });
+  const {
+    prebook_token,   // may be p-... (we'll map to book_hash)
+    token,           // alias from client, ignore unless it's p-...
+    book_hash,       // preferred field name
+    language = "en",
+    customer,        // keep if you want to store locally; ETG form call doesn't need it unless your contract says so
+    tourists         // same as above; the docs' minimal request doesn’t require them here
+  } = req.body || {};
+
+  // pick the provided value
+  const raw = book_hash || prebook_token || token;
+
+  // must be a p-... “book hash” from /hotel.prebook or /serp.prebook
+  if (!raw || typeof raw !== "string" || !/^p-/.test(raw)) {
+    return res.status(400).json({ error: "book_hash is required and must start with 'p-'" });
   }
 
+  // per docs: partner_order_id (UUID), book_hash, language, user_ip
+  const payload = {
+    partner_order_id: randomUUID(),
+    book_hash: raw,
+    language,
+    user_ip: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip
+  };
+
   try {
-    const form = await callETG("POST", "/hotel/order/booking/form/", {
-      token: prebook_token,
-      customer,
-      tourists,
-    });
-    res.json({ status: "ok", form });
+    const form = await callETG("POST", "/hotel/order/booking/form/", payload);
+    // Return ETG response + echo our partner_order_id so you can reuse it for the next steps
+    return res.json({ status: "ok", partner_order_id: payload.partner_order_id, form });
   } catch (e) {
-    res
-      .status(400)
-      .json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
+    return res.status(400).json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
   }
 });
+
+
+
 
 // ========== BOOKING FINISH (⚠️ REAL RESA IN PROD) ==========
 /**
  * POST /api/booking/finish
  * Body: { "prebook_token": "..." }
  */
+// BOOKING FINISH — finalize the order
 router.post("/booking/finish", async (req, res) => {
-  const { prebook_token } = req.body || {};
-  if (!prebook_token)
-    return res.status(400).json({ error: "prebook_token is required" });
+  const { prebook_token, token, book_hash } = req.body || {};
+  const effectiveToken = prebook_token || token || book_hash;
+
+  if (!effectiveToken || typeof effectiveToken !== "string" || effectiveToken.length < 16) {
+    return res.status(400).json({ error: "token (prebook_token) is required" });
+  }
 
   try {
     const finish = await callETG("POST", "/hotel/order/booking/finish/", {
-      token: prebook_token,
+      token: effectiveToken
     });
-    res.json({ status: "ok", finish });
+    // ETG usually returns an order id or structure you can poll
+    return res.json({ status: "ok", finish });
   } catch (e) {
-    res
+    return res
       .status(400)
-      .json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
+      .json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
   }
 });
+
 
 // ========== BOOKING STATUS ==========
 /**
@@ -295,11 +394,11 @@ router.get("/booking/status/:id", async (req, res) => {
       "GET",
       `/hotel/order/booking/finish/status/?id=${encodeURIComponent(id)}`
     );
-    res.json({ status: "ok", booking_status: status });
+    return res.json({ status: "ok", booking_status: status });
   } catch (e) {
-    res
+    return res
       .status(400)
-      .json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
+      .json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
   }
 });
 
@@ -344,6 +443,47 @@ router.post("/search/hp", async (req, res) => {
     res.status(400).json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
   }
 });
+
+//========= BOOKING FORM ==========
+// BOOKING FORM — accepts prebook_token (preferred) or book_hash fallback
+router.post("/booking/form", async (req, res) => {
+  const {
+    prebook_token,          // preferred from /prebook
+    token,                  // alias if caller already named it token
+    book_hash,              // fallback if your prebook returned book_hash
+    customer,
+    tourists
+  } = req.body || {};
+
+  const effectiveToken = prebook_token || token || book_hash;
+
+  // basic validation
+  if (!effectiveToken || typeof effectiveToken !== "string" || effectiveToken.length < 16) {
+    return res.status(400).json({ error: "token (prebook_token) is required" });
+  }
+  if (!customer || !customer.email) {
+    return res.status(400).json({ error: "customer.email is required" });
+  }
+  if (!Array.isArray(tourists) || tourists.length === 0) {
+    return res.status(400).json({ error: "tourists is required (non-empty array)" });
+  }
+
+  try {
+    const form = await callETG("POST", "/hotel/order/booking/form/", {
+      token: effectiveToken,
+      customer,
+      tourists
+    });
+
+    // form may already contain an order token; we just surface the response
+    return res.json({ status: "ok", form });
+  } catch (e) {
+    return res
+      .status(400)
+      .json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
+  }
+});
+
 
 // ========== WEBHOOK PLACEHOLDERS ==========
 router.post("/webhook/ratehawk", async (req, res) => {
