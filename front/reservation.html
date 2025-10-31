@@ -1,152 +1,189 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en" class="hotel-app">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Réservation d'Hôtel</title>
-  <link rel="stylesheet" href="public/styles.css" />
+  <title>Kotan Voyages — Hotel Search (Sandbox)</title>
+  <link rel="stylesheet" href="public/style.css" />
 </head>
 <body>
-  <h1>🔍 Recherche d’Hôtels</h1>
 
-  <form id="searchForm">
-  <label>Check-in:
-    <input type="date" id="checkin" required />
-  </label>
-  <label>Check-out:
-    <input type="date" id="checkout" required />
-  </label>
-  <label>Adultes:
-    <input type="number" id="adults" min="1" value="2" required />
-  </label>
-  <label>Enfants:
-    <input type="number" id="children" min="0" value="0" />
-  </label>
+<header>
+  <h1>
+    Kotan Voyages — Internal Sandbox
+    <span class="badge">ETG sandbox</span>
+  </h1>
+  <div class="sub">Recherche d'hôtel · Détails (pas encore paiement)</div>
+</header>
 
-  <label>Langue:
-    <select id="language">
-      <option value="fr">Français</option>
-      <option value="en">Anglais</option>
-    </select>
-  </label>
-  <label>Devise:
-    <select id="currency">
-      <option value="EUR">EUR</option>
-      <option value="USD">USD</option>
-    </select>
-  </label>
-
-  <fieldset style="border:1px solid #ccc;padding:1rem;border-radius:8px;">
-    <legend>Type de recherche</legend>
-    <label><input type="radio" name="mode" value="region" checked /> Par région</label>
-    <label><input type="radio" name="mode" value="geo" /> Par localisation (lat/lon)</label>
-
-    <div id="regionFields" style="margin-top:.8rem;">
-      <label>Region ID:
-        <input type="text" id="region_id" placeholder="ex: 12345" />
-      </label>
+<main>
+  <!-- TOP SEARCH BAR -->
+  <section class="card searchbar">
+    <div class="search-grid">
+      <div class="field">
+        <label for="region_id">Destination (region_id)</label>
+        <input id="region_id" type="text" placeholder="e.g., 1798" />
+      </div>
+      <div class="field">
+        <label for="checkin">Arrivée</label>
+        <input id="checkin" type="date" />
+      </div>
+      <div class="field">
+        <label for="checkout">Départ</label>
+        <input id="checkout" type="date" />
+      </div>
+      <div class="field compact" style="position:relative;">
+        <label for="guestsSummary">Guests</label>
+        <button id="btnGuests" class="secondary" style="text-align:left;">
+          <span id="guestsSummary">2 adults · 0 children</span>
+        </button>
+      </div>
+      <div class="field compact">
+        <label for="language">Lang</label>
+        <select id="language">
+          <option value="en" selected>EN</option>
+          <option value="fr">FR</option>
+        </select>
+      </div>
+      <div class="field compact">
+        <label for="currency">Currency</label>
+        <select id="currency">
+          <option value="EUR" selected>EUR</option>
+          <option value="USD">USD</option>
+        </select>
+      </div>
+      <div class="field action">
+        <label>&nbsp;</label>
+        <button id="btnSearch" class="primary">Rechercher</button>
+      </div>
     </div>
 
-    <div id="geoFields" style="display:none;margin-top:.8rem;">
-      <label>Latitude:
-        <input type="number" step="0.000001" id="latitude" placeholder="48.8566" />
-      </label>
-      <label>Longitude:
-        <input type="number" step="0.000001" id="longitude" placeholder="2.3522" />
-      </label>
-      <label>Rayon (mètres):
-        <input type="number" id="radius" value="1500" min="100" max="5000" />
-      </label>
+    <details class="extras">
+      <summary>Use Geo (optional)</summary>
+      <div class="extras-grid">
+        <div class="field">
+          <label>Search mode</label>
+          <div class="radio-row">
+            <label><input type="radio" name="mode" value="region" checked /> Region</label>
+            <label><input type="radio" name="mode" value="geo" /> Geo (lat/lon)</label>
+          </div>
+        </div>
+        <div class="field" id="regionBlock">
+          <small style="color:#94a3b8;font-size:.7rem;">Uses region_id field above</small>
+        </div>
+        <div class="field" id="geoBlock" style="display:none;">
+          <div class="geo-grid">
+            <div>
+              <label for="latitude">Latitude</label>
+              <input id="latitude" type="number" step="0.000001" placeholder="48.8566" />
+            </div>
+            <div>
+              <label for="longitude">Longitude</label>
+              <input id="longitude" type="number" step="0.000001" placeholder="2.3522" />
+            </div>
+            <div>
+              <label for="radius">Radius (m)</label>
+              <input id="radius" type="number" min="100" max="5000" value="1500" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- FILTERS UI -->
+    <div class="row" style="margin-top:.75rem; gap:.75rem; flex-wrap:wrap; display:flex;">
+      <div>
+        <label>Stars</label>
+        <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+          <label><input type="checkbox" class="flt-stars" value="2"> 2★</label>
+          <label><input type="checkbox" class="flt-stars" value="3"> 3★</label>
+          <label><input type="checkbox" class="flt-stars" value="4"> 4★</label>
+          <label><input type="checkbox" class="flt-stars" value="5"> 5★</label>
+        </div>
+      </div>
+
+      <div>
+        <label>Meal plan</label>
+        <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+          <label><input type="checkbox" class="flt-meal" value="nomeal"> RO</label>
+          <label><input type="checkbox" class="flt-meal" value="breakfast"> BB</label>
+          <label><input type="checkbox" class="flt-meal" value="half_board"> HB</label>
+          <label><input type="checkbox" class="flt-meal" value="full_board"> FB</label>
+          <label><input type="checkbox" class="flt-meal" value="all_inclusive"> AI</label>
+        </div>
+      </div>
+
+      <div style="align-self:flex-end;">
+        <label style="display:flex; gap:.5rem; align-items:center;">
+          <input type="checkbox" id="flt_free_cancel"> Free cancellation
+        </label>
+      </div>
     </div>
-  </fieldset>
+  </section>
 
-  <button type="submit">Chercher</button>
-</form>
+  <!-- RESULTS + DETAILS SIDE BY SIDE -->
+  <section class="results-grid">
+    <div class="card">
+      <h3>
+        Search results
+        <span id="searchMeta" style="color:#64748b;font-size:.7rem;font-weight:400;"></span>
+      </h3>
+      <div id="hotelsContainer" class="hotel-list">
+        <div style="font-size:.7rem;color:#64748b;">No results yet. Do a search</div>
+      </div>
+    </div>
 
-<div id="results"></div>
+    <div class="card">
+      <h3>
+        Hotel details & rates
+        <span style="color:#64748b;font-size:.7rem;font-weight:400;">select a hotel</span>
+      </h3>
+      <div id="hotelDetails">
+        <div style="font-size:.7rem;color:#64748b;">No hotel selected.</div>
+      </div>
+    </div>
 
+    <div class="card span-2">
+      <h3>
+        Debug / Log output
+        <span style="color:#64748b;font-size:.7rem;font-weight:400;">for dev only</span>
+      </h3>
+      <pre id="logOutput">// logs will show here</pre>
+    </div>
+  </section>
 
-  <div id="results"></div>
+</main>
 
-  <script>
-  const form = document.getElementById('searchForm');
-  const resultsDiv = document.getElementById('results');
+<!-- Guests small modal -->
+<div id="guestModal" class="modal hidden" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="modal__backdrop"></div>
+  <div class="modal__dialog" style="width:min(360px,92vw)">
+    <div class="modal__header">
+      <div class="modal__title">Guests</div>
+      <button id="guestClose" class="secondary mini" aria-label="Close">✕</button>
+    </div>
+    <div class="modal__body" style="gap:1rem;">
+      <div>
+        <label style="font-size:.75rem;color:#cbd5e1;">Adults</label>
+        <div class="counter">
+          <button type="button" id="adultDec">−</button>
+          <div class="value" id="adultValue">2</div>
+          <button type="button" id="adultInc">+</button>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#cbd5e1;">Children</label>
+        <input id="childrenCount" type="number" min="0" max="8" value="0" />
+        <div id="childAges" class="ages-grid" style="margin-top:.5rem;"></div>
+        <small class="muted">Ages 0–17 when children present.</small>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button id="guestsDoneModal" class="primary">Done</button>
+    </div>
+  </div>
+</div>
 
-  // Toggle fields based on mode
-  const modeRadios = document.querySelectorAll('input[name="mode"]');
-  const regionFields = document.getElementById('regionFields');
-  const geoFields = document.getElementById('geoFields');
-  modeRadios.forEach(r => {
-    r.addEventListener('change', () => {
-      if (document.querySelector('input[name="mode"]:checked').value === 'region') {
-        regionFields.style.display = '';
-        geoFields.style.display = 'none';
-      } else {
-        regionFields.style.display = 'none';
-        geoFields.style.display = '';
-      }
-    });
-  });
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    resultsDiv.innerHTML = '<p>Recherche en cours...</p>';
-
-    const body = {
-      checkin: document.getElementById('checkin').value,
-      checkout: document.getElementById('checkout').value,
-      currency: document.getElementById('currency').value,
-      language: document.getElementById('language').value,
-      guests: [{ adults: Number(document.getElementById('adults').value) }],
-    };
-
-    const mode = document.querySelector('input[name="mode"]:checked').value;
-    if (mode === 'region') {
-      const regionId = document.getElementById('region_id').value.trim();
-      if (!regionId) {
-        resultsDiv.innerHTML = '<p style="color:red;">Veuillez entrer un region_id.</p>';
-        return;
-      }
-      body.region_id = isNaN(Number(regionId)) ? regionId : Number(regionId);
-    } else {
-      const lat = parseFloat(document.getElementById('latitude').value);
-      const lon = parseFloat(document.getElementById('longitude').value);
-      const rad = parseInt(document.getElementById('radius').value, 10);
-      if (isNaN(lat) || isNaN(lon) || isNaN(rad)) {
-        resultsDiv.innerHTML = '<p style="color:red;">Veuillez entrer latitude, longitude et rayon.</p>';
-        return;
-      }
-      body.latitude = lat;
-      body.longitude = lon;
-      body.radius = rad;
-    }
-
-    const res = await fetch('/api/search/serp?limit=10', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    const data = await res.json();
-    if (data.error) {
-      resultsDiv.innerHTML = `<p style="color:red;">Erreur: ${data.error}</p>`;
-      return;
-    }
-
-    const hotels = data.results?.hotels || data.results || [];
-    if (!hotels.length) {
-      resultsDiv.innerHTML = '<p>Aucun hôtel trouvé pour ces critères.</p>';
-      return;
-    }
-
-    resultsDiv.innerHTML = hotels
-      .map((h, i) => {
-        const name = h.name || 'Hôtel';
-        return `<div class="hotel"><strong>${i + 1}. ${name}</strong></div>`;
-      })
-      .join('');
-  });
-</script>
-
+<script src="reservation.js" type="module"></script>
 </body>
 </html>

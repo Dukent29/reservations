@@ -120,8 +120,73 @@ router.post("/search/serp", async (req, res) => {
 
   try {
     const data = await callETG("POST", endpoint, body);
-    const limit = Number(req.query.limit) || 20;
-    const trimmed = trimSerpPayload(data, limit, 50);
+  const limit = Number(req.query.limit) || 20;
+
+    // ----- FILTER HELPERS -----
+    function hotelStars(hotel) {
+      const direct = hotel?.stars ?? hotel?.category ?? hotel?.rg_ext?.class;
+      const directNum = Number(direct);
+      if (Number.isFinite(directNum) && directNum > 0) return directNum;
+      if (Array.isArray(hotel?.rates)) {
+        const vals = hotel.rates
+          .map(r => Number(r?.rg_ext?.class))
+          .filter(n => Number.isFinite(n) && n > 0);
+        if (vals.length) return Math.max(...vals);
+      }
+      return null;
+    }
+    function rateHasFreeCancellation(rate) {
+      const fc = rate?.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before;
+      if (!fc) return false;
+      const ts = Date.parse(fc);
+      return Number.isFinite(ts) ? ts > Date.now() : false;
+    }
+    function rateMealCode(rate) {
+      return rate?.meal || rate?.meal_data?.value || null;
+    }
+    function rateMatchesMeal(rate, meals) {
+      if (!meals?.length) return true;
+      const code = rateMealCode(rate);
+      return code ? meals.includes(code) : false;
+    }
+
+    // ----- APPLY FILTERS -----
+    const filters = req.body?.filters || {};
+    let hotels = (data?.results?.hotels) || (data?.hotels) || [];
+    if (!Array.isArray(hotels) && Array.isArray(data?.results)) hotels = data.results;
+
+    if (Array.isArray(hotels) && hotels.length) {
+      if (filters.stars?.length) {
+        const starSet = new Set(
+          filters.stars
+            .map((v) => Number(v))
+            .filter((n) => Number.isFinite(n) && n > 0)
+        );
+        if (starSet.size) {
+          hotels = hotels.filter((h) => {
+            const st = Number(hotelStars(h));
+            return Number.isFinite(st) && starSet.has(st);
+          });
+        }
+      }
+
+      if (filters.meals?.length || filters.free_cancel) {
+        hotels = hotels
+          .map(h => {
+            const rates = Array.isArray(h.rates) ? h.rates : [];
+            const filteredRates = rates.filter(r => {
+              const mealOk = rateMatchesMeal(r, filters.meals);
+              const cancelOk = filters.free_cancel ? rateHasFreeCancellation(r) : true;
+              return mealOk && cancelOk;
+            });
+            return { ...h, rates: filteredRates };
+          })
+          .filter(h => (Array.isArray(h.rates) && h.rates.length > 0));
+      }
+    }
+
+    // ----- TRIM + RESPOND -----
+    const trimmed = trimSerpPayload({ hotels }, limit, 50);
 
     const etgRequestId = data?.debug?.request_id || null;
     await saveSerpSearch({
@@ -392,5 +457,36 @@ router.use((err, req, res, _next) => {
     debug: err.debug || null,
   });
 });
+
+// ===== HOTEL FULL DUMP (download URL) =====
+// POST /api/content/hotel-dump
+// Body (optionnel): { "language": "en" }  // par défaut "en"
+router.post("/content/hotel-dump", async (req, res) => {
+  try {
+    const { language = "en" } = req.body || {};
+    // ETG: full hotel dump
+    const data = await callETG("POST", "/hotel/info/dump/", { language });
+
+    // Selon ETG, la réponse contient généralement un lien de téléchargement (ex: data.url ou data.download_url)
+    // On renvoie brut + un alias "download_url" si on le détecte.
+    const download_url =
+      data?.download_url || data?.url || data?.link || null;
+
+    return res.json({
+      status: "ok",
+      hint: "Use download_url to fetch the .zst file (often .jsonl.zst or .tar.zst)",
+      download_url,
+      raw: data,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      error: e.message,
+      status: e.status,
+      http: e.http,
+      debug: e.debug
+    });
+  }
+});
+
 
 module.exports = router;
