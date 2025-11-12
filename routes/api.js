@@ -3,40 +3,100 @@
  * FILE: routes/api.js
  * DEPENDENCIES:
  *   - utils/etg.js  (must exist)
+ *   - utils/repo.js (saveSerpSearch/savePrebook can be no-op if not ready)
  *   - Express + dotenv + axios
  * DESCRIPTION:
- *   This file handles all API endpoints that proxy to
- *   Emerging Travel Group (RateHawk) B2B v3 endpoints.
- *   Uses Basic Auth via .env credentials and a helper (callETG).
+ *   Proxy vers Emerging Travel Group (RateHawk) B2B v3.
+ *   Auth Basic via .env (gérée par callETG).
+ *
+ * FLOW DOC:
+ *   SERP/HOTEL → PREBOOK (h- or sr-) → BOOKING FORM (CREATE) [p- book_hash] → START → CHECK
  */
+
 const express = require("express");
 const router = express.Router();
 const dotenv = require("dotenv");
-const { saveSerpSearch, savePrebook } = require("../utils/repo");
-function trimSerpPayload(data, limitHotels = 20, limitOffers = 50) {
-  if (Array.isArray(data)) return data.slice(0, limitHotels);
-
-  const copy = typeof data === "object" && data !== null ? { ...data } : data;
-
-  if (copy?.hotels && Array.isArray(copy.hotels)) {
-    copy.hotels = copy.hotels.slice(0, limitHotels);
-  }
-  if (copy?.offers && Array.isArray(copy.offers)) {
-    copy.offers = copy.offers.slice(0, limitOffers);
-  }
-  if (copy?.results && Array.isArray(copy.results)) {
-    copy.results = copy.results.slice(0, limitHotels);
-  }
-
-  return copy;
-}
 dotenv.config();
 
-const { callETG, BASE } = require("../utils/etg"); // helper created in utils/etg.js
+const axios = require("axios");
+const { callETG, BASE: UTIL_BASE } = require("../utils/etg");
+const BASE =
+  (process.env.ETG_ENV || "prod").toLowerCase() === "sandbox"
+    ? process.env.ETG_BASE_SANDBOX || UTIL_BASE
+    : process.env.ETG_BASE_PROD || UTIL_BASE;
+const KEY_ID = String(process.env.ETG_PARTNER_ID || "").trim();
+const API_KEY = String(process.env.ETG_API_KEY || "").trim();
+const AUTH = "Basic " + Buffer.from(`${KEY_ID}:${API_KEY}`).toString("base64");
+const { saveSerpSearch, savePrebook } = require("../utils/repo"); // ok si no-op
 
-// ========== HEALTH CHECK ==========
+// -------- utils --------
+function trimSerpPayload(data, limitHotels = 20, limitOffers = 50) {
+  if (Array.isArray(data)) return data.slice(0, limitHotels);
+  const copy = typeof data === "object" && data !== null ? { ...data } : data;
+  if (copy?.hotels && Array.isArray(copy.hotels)) copy.hotels = copy.hotels.slice(0, limitHotels);
+  if (copy?.offers && Array.isArray(copy.offers)) copy.offers = copy.offers.slice(0, limitOffers);
+  if (copy?.results && Array.isArray(copy.results)) copy.results = copy.results.slice(0, limitHotels);
+  return copy;
+}
+
+// ========== HEALTH ==========
 router.get("/health", (_req, res) => {
   res.json({ ok: true, env: process.env.ETG_ENV, base: BASE });
+});
+
+// ========== REGION / HOTEL AUTOCOMPLETE ==========
+router.get("/regions/search", async (req, res) => {
+  const term = (req.query.q || "").trim();
+  const language = (req.query.lang || req.query.language || "en").trim() || "en";
+
+  if (!term) return res.json({ regions: [], hotels: [] });
+
+  try {
+    const mc = await axios.post(
+      `${BASE}/search/multicomplete/`,
+      { query: term, language },
+      {
+        headers: {
+          Authorization: AUTH,
+          Accept: "application/json",
+          "User-Agent": process.env.APP_USER_AGENT || "KotanVoyages/1.0 (+tech@kotan)",
+        },
+        timeout: 12000,
+      }
+    );
+
+    const raw = mc.data || {};
+    const pickArray = (...candidates) => {
+      for (const c of candidates) {
+        if (Array.isArray(c)) return c;
+      }
+      return [];
+    };
+
+    const regions = pickArray(raw?.data?.regions, raw?.results?.regions, raw?.regions)
+      .filter((r) => r && r.id && r.is_searchable !== false)
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        type: r.type,
+        country_code: r.country_code,
+        full_name: r.full_name || r.fullName || null,
+        is_searchable: r.is_searchable !== false,
+      }));
+
+    const hotels = pickArray(raw?.data?.hotels, raw?.results?.hotels, raw?.hotels)
+      .filter((h) => h && (h.hid || h.id))
+      .map((h) => ({
+        id: h.id || null,
+        hid: h.hid || null,
+        name: h.name || null,
+        region_id: h.region_id || null,
+      }));
+
+    res.json({ regions, hotels });
+  } catch (e) {
+    res.status(400).json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
+  }
 });
 
 // ========== OVERVIEW ==========
@@ -45,31 +105,92 @@ router.get("/etg/overview", async (_req, res) => {
     const data = await callETG("GET", "/overview/", null);
     res.json({ status: "ok", endpoints: data });
   } catch (e) {
-    res
-      .status(400)
-      .json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
+    res.status(400).json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
   }
 });
 
-// ========== HOTEL SEARCH (SERP) ==========
-/**
- * POST /api/search/serp/hotels
- * Example body:
- * {
- *   "checkin": "2025-11-10",
- *   "checkout": "2025-11-12",
- *   "currency": "EUR",
- *   "language": "fr",
- *   "guests": [{ "adults": 2 }],
- *   "geo": { "latitude": 48.8566, "longitude": 2.3522, "radius": 5000 }
- * }
- */
-// POST /api/search/serp  (dispatches to /search/serp/{hotels|region|geo} on ETG)
-
+// ========== SERP (dispatch hotels/region/geo) ==========
 router.post("/search/serp", async (req, res) => {
   const p = req.body || {};
 
-  // garde-fous génériques
+  const rawRegionId = typeof p.region_id === "string" ? p.region_id.trim() : null;
+  const regionIdIsNumeric =
+    typeof p.region_id === "number" ||
+    (rawRegionId && /^\d+$/.test(rawRegionId));
+
+  const destinationQuery = (() => {
+    if (typeof p.query === "string" && p.query.trim().length >= 2) {
+      return p.query.trim();
+    }
+    if (!regionIdIsNumeric && rawRegionId && rawRegionId.length >= 2) {
+      return rawRegionId;
+    }
+    return null;
+  })();
+
+  if (!regionIdIsNumeric && destinationQuery) {
+    const language = (p.language || "en").trim() || "en";
+    try {
+      const mc = await axios.post(
+        `${BASE}/search/multicomplete/`,
+        { query: destinationQuery, language },
+        {
+          headers: {
+            Authorization: AUTH,
+            Accept: "application/json",
+            "User-Agent": process.env.APP_USER_AGENT || "KotanVoyages/1.0 (+tech@kotan)",
+          },
+          timeout: 12000,
+        }
+      );
+
+      let regions =
+        (mc.data?.results?.regions ||
+          mc.data?.data?.regions ||
+          mc.data?.regions ||
+          []) || [];
+
+      regions = regions.filter((r) => r && r.id && r.is_searchable !== false);
+      if (!regions.length) {
+        return res.status(404).json({ error: "region_not_found", query: destinationQuery });
+      }
+
+      const norm = (val) => String(val || "").trim().toLowerCase();
+      const target = norm(destinationQuery);
+      const scoreRegion = (r, idx) => {
+        const name = norm(r.name);
+        const full = norm(r.full_name || r.fullName || r.name);
+        const type = norm(r.type);
+        let score = 0;
+        if (name === target || full === target) score += 5;
+        if (type === "city") score += 2;
+        if (name.includes(target) || full.includes(target)) score += 1;
+        score -= idx * 0.01; // keep initial order as tiebreaker
+        return score;
+      };
+
+      const ranked = regions
+        .map((r, idx) => ({ r, score: scoreRegion(r, idx) }))
+        .sort((a, b) => b.score - a.score);
+
+      const picked = ranked[0]?.r;
+      if (!picked) {
+        return res.status(404).json({ error: "region_not_found", query: destinationQuery });
+      }
+
+      p.region_id = picked.id;
+      p._resolved_region = picked;
+      p._region_suggestions = regions.slice(0, 7).map((r) => ({
+        id: r.id,
+        name: r.name,
+        type: r.type,
+        country_code: r.country_code,
+      }));
+    } catch (err) {
+      return res.status(400).json({ error: "region_lookup_failed", debug: err.message });
+    }
+  }
+
   if (!p.checkin || !p.checkout) {
     return res.status(400).json({ error: "checkin & checkout are required (YYYY-MM-DD)" });
   }
@@ -79,27 +200,19 @@ router.post("/search/serp", async (req, res) => {
   if (!p.language) p.language = "en";
   if (!p.currency) p.currency = "EUR";
 
-  // dispatch selon les champs présents
   let endpoint = null;
   let body = { ...p };
 
-  if ((Array.isArray(p.ids) && p.ids.length) || (Array.isArray(p.hids) && p.hids.length)) {
-    // recherche par hôtel(s)
+    if ((Array.isArray(p.ids) && p.ids.length) || (Array.isArray(p.hids) && p.hids.length)) {
     endpoint = "/search/serp/hotels/";
-    // ETG attend "ids" OU "hids" — tu laisses tel quel
   } else if (typeof p.region_id === "number" || typeof p.region_id === "string") {
-    // recherche par région
     endpoint = "/search/serp/region/";
-    // ETG attend généralement { region_id, ...dates/currency/language/guests }
   } else if (
     typeof p.latitude === "number" &&
     typeof p.longitude === "number" &&
     typeof p.radius === "number"
   ) {
-    // recherche géo
     endpoint = "/search/serp/geo/";
-    // Pour /geo, ETG attend { latitude, longitude, radius, ... }
-    // On enlève éventuellement l'objet "geo" si tu l’utilisais avant
     if (p.geo) {
       body.latitude = p.geo.latitude;
       body.longitude = p.geo.longitude;
@@ -109,46 +222,38 @@ router.post("/search/serp", async (req, res) => {
   } else {
     return res.status(400).json({
       error:
-        "You must provide either ids/hids (for /hotels), region_id (for /region), or latitude/longitude/radius (for /geo)."
+        "You must provide either ids/hids (for /hotels), region_id (for /region), or latitude/longitude/radius (for /geo).",
     });
   }
+
   const checkinDate = new Date(p.checkin);
-const checkoutDate = new Date(p.checkout);
+  const checkoutDate = new Date(p.checkout);
 
-if (checkoutDate <= checkinDate) {
-  return res.status(400).json({ error: "checkout must be after checkin" });
-}
-
-if (p.radius && p.radius > 5000) {
-  return res.status(400).json({ error: "radius too large (max 5000 meters)" });
-}
-
-if (p.guests && p.guests.length > 4) {
-  return res.status(400).json({ error: "too many rooms/guests for one request" });
-}
-
-    // Coerce region_id to number if it's a string containing numeric characters
-    if (typeof p.region_id === "string" && /^\d+$/.test(p.region_id)) {
-      body.region_id = Number(p.region_id);
-    }
-
-    const isValid = (d) => d instanceof Date && !isNaN(d.getTime());
-if (!isValid(checkinDate) || !isValid(checkoutDate)) {
-  return res.status(400).json({ error: "invalid date format (use YYYY-MM-DD)" });
-}
-
-  // normalization to match doc behavior
-  if (body.residency && typeof body.residency === "string") {
-    body.residency = body.residency.toLowerCase(); // "gb"
+  const isValid = (d) => d instanceof Date && !isNaN(d.getTime());
+  if (!isValid(checkinDate) || !isValid(checkoutDate)) {
+    return res.status(400).json({ error: "invalid date format (use YYYY-MM-DD)" });
   }
-  if (body.region_id && typeof body.region_id === "string" && /^\d+$/.test(body.region_id)) {
-    body.region_id = Number(body.region_id);
+  if (checkoutDate <= checkinDate) {
+    return res.status(400).json({ error: "checkout must be after checkin" });
+  }
+  if (p.radius && p.radius > 5000) {
+    return res.status(400).json({ error: "radius too large (max 5000 meters)" });
+  }
+  if (p.guests && p.guests.length > 4) {
+    return res.status(400).json({ error: "too many rooms/guests for one request" });
+  }
+
+  if (typeof p.region_id === "string" && /^\d+$/.test(p.region_id)) {
+    body.region_id = Number(p.region_id);
+  }
+  if (body.residency && typeof body.residency === "string") {
+    body.residency = body.residency.toLowerCase();
   }
   if (Array.isArray(body.guests)) {
-    body.guests = body.guests.map(g => {
+    body.guests = body.guests.map((g) => {
       const cleaned = { ...g };
       if (Array.isArray(cleaned.children) && cleaned.children.length === 0) {
-        delete cleaned.children; // omit empty array
+        delete cleaned.children;
       }
       return cleaned;
     });
@@ -156,20 +261,81 @@ if (!isValid(checkinDate) || !isValid(checkoutDate)) {
 
   try {
     const data = await callETG("POST", endpoint, body);
+  const limit = Number(req.query.limit) || 20;
 
-    const limit = Number(req.query.limit) || 20;
-    const trimmed = trimSerpPayload(data, limit, 50);
+    // ----- FILTER HELPERS -----
+    function hotelStars(hotel) {
+      const direct = hotel?.stars ?? hotel?.category ?? hotel?.rg_ext?.class;
+      const directNum = Number(direct);
+      if (Number.isFinite(directNum) && directNum > 0) return directNum;
+      if (Array.isArray(hotel?.rates)) {
+        const vals = hotel.rates
+          .map(r => Number(r?.rg_ext?.class))
+          .filter(n => Number.isFinite(n) && n > 0);
+        if (vals.length) return Math.max(...vals);
+      }
+      return null;
+    }
+    function rateHasFreeCancellation(rate) {
+      const fc = rate?.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before;
+      if (!fc) return false;
+      const ts = Date.parse(fc);
+      return Number.isFinite(ts) ? ts > Date.now() : false;
+    }
+    function rateMealCode(rate) {
+      return rate?.meal || rate?.meal_data?.value || null;
+    }
+    function rateMatchesMeal(rate, meals) {
+      if (!meals?.length) return true;
+      const code = rateMealCode(rate);
+      return code ? meals.includes(code) : false;
+    }
 
-    // 🧩 get ETG request-id if your callETG returns it; if not, skip (null is fine)
-    const etgRequestId = (data && data.debug && data.debug.request_id) ? data.debug.request_id : null;
+    // ----- APPLY FILTERS -----
+    const filters = req.body?.filters || {};
+    let hotels = (data?.results?.hotels) || (data?.hotels) || [];
+    if (!Array.isArray(hotels) && Array.isArray(data?.results)) hotels = data.results;
 
-    // save a lightweight trace (payload/body is what you sent to ETG)
+    if (Array.isArray(hotels) && hotels.length) {
+      if (filters.stars?.length) {
+        const starSet = new Set(
+          filters.stars
+            .map((v) => Number(v))
+            .filter((n) => Number.isFinite(n) && n > 0)
+        );
+        if (starSet.size) {
+          hotels = hotels.filter((h) => {
+            const st = Number(hotelStars(h));
+            return Number.isFinite(st) && starSet.has(st);
+          });
+        }
+      }
+
+      if (filters.meals?.length || filters.free_cancel) {
+        hotels = hotels
+          .map(h => {
+            const rates = Array.isArray(h.rates) ? h.rates : [];
+            const filteredRates = rates.filter(r => {
+              const mealOk = rateMatchesMeal(r, filters.meals);
+              const cancelOk = filters.free_cancel ? rateHasFreeCancellation(r) : true;
+              return mealOk && cancelOk;
+            });
+            return { ...h, rates: filteredRates };
+          })
+          .filter(h => (Array.isArray(h.rates) && h.rates.length > 0));
+      }
+    }
+
+    // ----- TRIM + RESPOND -----
+    const trimmed = trimSerpPayload({ hotels }, limit, 50);
+
+    const etgRequestId = data?.debug?.request_id || null;
     await saveSerpSearch({
       endpoint,
       payload: body,
-      resultsSample: trimmed, // small snippet you returned (already trimmed)
+      resultsSample: trimmed,
       requestId: etgRequestId,
-      ip: req.ip
+      ip: req.ip,
     });
 
     res.json({ status: "ok", endpoint, results: trimmed });
@@ -178,252 +344,7 @@ if (!isValid(checkinDate) || !isValid(checkoutDate)) {
   }
 });
 
-
-// ========== PREBOOK ==========
-// Accept BOTH flows:
-// - SERP flow:  { "search_hash": "<hash from /search/serp/...>" }  -> POST /serp/prebook/
-// - HOTEL flow: { "book_hash":   "<hash from /hotel/info/>" }      -> POST /hotel/prebook/
-//
-// Also keep backward-compat for { "offer_id": "<book_hash>" }.
-
-router.post("/prebook", async (req, res) => {
-  const {
-    // accepted inputs
-    search_hash,            // sr-... (SERP)
-    book_hash,              // h-... from hotelpage
-    hash,                   // alias (can be sr- or h-)
-    offer_id,               // alias
-    price_increase_percent = 0,
-
-    // optional auto-refresh context (REQUIRED for refresh to work)
-    hp_context              // { id|hid, checkin, checkout, guests, residency, currency, language, meal, room_name }
-  } = req.body || {};
-
-  // normalize
-  const h = search_hash || book_hash || hash || offer_id;
-  if (!h || typeof h !== "string" || /^m-/.test(h)) {
-    return res.status(400).json({ error: "invalid hash: provide sr-... (SERP) or h-... (hotelpage)" });
-  }
-
-  // decide endpoint/payload
-  const isSerp = /^sr-/.test(h);
-  let endpoint = isSerp ? "/serp/prebook/" : "/hotel/prebook/";
-  let payload  = isSerp ? { hash: h, price_increase_percent } : { hash: h, price_increase_percent };
-
-  // helper: single attempt
-  const doPrebook = async () => {
-    return callETG("POST", endpoint, payload);
-  };
-
-  try {
-    const token = await doPrebook();
-    return res.json({ status: "ok", endpoint, prebook_token: token });
-  } catch (e) {
-    // Only try auto-refresh when:
-    // - we used an h- hash (hotelpage), AND
-    // - ETG says the rate is stale, AND
-    // - we have hp_context to re-fetch the hotelpage
-    const stale = e?.debug?.error === "no_available_rates" || e?.message === "no_available_rates";
-    const isHotelHash = /^h-/.test(h);
-    if (!stale || !isHotelHash || !hp_context) {
-      return res.status(400).json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
-    }
-
-    // -------------- AUTO-REFRESH --------------
-    try {
-      // Re-fetch hotelpage
-      const {
-        id, hid, checkin, checkout, guests, residency, currency, language,
-        meal: desiredMeal, room_name: desiredRoomName
-      } = hp_context || {};
-
-      if (!(id || hid) || !checkin || !checkout || !Array.isArray(guests) || !guests.length) {
-        return res.status(400).json({
-          error: "hp_context is incomplete; need id|hid, checkin, checkout, guests at minimum"
-        });
-      }
-
-      const hpRequest = {
-        id: id || hid, // ETG accepts numeric HID as "id"
-        checkin, checkout, guests,
-        residency: residency ? String(residency).toLowerCase() : undefined,
-        currency:  currency || "EUR",
-        language:  language || "en"
-      };
-
-      const hp = await callETG("POST", "/search/hp/", hpRequest);
-      const hotels = Array.isArray(hp?.hotels) ? hp.hotels : [];
-      const rates  = hotels[0]?.rates || [];
-
-      if (!rates.length) {
-        return res.status(400).json({ error: "no fresh rates available after refresh" });
-      }
-
-      // Try to pick same meal + room_name first
-      let candidate =
-        rates.find(r =>
-          (!desiredMeal || r.meal === desiredMeal) &&
-          (!desiredRoomName || r.room_name === desiredRoomName)
-        )
-        || rates[0];
-
-      if (!candidate?.hash || !/^h-/.test(candidate.hash)) {
-        return res.status(400).json({ error: "no valid h- hash in refreshed rates" });
-      }
-
-      // retry prebook with new h- hash
-      endpoint = "/hotel/prebook/";
-      payload  = { hash: candidate.hash, price_increase_percent };
-      const token2 = await callETG("POST", endpoint, payload);
-
-      return res.json({
-        status: "ok",
-        endpoint,
-        prebook_token: token2,
-        refreshed: true,
-        picked: {
-          meal: candidate.meal,
-          room_name: candidate.room_name,
-          hash: candidate.hash
-        }
-      });
-    } catch (e2) {
-      return res.status(400).json({
-        error: e2.message || "refresh_failed",
-        status: e2.status,
-        http: e2.http,
-        debug: e2.debug
-      });
-    }
-  }
-});
-
-
-
-
-// ========== BOOKING FORM ==========
-/**
- * POST /api/booking/form
- * Body example:
- * {
- *   "prebook_token": "...",
- *   "customer": { "email": "you@example.com", "phone": "+33123456789" },
- *   "tourists": [{ "first_name": "KEVIN", "last_name": "MULINDA" }]
- * }
- */
-// BOOKING FORM — accepts prebook_token (preferred) or book_hash fallback
-// [routes/api.js] — Create booking process (booking form) per docs
-const { randomUUID } = require("crypto");
-
-router.post("/booking/form", async (req, res) => {
-  const {
-    prebook_token,   // may be p-... (we'll map to book_hash)
-    token,           // alias from client, ignore unless it's p-...
-    book_hash,       // preferred field name
-    language = "en",
-    customer,        // keep if you want to store locally; ETG form call doesn't need it unless your contract says so
-    tourists         // same as above; the docs' minimal request doesn’t require them here
-  } = req.body || {};
-
-  // pick the provided value
-  const raw = book_hash || prebook_token || token;
-
-  // must be a p-... “book hash” from /hotel.prebook or /serp.prebook
-  if (!raw || typeof raw !== "string" || !/^p-/.test(raw)) {
-    return res.status(400).json({ error: "book_hash is required and must start with 'p-'" });
-  }
-
-  // per docs: partner_order_id (UUID), book_hash, language, user_ip
-  const payload = {
-    partner_order_id: randomUUID(),
-    book_hash: raw,
-    language,
-    user_ip: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip
-  };
-
-  try {
-    const form = await callETG("POST", "/hotel/order/booking/form/", payload);
-    // Return ETG response + echo our partner_order_id so you can reuse it for the next steps
-    return res.json({ status: "ok", partner_order_id: payload.partner_order_id, form });
-  } catch (e) {
-    return res.status(400).json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
-  }
-});
-
-
-
-
-// ========== BOOKING FINISH (⚠️ REAL RESA IN PROD) ==========
-/**
- * POST /api/booking/finish
- * Body: { "prebook_token": "..." }
- */
-// BOOKING FINISH — finalize the order
-router.post("/booking/finish", async (req, res) => {
-  const { prebook_token, token, book_hash } = req.body || {};
-  const effectiveToken = prebook_token || token || book_hash;
-
-  if (!effectiveToken || typeof effectiveToken !== "string" || effectiveToken.length < 16) {
-    return res.status(400).json({ error: "token (prebook_token) is required" });
-  }
-
-  try {
-    const finish = await callETG("POST", "/hotel/order/booking/finish/", {
-      token: effectiveToken
-    });
-    // ETG usually returns an order id or structure you can poll
-    return res.json({ status: "ok", finish });
-  } catch (e) {
-    return res
-      .status(400)
-      .json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
-  }
-});
-
-
-// ========== BOOKING STATUS ==========
-/**
- * GET /api/booking/status/:id
- */
-router.get("/booking/status/:id", async (req, res) => {
-  const { id } = req.params;
-  if (!id) return res.status(400).json({ error: "id is required" });
-
-  try {
-    const status = await callETG(
-      "GET",
-      `/hotel/order/booking/finish/status/?id=${encodeURIComponent(id)}`
-    );
-    return res.json({ status: "ok", booking_status: status });
-  } catch (e) {
-    return res
-      .status(400)
-      .json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
-  }
-});
-
-// ========== HOTEL INFO ==========
-/**
- * POST /api/hotel/info
- * Body: { "id": HID, "language": "en" }
- */
-router.post("/hotel/info", async (req, res) => {
-  const body = req.body || {};
-  if (!body.id && !body.hid) {
-    return res.status(400).json({ error: "id or hid is required" });
-  }
-  if (!body.language) body.language = "en";
-
-  try {
-    const info = await callETG("POST", "/hotel/info/", body);
-    res.json({ status: "ok", info });
-  } catch (e) {
-    res
-      .status(400)
-      .json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
-  }
-});
-// ========== HOTEL PAGE SEARCH ==========
+// ========== HOTEL PAGE SEARCH (HP) ==========
 router.post("/search/hp", async (req, res) => {
   const p = req.body || {};
   if (!p.id && !p.hid) return res.status(400).json({ error: "id (hid) is required" });
@@ -436,7 +357,6 @@ router.post("/search/hp", async (req, res) => {
   if (p.residency) p.residency = String(p.residency).toLowerCase();
 
   try {
-    // ETG HP endpoint expects top-level id/hid + search params
     const data = await callETG("POST", "/search/hp/", p);
     res.json({ status: "ok", results: data });
   } catch (e) {
@@ -444,39 +364,199 @@ router.post("/search/hp", async (req, res) => {
   }
 });
 
-//========= BOOKING FORM ==========
-// BOOKING FORM — accepts prebook_token (preferred) or book_hash fallback
-router.post("/booking/form", async (req, res) => {
-  const {
-    prebook_token,          // preferred from /prebook
-    token,                  // alias if caller already named it token
-    book_hash,              // fallback if your prebook returned book_hash
-    customer,
-    tourists
-  } = req.body || {};
-
-  const effectiveToken = prebook_token || token || book_hash;
-
-  // basic validation
-  if (!effectiveToken || typeof effectiveToken !== "string" || effectiveToken.length < 16) {
-    return res.status(400).json({ error: "token (prebook_token) is required" });
+// ========== HOTEL INFO ==========
+router.post("/hotel/info", async (req, res) => {
+  const body = req.body || {};
+  if (!body.id && !body.hid) {
+    return res.status(400).json({ error: "id or hid is required" });
   }
-  if (!customer || !customer.email) {
-    return res.status(400).json({ error: "customer.email is required" });
-  }
-  if (!Array.isArray(tourists) || tourists.length === 0) {
-    return res.status(400).json({ error: "tourists is required (non-empty array)" });
-  }
+  if (!body.language) body.language = "en";
 
   try {
-    const form = await callETG("POST", "/hotel/order/booking/form/", {
-      token: effectiveToken,
-      customer,
-      tourists
-    });
+    const info = await callETG("POST", "/hotel/info/", body);
+    res.json({ status: "ok", info });
+  } catch (e) {
+    res.status(400).json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
+  }
+});
 
-    // form may already contain an order token; we just surface the response
-    return res.json({ status: "ok", form });
+// ========== PREBOOK (SERP or HOTEL hash) ==========
+router.post("/prebook", async (req, res) => {
+  const {
+    search_hash,            // sr-... (SERP)
+    book_hash,              // h-... from hotelpage
+    hash,                   // alias (sr- or h-)
+    offer_id,               // alias
+    price_increase_percent = 0,
+    hp_context              // optional refresh context (id/hid + dates + guests...)
+  } = req.body || {};
+
+  const h = search_hash || book_hash || hash || offer_id;
+  if (!h || typeof h !== "string" || /^m-/.test(h)) {
+    return res.status(400).json({ error: "invalid hash: provide sr-... or h-..." });
+  }
+
+  const endpoint = "/hotel/prebook/"; // ETG accepte { hash: sr-|h- } ici aussi
+  const payload  = { hash: h, price_increase_percent };
+
+  try {
+    const token = await callETG("POST", endpoint, payload);
+    // Optionnel: log / persist
+    try {
+      await savePrebook({ hash: h, token });
+    } catch (_) {}
+    return res.json({ status: "ok", endpoint, prebook_token: token });
+  } catch (e) {
+    // refresh auto seulement si hotel hash + contexte fourni + "no_available_rates"
+    const stale = e?.debug?.error === "no_available_rates" || e?.message === "no_available_rates";
+    const isHotelHash = /^h-/.test(h);
+    if (!stale || !isHotelHash || !hp_context) {
+      return res.status(400).json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
+    }
+
+    try {
+      const {
+        id, hid, checkin, checkout, guests, residency, currency, language,
+        meal: desiredMeal, room_name: desiredRoomName
+      } = hp_context || {};
+
+      if (!(id || hid) || !checkin || !checkout || !Array.isArray(guests) || !guests.length) {
+        return res.status(400).json({
+          error: "hp_context is incomplete; need id|hid, checkin, checkout, guests"
+        });
+      }
+
+      const hpReq = {
+        id: id || hid,
+        checkin, checkout, guests,
+        residency: residency ? String(residency).toLowerCase() : undefined,
+        currency: currency || "EUR",
+        language: language || "en",
+      };
+
+      const hp = await callETG("POST", "/search/hp/", hpReq);
+      const hotels = Array.isArray(hp?.hotels) ? hp.hotels : [];
+      const rates = hotels[0]?.rates || [];
+      if (!rates.length) return res.status(400).json({ error: "no fresh rates available after refresh" });
+
+      let candidate =
+        rates.find(r =>
+          (!desiredMeal || r.meal === desiredMeal) &&
+          (!desiredRoomName || r.room_name === desiredRoomName)
+        ) || rates[0];
+
+      if (!candidate?.hash || !/^h-/.test(candidate.hash)) {
+        return res.status(400).json({ error: "no valid h- hash in refreshed rates" });
+      }
+
+      const token2 = await callETG("POST", "/hotel/prebook/", { hash: candidate.hash, price_increase_percent });
+      return res.json({
+        status: "ok",
+        endpoint: "/hotel/prebook/",
+        prebook_token: token2,
+        refreshed: true,
+        picked: { meal: candidate.meal, room_name: candidate.room_name, hash: candidate.hash }
+      });
+    } catch (e2) {
+      return res.status(400).json({ error: e2.message || "refresh_failed", status: e2.status, http: e2.http, debug: e2.debug });
+    }
+  }
+});
+
+// ========== BOOKING FORM (CREATE booking process) ==========
+// >>> GARDER CETTE VERSION, SUPPRIMER TOUTE AUTRE /booking/form
+const { randomUUID } = require("crypto");
+router.post("/booking/form", async (req, res) => {
+  const {
+    prebook_token,   // p-... (recommandé)
+    token,           // alias
+    book_hash,       // fallback si tu le nommes comme ça côté client
+    language = "en",
+  } = req.body || {};
+
+  const raw = book_hash || prebook_token || token;
+  if (!raw || typeof raw !== "string" || !/^p-/.test(raw)) {
+    return res.status(400).json({ error: "book_hash is required and must start with 'p-'" });
+  }
+
+  const payload = {
+    partner_order_id: randomUUID(),
+    book_hash: raw,
+    language,
+    user_ip: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip,
+  };
+
+  try {
+    const form = await callETG("POST", "/hotel/order/booking/form/", payload);
+    return res.json({ status: "ok", partner_order_id: payload.partner_order_id, form });
+  } catch (e) {
+    return res.status(400).json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
+  }
+});
+
+// ========== START BOOKING (aka finish) ==========
+// >>> C’EST LA BONNE VERSION (avec partner_order_id, rooms, user, payment_type…)
+router.post("/booking/start", async (req, res) => {
+  try {
+    const {
+      partner_order_id,
+      language = "en",
+      user,
+      rooms,
+      payment_type,
+      supplier_data,
+      upsell_data,
+      return_path,
+      arrival_datetime,
+    } = req.body || {};
+
+    if (!partner_order_id) return res.status(400).json({ error: "partner_order_id is required" });
+    if (!user?.email || !user?.phone) {
+      return res.status(400).json({ error: "user.email and user.phone are required" });
+    }
+    if (!Array.isArray(rooms) || rooms.length === 0) {
+      return res.status(400).json({ error: "rooms (with guests[]) is required" });
+    }
+    if (!payment_type?.currency_code) {
+      return res.status(400).json({ error: "payment_type.currency_code is required (e.g., 'EUR')" });
+    }
+    if (!payment_type?.type) payment_type.type = "deposit";
+
+    const payload = {
+      partner: { partner_order_id, comment: null, amount_sell_b2b2c: null },
+      language,
+      user,
+      supplier_data,
+      rooms,
+      upsell_data,
+      payment_type,
+      return_path,
+      arrival_datetime,
+    };
+
+    const startResp = await callETG("POST", "/hotel/order/booking/finish/", payload);
+    return res.json({ status: "ok", start: startResp });
+  } catch (e) {
+    return res.status(400).json({ error: e.message, status: e.status, http: e.http, debug: e.debug });
+  }
+});
+
+// ========== CHECK BOOKING STATUS ==========
+// FILE: routes/api.js  (replace your current /booking/check route)
+
+// Poll booking status (ETG calls this "Check booking process")
+router.post("/booking/check", async (req, res) => {
+  try {
+    const { partner_order_id } = req.body || {};
+    if (!partner_order_id) {
+      return res.status(400).json({ error: "partner_order_id is required" });
+    }
+
+    // Correct ETG endpoint (POST + body with partner_order_id)
+    const payload = { partner_order_id };
+    const resp = await callETG("POST", "/hotel/order/booking/finish/status/", payload);
+
+    return res.json({ status: "ok", check: resp });
   } catch (e) {
     return res
       .status(400)
@@ -485,10 +565,10 @@ router.post("/booking/form", async (req, res) => {
 });
 
 
-// ========== WEBHOOK PLACEHOLDERS ==========
+// ========== WEBHOOKS ==========
 router.post("/webhook/ratehawk", async (req, res) => {
   try {
-    console.log("RateHawk Webhook:", req.body);
+    console.log("[ETG Webhook]", req.body);
     res.status(200).send("OK");
   } catch (e) {
     res.status(500).send("Internal Server Error");
@@ -497,27 +577,57 @@ router.post("/webhook/ratehawk", async (req, res) => {
 
 router.post("/webhook/stripe", async (req, res) => {
   try {
-    console.log("Stripe Webhook:", req.body);
+    console.log("[Stripe Webhook]", req.body);
     res.status(200).send("OK");
   } catch (e) {
     res.status(500).send("Internal Server Error");
   }
 });
 
+// ========== ERROR HANDLER ==========
 router.use((err, req, res, _next) => {
   console.error("[API Error]", err);
-
   const status = err.status || "error";
   const http = err.http || 500;
   const request_id = err?.debug?.request_id || null;
-
   res.status(400).json({
     error: err.message || "Unexpected error",
     status,
     http,
     request_id,
-    debug: err.debug || null
+    debug: err.debug || null,
   });
 });
+
+// ===== HOTEL FULL DUMP (download URL) =====
+// POST /api/content/hotel-dump
+// Body (optionnel): { "language": "en" }  // par défaut "en"
+router.post("/content/hotel-dump", async (req, res) => {
+  try {
+    const { language = "en" } = req.body || {};
+    // ETG: full hotel dump
+    const data = await callETG("POST", "/hotel/info/dump/", { language });
+
+    // Selon ETG, la réponse contient généralement un lien de téléchargement (ex: data.url ou data.download_url)
+    // On renvoie brut + un alias "download_url" si on le détecte.
+    const download_url =
+      data?.download_url || data?.url || data?.link || null;
+
+    return res.json({
+      status: "ok",
+      hint: "Use download_url to fetch the .zst file (often .jsonl.zst or .tar.zst)",
+      download_url,
+      raw: data,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      error: e.message,
+      status: e.status,
+      http: e.http,
+      debug: e.debug
+    });
+  }
+});
+
 
 module.exports = router;

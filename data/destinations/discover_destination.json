@@ -1,0 +1,187 @@
+{
+    "basePath": "destinations/discover/",
+    "destinations": [
+        {
+            "name": "Split",
+            "code": "SPU",
+            "country": "Croatie",
+            "image": "split.webp",
+            "latLng": {"lat": 43.508133, "lng": 16.440193}
+        },
+        {
+            "name": "Ljubljana",
+            "code": "LJU",
+            "country": "Slovénie",
+            "image": "ljubljana.webp",
+            "latLng": {"lat": 46.056946, "lng": 14.505752}
+        },
+        {
+            "name": "Hvar",
+            "code": "SPU",
+            "country": "Croatie",
+            "image": "hvar.webp",
+            "latLng": {"lat": 43.172588, "lng": 16.443230}
+        },
+        {
+            "name": "Reykjavik",
+            "code": "REK",
+            "country": "Islande",
+            "image": "reykjavik.webp",
+            "latLng": {"lat": 64.126518, "lng": -21.817438}
+        },
+        {
+            "name": "Chiang Mai",
+            "code": "CNX",
+            "country": "Thaïlande",
+            "image": "chiang_mai.webp",
+            "latLng": {"lat": 18.706064, "lng": 98.981712}
+        },
+        {
+            "name": "Hoi An",
+            "code": "DAD",
+            "country": "Vietnam",
+            "image": "hoi_an.webp",
+            "latLng": {"lat": 15.8795863, "lng": 108.3319406}
+        },
+        {
+            "name": "Québec",
+            "code": "YQB",
+            "country": "Canada",
+            "image": "quebec.webp",
+            "latLng": {"lat": 46.81394958496094, "lng": -71.2074203491211}
+        },
+        {
+            "name": "Kotor",
+            "code": "TGD",
+            "country": "Monténégro",
+            "image": "kotor.webp",
+            "latLng": {"lat": 42.4249205, "lng": 18.7713332}
+        },
+        {
+            "name": "Bruges",
+            "code": "OST",
+            "country": "Belgique",
+            "image": "bruges.webp",
+            "latLng": {"lat": 51.2085526, "lng": 3.226772}
+        },
+        {
+            "name": "Tallinn",
+            "code": "TLL",
+            "country": "Estonie",
+            "image": "tallinn.webp",
+            "latLng": {"lat": 59.4372155, "lng": 24.7453688}
+        },
+        {
+            "name": "Ubud",
+            "code": "DPS",
+            "country": "Indonésie",
+            "image": "ubud.webp",
+            "latLng": {"lat": -8.5068977, "lng": 115.2622931}
+        },
+        {
+            "name": "Luang Prabang",
+            "code": "LPQ",
+            "country": "Laos",
+            "image": "luang_prabang.webp",
+            "latLng": {"lat": 19.8887438, "lng": 102.135898}
+        },
+        {
+            "name": "San Miguel de Allende",
+            "code": "QRO",
+            "country": "Mexique",
+            "image": "san_miguel.webp",
+            "latLng": {"lat": 20.9130501, "lng": -100.73566}
+        },
+        {
+            "name": "Valparaíso",
+            "code": "SCL",
+            "country": "Chili",
+            "image": "valparaiso.webp",
+            "latLng": {"lat": -33.0458456, "lng": -71.6196749}
+        },
+        {
+            "name": "Mostar",
+            "code": "OMO",
+            "country": "Bosnie-Herzégovine",
+            "image": "mostar.webp",
+            "latLng": {"lat": 43.3435855, "lng": 17.8076584}
+        },
+                {
+            "name": "Annecy",
+            "code": "NCY",
+            "country": "France",
+            "image": "annecy.webp",
+            "latLng": {"lat": 45.8992348, "lng": 6.1288847}
+        },
+        {
+            "name": "Matera",
+            "code": "BRI",
+            "country": "Italie",
+            "image": "matera.webp",
+            "latLng": {"lat": 40.666668, "lng": 16.600000}
+        },
+        {
+            "name": "Salamanque",
+            "code": "SLM",
+            "country": "Espagne",
+            "image": "salamanca.webp",
+            "latLng": {"lat": 40.9651572, "lng": -5.6640182}
+        },
+        {
+            "name": "Nafplio",
+            "code": "KLX",
+            "country": "Grèce",
+            "image": "nafplio.webp",
+            "latLng": {"lat": 37.5659229, "lng": 22.8068782}
+        },
+        {
+            "name": "Chefchaouen",
+            "code": "TNG",
+            "country": "Maroc",
+            "image": "chefchaouen.webp",
+            "latLng": {"lat": 35.1700832, "lng": -5.2766583}
+        },
+        {
+            "name": "Aveiro",
+            "code": "OPO",
+            "country": "Portugal",
+            "image": "aveiro.webp",
+            "latLng": {"lat": 40.640496, "lng": -8.6537841}
+        },
+        {
+            "name": "San Sebastián",
+            "code": "EAS",
+            "country": "Espagne",
+            "image": "san_sebastian.webp",
+            "latLng": {"lat": 43.3224219, "lng": -1.9838889}
+        },
+        {
+            "name": "Alberobello",
+            "code": "BDS",
+            "country": "Italie",
+            "image": "alberobello.webp",
+            "latLng": {"lat": 40.7841242, "lng": 17.2377031}
+        },
+        {
+            "name": "Göcek",
+            "code": "DLM",
+            "country": "Turquie",
+            "image": "gocek.webp",
+            "latLng": {"lat": 36.7537141, "lng": 28.9422879}
+        },
+        {
+            "name": "Sintra",
+            "code": "LIS",
+            "country": "Portugal",
+            "image": "sintra.webp",
+            "latLng": {"lat": 38.80097, "lng": -9.37826}
+        },
+        {
+            "name": "Chania",
+            "code": "CHQ",
+            "country": "Grèce",
+            "image": "chania.webp",
+            "latLng": {"lat": 35.5120831, "lng": 24.0191544}
+        }
+    ]
+}
