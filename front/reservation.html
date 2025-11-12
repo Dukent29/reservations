@@ -142,15 +142,20 @@
       <div id="hotelsContainer" class="hotel-list">
         <div style="font-size:.7rem;color:#64748b;">No results yet. Do a search</div>
       </div>
+      <div id="resultsPagination" class="pagination" style="display:none;">
+        <button id="btnResultsPrev" class="secondary mini" type="button">Previous</button>
+        <span id="resultsPaginationLabel">Page 1 / 1</span>
+        <button id="btnResultsNext" class="secondary mini" type="button">Next</button>
+      </div>
     </div>
 
     <div class="card">
       <h3>
-        Hotel details & rates
-        <span style="color:#64748b;font-size:.7rem;font-weight:400;">select a hotel</span>
+        <span id="hotelDetailHeaderTitle">Hotel details & rates</span>
+        <span id="hotelDetailHeaderHint" style="color:#64748b;font-size:.7rem;font-weight:400;">select a hotel</span>
       </h3>
       <div id="hotelDetails">
-        <div style="font-size:.7rem;color:#64748b;">No hotel selected.</div>
+        <div id="hotelDetailsPlaceholder" style="font-size:.7rem;color:#64748b;">No hotel selected.</div>
       </div>
     </div>
 
