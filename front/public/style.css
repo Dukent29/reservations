@@ -197,6 +197,48 @@
     .children-field { display: grid; grid-template-columns: 1fr auto; gap: .5rem; align-items: center; }
     .muted { color: #94a3b8; font-size: .7rem; }
 
+    .hotel-suggestions {
+      margin-top: .35rem;
+      display: flex;
+      flex-direction: column;
+      gap: .35rem;
+    }
+    .hotel-suggestions__group {
+      display: flex;
+      flex-direction: column;
+      gap: .25rem;
+      background: rgba(15,23,42,.45);
+      border: 1px solid rgba(148,163,184,.3);
+      border-radius: .5rem;
+      padding: .4rem .5rem;
+    }
+    .hotel-suggestions__title {
+      font-size: .65rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #94a3b8;
+    }
+    .hotel-suggestion {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: .15rem;
+      background: rgba(15,23,42,.6);
+      border: 1px solid rgba(148,163,184,.25);
+      border-radius: .45rem;
+      padding: .4rem .55rem;
+      color: #e2e8f0;
+      cursor: pointer;
+      font-size: .75rem;
+      transition: border-color .15s, background .15s;
+    }
+    .hotel-suggestion:hover {
+      border-color: rgba(59,130,246,.6);
+      background: rgba(30,41,59,.75);
+    }
+    .hotel-suggestion__name { font-weight: 600; }
+    .hotel-suggestion__meta { font-size: .65rem; color: #94a3b8; }
+
     /* Guest popover */
     .popover.hidden { display: none; }
     .popover { position: absolute; top: calc(100% + .4rem); left: 0; z-index: 40; }

@@ -18,7 +18,15 @@ const router = express.Router();
 const dotenv = require("dotenv");
 dotenv.config();
 
-const { callETG, BASE } = require("../utils/etg");
+const axios = require("axios");
+const { callETG, BASE: UTIL_BASE } = require("../utils/etg");
+const BASE =
+  (process.env.ETG_ENV || "prod").toLowerCase() === "sandbox"
+    ? process.env.ETG_BASE_SANDBOX || UTIL_BASE
+    : process.env.ETG_BASE_PROD || UTIL_BASE;
+const KEY_ID = String(process.env.ETG_PARTNER_ID || "").trim();
+const API_KEY = String(process.env.ETG_API_KEY || "").trim();
+const AUTH = "Basic " + Buffer.from(`${KEY_ID}:${API_KEY}`).toString("base64");
 const { saveSerpSearch, savePrebook } = require("../utils/repo"); // ok si no-op
 
 // -------- utils --------
@@ -36,6 +44,61 @@ router.get("/health", (_req, res) => {
   res.json({ ok: true, env: process.env.ETG_ENV, base: BASE });
 });
 
+// ========== REGION / HOTEL AUTOCOMPLETE ==========
+router.get("/regions/search", async (req, res) => {
+  const term = (req.query.q || "").trim();
+  const language = (req.query.lang || req.query.language || "en").trim() || "en";
+
+  if (!term) return res.json({ regions: [], hotels: [] });
+
+  try {
+    const mc = await axios.post(
+      `${BASE}/search/multicomplete/`,
+      { query: term, language },
+      {
+        headers: {
+          Authorization: AUTH,
+          Accept: "application/json",
+          "User-Agent": process.env.APP_USER_AGENT || "KotanVoyages/1.0 (+tech@kotan)",
+        },
+        timeout: 12000,
+      }
+    );
+
+    const raw = mc.data || {};
+    const pickArray = (...candidates) => {
+      for (const c of candidates) {
+        if (Array.isArray(c)) return c;
+      }
+      return [];
+    };
+
+    const regions = pickArray(raw?.data?.regions, raw?.results?.regions, raw?.regions)
+      .filter((r) => r && r.id && r.is_searchable !== false)
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        type: r.type,
+        country_code: r.country_code,
+        full_name: r.full_name || r.fullName || null,
+        is_searchable: r.is_searchable !== false,
+      }));
+
+    const hotels = pickArray(raw?.data?.hotels, raw?.results?.hotels, raw?.hotels)
+      .filter((h) => h && (h.hid || h.id))
+      .map((h) => ({
+        id: h.id || null,
+        hid: h.hid || null,
+        name: h.name || null,
+        region_id: h.region_id || null,
+      }));
+
+    res.json({ regions, hotels });
+  } catch (e) {
+    res.status(400).json({ error: e.message, status: e.status, debug: e.debug, http: e.http });
+  }
+});
+
 // ========== OVERVIEW ==========
 router.get("/etg/overview", async (_req, res) => {
   try {
@@ -50,6 +113,84 @@ router.get("/etg/overview", async (_req, res) => {
 router.post("/search/serp", async (req, res) => {
   const p = req.body || {};
 
+  const rawRegionId = typeof p.region_id === "string" ? p.region_id.trim() : null;
+  const regionIdIsNumeric =
+    typeof p.region_id === "number" ||
+    (rawRegionId && /^\d+$/.test(rawRegionId));
+
+  const destinationQuery = (() => {
+    if (typeof p.query === "string" && p.query.trim().length >= 2) {
+      return p.query.trim();
+    }
+    if (!regionIdIsNumeric && rawRegionId && rawRegionId.length >= 2) {
+      return rawRegionId;
+    }
+    return null;
+  })();
+
+  if (!regionIdIsNumeric && destinationQuery) {
+    const language = (p.language || "en").trim() || "en";
+    try {
+      const mc = await axios.post(
+        `${BASE}/search/multicomplete/`,
+        { query: destinationQuery, language },
+        {
+          headers: {
+            Authorization: AUTH,
+            Accept: "application/json",
+            "User-Agent": process.env.APP_USER_AGENT || "KotanVoyages/1.0 (+tech@kotan)",
+          },
+          timeout: 12000,
+        }
+      );
+
+      let regions =
+        (mc.data?.results?.regions ||
+          mc.data?.data?.regions ||
+          mc.data?.regions ||
+          []) || [];
+
+      regions = regions.filter((r) => r && r.id && r.is_searchable !== false);
+      if (!regions.length) {
+        return res.status(404).json({ error: "region_not_found", query: destinationQuery });
+      }
+
+      const norm = (val) => String(val || "").trim().toLowerCase();
+      const target = norm(destinationQuery);
+      const scoreRegion = (r, idx) => {
+        const name = norm(r.name);
+        const full = norm(r.full_name || r.fullName || r.name);
+        const type = norm(r.type);
+        let score = 0;
+        if (name === target || full === target) score += 5;
+        if (type === "city") score += 2;
+        if (name.includes(target) || full.includes(target)) score += 1;
+        score -= idx * 0.01; // keep initial order as tiebreaker
+        return score;
+      };
+
+      const ranked = regions
+        .map((r, idx) => ({ r, score: scoreRegion(r, idx) }))
+        .sort((a, b) => b.score - a.score);
+
+      const picked = ranked[0]?.r;
+      if (!picked) {
+        return res.status(404).json({ error: "region_not_found", query: destinationQuery });
+      }
+
+      p.region_id = picked.id;
+      p._resolved_region = picked;
+      p._region_suggestions = regions.slice(0, 7).map((r) => ({
+        id: r.id,
+        name: r.name,
+        type: r.type,
+        country_code: r.country_code,
+      }));
+    } catch (err) {
+      return res.status(400).json({ error: "region_lookup_failed", debug: err.message });
+    }
+  }
+
   if (!p.checkin || !p.checkout) {
     return res.status(400).json({ error: "checkin & checkout are required (YYYY-MM-DD)" });
   }
@@ -62,7 +203,7 @@ router.post("/search/serp", async (req, res) => {
   let endpoint = null;
   let body = { ...p };
 
-  if ((Array.isArray(p.ids) && p.ids.length) || (Array.isArray(p.hids) && p.hids.length)) {
+    if ((Array.isArray(p.ids) && p.ids.length) || (Array.isArray(p.hids) && p.hids.length)) {
     endpoint = "/search/serp/hotels/";
   } else if (typeof p.region_id === "number" || typeof p.region_id === "string") {
     endpoint = "/search/serp/region/";

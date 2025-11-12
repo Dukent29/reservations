@@ -1,0 +1,41 @@
+{
+	"basePath": "destinations/authentic/",
+	"destinations": [
+		{
+			"name": "Gjirokastër",
+			"code": "TIA",
+			"country": "Albanie",
+			"image": "gjirokaster.webp",
+			"latLng": {"lat": 40.0756, "lng": 20.1385},
+			"short_fr": "Explorez cette ville en pierre classée à l'UNESCO, avec ses ruelles pavées, ses maisons traditionnelles ottomanes et sa citadelle offrant une vue imprenable sur les montagnes albanaises.",
+			"short_en": "Explore this UNESCO-listed stone city with its cobbled streets, traditional Ottoman houses, and a fortress offering stunning views of the Albanian mountains."
+		},
+		{
+			"name": "Colmar",
+			"code": "CMR",
+			"country": "France",
+			"image": "colmar.webp",
+			"latLng": {"lat": 48.0795, "lng": 7.3585},
+			"short_fr": "Découvrez le charme alsacien de Colmar, ses canaux bordés de maisons colorées à colombages, ses marchés traditionnels et son ambiance de village de conte de fées.",
+			"short_en": "Discover the Alsatian charm of Colmar, with its canals lined with colorful half-timbered houses, traditional markets, and a fairytale village atmosphere."
+		},
+		{
+			"name": "Takayama",
+			"code": "NGO",
+			"country": "Japon",
+			"image": "takayama.webp",
+			"latLng": {"lat": 36.1468, "lng": 137.2527},
+			"short_fr": "Immergez-vous dans l'ambiance préservée de Takayama, une vieille ville japonaise au cœur des Alpes avec ses ruelles étroites, ses maisons de marchands et ses marchés matinaux animés.",
+			"short_en": "Immerse yourself in the preserved atmosphere of Takayama, a historic Japanese town in the Alps with narrow streets, merchant houses, and lively morning markets."
+		},
+		{
+			"name": "Valldemossa",
+			"code": "PMI",
+			"country": "Espagne",
+			"image": "valldemossa.webp",
+			"latLng": {"lat": 39.7100, "lng": 2.6216},
+			"short_fr": "Découvrez Valldemossa, un village de montagne pittoresque à Majorque, célèbre pour ses ruelles en pierre, ses jardins fleuris et son monastère niché dans un décor de collines verdoyantes.",
+			"short_en": "Discover Valldemossa, a picturesque mountain village in Mallorca, known for its stone streets, flower-filled gardens, and monastery nestled among green hills."
+		}
+	]
+}

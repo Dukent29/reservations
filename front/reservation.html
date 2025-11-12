@@ -21,8 +21,19 @@
   <section class="card searchbar">
     <div class="search-grid">
       <div class="field">
-        <label for="region_id">Destination (region_id)</label>
-        <input id="region_id" type="text" placeholder="e.g., 1798" />
+        <label for="region_id">Destination (region name)</label>
+        <input
+          id="region_id"
+          type="text"
+          placeholder="e.g., Paris"
+          list="regionSuggestions"
+          autocomplete="off"
+          aria-describedby="destinationHelp regionStatus"
+        />
+        <small id="destinationHelp" class="muted" style="font-size:.7rem;">Enter a city or ETG region; we’ll resolve it automatically.</small>
+        <small id="regionStatus" class="muted" style="font-size:.7rem;"></small>
+        <div id="hotelSuggestions" class="hotel-suggestions"></div>
+        <datalist id="regionSuggestions"></datalist>
       </div>
       <div class="field">
         <label for="checkin">Arrivée</label>

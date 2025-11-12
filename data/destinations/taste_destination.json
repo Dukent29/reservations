@@ -1,0 +1,41 @@
+{
+	"basePath": "destinations/taste/",
+	"destinations": [
+		{
+			"name": "Bologne",
+			"code": "BLQ",
+			"country": "Italie",
+			"image": "bologne.webp",
+			"latLng": {"lat": 44.4949, "lng": 11.3426},
+			"short_fr": "Découvrez Bologne, la capitale gastronomique de l'Italie, réputée pour ses pâtes fraîches, ses marchés animés et ses petites trattorias où déguster des recettes traditionnelles.",
+			"short_en": "Discover Bologna, Italy's gastronomic capital, renowned for its fresh pasta, lively markets, and small trattorias serving traditional recipes."
+		},
+		{
+			"name": "Penang",
+			"code": "PEN",
+			"country": "Malaisie",
+			"image": "penang.webp",
+			"latLng": {"lat": 5.4141, "lng": 100.3288},
+			"short_fr": "Explorez Penang, un paradis de la street food en Asie, où saveurs chinoises, malaises et indiennes se mélangent dans des marchés de nuit vibrants et colorés.",
+			"short_en": "Explore Penang, a street food paradise in Asia, where Chinese, Malay, and Indian flavors mix in vibrant, colorful night markets."
+		},
+		{
+			"name": "Lima",
+			"code": "LIM",
+			"country": "Pérou",
+			"image": "lima.webp",
+			"latLng": {"lat": -12.0464, "lng": -77.0428},
+			"short_fr": "Goûtez aux saveurs uniques de Lima, berceau de la cuisine fusion péruvienne et du ceviche, dans une ville où gastronomie et culture se rencontrent au bord de l'océan Pacifique.",
+			"short_en": "Taste the unique flavors of Lima, the birthplace of Peruvian fusion cuisine and ceviche, in a city where gastronomy and culture meet on the Pacific coast."
+		},
+		{
+			"name": "Strasbourg",
+			"code": "SXB",
+			"country": "France",
+			"image": "strasbourg.webp",
+			"latLng": {"lat": 48.5734, "lng": 7.7521},
+			"short_fr": "Découvrez Strasbourg, où la cuisine alsacienne s'exprime dans des marchés gourmands et des winstubs traditionnelles proposant tartes flambées et choucroute.",
+			"short_en": "Discover Strasbourg, where Alsatian cuisine comes alive in gourmet markets and traditional winstubs serving tarte flambée and sauerkraut."
+		}
+	]
+}

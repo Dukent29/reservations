@@ -1,0 +1,340 @@
+{
+	"countries": {
+		"france": {
+			"name": "France",
+			"basePath": "destinations/popular/france",
+			"destinations": [
+				{
+					"name": "Paris",
+					"code": "PAR",
+					"country": "France",
+					"image": "paris.webp",
+					"latLng": {"lat": 48.8534951, "lng": 2.3483915}
+				},
+				{
+					"name": "Nice",
+					"code": "NCE",
+					"country": "France",
+					"image": "nice.webp",
+					"latLng": {"lat": 43.7009358, "lng": 7.2683912}
+				},
+				{
+					"name": "Lyon",
+					"code": "LYS",
+					"country": "France",
+					"image": "lyon.webp",
+					"latLng": {"lat": 45.7578137, "lng": 4.8320114}
+				},
+				{
+					"name": "Marseille",
+					"code": "MRS",
+					"country": "France",
+					"image": "marseille.webp",
+					"latLng": {"lat": 43.2961743, "lng": 5.3699525}
+				},
+				{
+					"name": "Bordeaux",
+					"code": "BOD",
+					"country": "France",
+					"image": "bordeaux.webp",
+					"latLng": {"lat": 44.841225, "lng": -0.5800364}
+				},
+				{
+					"name": "Strasbourg",
+					"code": "SXB",
+					"country": "France",
+					"image": "strasbourg.webp",
+					"latLng": {"lat": 48.584614, "lng": 7.7507127}
+				}
+			]
+		},
+		"italie": {
+			"name": "Italie",
+			"basePath": "destinations/popular/italie",
+			"destinations": [
+				{
+					"name": "Rome",
+					"code": "ROM",
+					"country": "Italie",
+					"image": "rome.webp",
+					"latLng": {"lat": 41.8933203, "lng": 12.4829321}
+				},
+				{
+					"name": "Venise",
+					"code": "VCE",
+					"country": "Italie",
+					"image": "venise.webp",
+					"latLng": {"lat": 45.4371908, "lng": 12.3345898}
+				},
+				{
+					"name": "Florence",
+					"code": "FLR",
+					"country": "Italie",
+					"image": "florence.webp",
+					"latLng": {"lat": 43.7697955, "lng": 11.2556404}
+				},
+				{
+					"name": "Milan",
+					"code": "MIL",
+					"country": "Italie",
+					"image": "milan.webp",
+					"latLng": {"lat": 45.4641943, "lng": 9.1896346}
+				},
+				{
+					"name": "Naples",
+					"code": "NAP",
+					"country": "Italie",
+					"image": "naples.webp",
+					"latLng": {"lat": 40.8358846, "lng": 14.2487679}
+				},
+				{
+					"name": "Turin",
+					"code": "TRN",
+					"country": "Italie",
+					"image": "turin.webp",
+					"latLng": {"lat": 45.0677551, "lng": 7.6824892}
+				}
+			]
+		},
+		"espagne": {
+			"name": "Espagne",
+			"basePath": "destinations/popular/espagne",
+			"destinations": [
+				{
+					"name": "Barcelone",
+					"code": "BCN",
+					"country": "Espagne",
+					"image": "barcelone.webp",
+					"latLng": {"lat": 41.3825802, "lng": 2.177073}
+				},
+				{
+					"name": "Madrid",
+					"code": "MAD",
+					"country": "Espagne",
+					"image": "madrid.webp",
+					"latLng": {"lat": 40.4167047, "lng": -3.7035825}
+				},
+				{
+					"name": "Séville",
+					"code": "SVQ",
+					"country": "Espagne",
+					"image": "seville.webp",
+					"latLng": {"lat": 37.3886303, "lng": -5.9953403}
+				},
+				{
+					"name": "Valence",
+					"code": "VLC",
+					"country": "Espagne",
+					"image": "valence.webp",
+					"latLng": {"lat": 39.4697065, "lng": -0.3763353}
+				},
+				{
+					"name": "Grenade",
+					"code": "GRX",
+					"country": "Espagne",
+					"image": "grenade.webp",
+					"latLng": {"lat": 37.178055, "lng": -3.600833}
+				},
+				{
+					"name": "Bilbao",
+					"code": "BIO",
+					"country": "Espagne",
+					"image": "bilbao.webp",
+					"latLng": {"lat": 43.2630018, "lng": -2.9350039}
+				}
+			]
+		},
+		"grece": {
+			"name": "Grèce",
+			"basePath": "destinations/popular/grece",
+			"destinations": [
+				{
+					"name": "Athènes",
+					"code": "ATH",
+					"country": "Grèce",
+					"image": "athenes.webp",
+					"latLng": {"lat": 37.9755648, "lng": 23.7348324}
+				},
+				{
+					"name": "Santorin",
+					"code": "JTR",
+					"country": "Grèce",
+					"image": "santorin.webp",
+					"latLng": {"lat": 36.4071112, "lng": 25.4566637}
+				},
+				{
+					"name": "Mykonos",
+					"code": "JMK",
+					"country": "Grèce",
+					"image": "mykonos.webp",
+					"latLng": {"lat": 37.4513936, "lng": 25.3923149}
+				},
+				{
+					"name": "Rhodes",
+					"code": "RHO",
+					"country": "Grèce",
+					"image": "rhodes.webp",
+					"latLng": {"lat": 36.1725297, "lng": 27.9194016}
+				},
+				{
+					"name": "Corfou",
+					"code": "CFU",
+					"country": "Grèce",
+					"image": "corfou.webp",
+					"latLng": {"lat": 39.62069, "lng": 19.91975}
+				},
+				{
+					"name": "Thessalonique",
+					"code": "SKG",
+					"country": "Grèce",
+					"image": "thessalonique.webp",
+					"latLng": {"lat": 40.6403167, "lng": 22.9352716}
+				}
+			]
+		},
+		"maroc": {
+			"name": "Maroc",
+			"basePath": "destinations/popular/maroc",
+			"destinations": [
+				{
+					"name": "Marrakech",
+					"code": "RAK",
+					"country": "Maroc",
+					"image": "marrakech.webp",
+					"latLng": {"lat": 31.6258257, "lng": -7.9891608}
+				},
+				{
+					"name": "Casablanca",
+					"code": "CMN",
+					"country": "Maroc",
+					"image": "casablanca.webp",
+					"latLng": {"lat": 33.5945144, "lng": -7.6200284}
+				},
+				{
+					"name": "Fès",
+					"code": "FEZ",
+					"country": "Maroc",
+					"image": "fes.webp",
+					"latLng": {"lat": 34.0346534, "lng": -5.0161926}
+				},
+				{
+					"name": "Agadir",
+					"code": "AGA",
+					"country": "Maroc",
+					"image": "agadir.webp",
+					"latLng": {"lat": 30.4205162, "lng": -9.5838532}
+				},
+				{
+					"name": "Essaouira",
+					"code": "ESU",
+					"country": "Maroc",
+					"image": "essaouira.webp",
+					"latLng": {"lat": 31.5118281, "lng": -9.7620903}
+				},
+				{
+					"name": "Tanger",
+					"code": "TNG",
+					"country": "Maroc",
+					"image": "tanger.webp",
+					"latLng": {"lat": 35.7696302, "lng": -5.8033522}
+				}
+			]
+		},
+		"portugal": {
+			"name": "Portugal",
+			"basePath": "destinations/popular/portugal",
+			"destinations": [
+				{
+					"name": "Lisbonne",
+					"code": "LIS",
+					"country": "Portugal",
+					"image": "lisbonne.webp",
+					"latLng": {"lat": 38.7077507, "lng": -9.1365919}
+				},
+				{
+					"name": "Porto",
+					"code": "OPO",
+					"country": "Portugal",
+					"image": "porto.webp",
+					"latLng": {"lat": 41.1502195, "lng": -8.6103497}
+				},
+				{
+					"name": "Funchal",
+					"code": "FNC",
+					"country": "Portugal",
+					"image": "funchal.webp",
+					"latLng": {"lat": 32.6496497, "lng": -16.9086783}
+				},
+				{
+					"name": "Faro",
+					"code": "FAO",
+					"country": "Portugal",
+					"image": "faro.webp",
+					"latLng": {"lat": 37.0162944, "lng": -7.935182}
+				},
+				{
+					"name": "Évora",
+					"code": "EVR",
+					"country": "Portugal",
+					"image": "evora.webp",
+					"latLng": {"lat": 38.5707742, "lng": -7.9092808}
+				},
+				{
+					"name": "Coimbra",
+					"code": "CBP",
+					"country": "Portugal",
+					"image": "coimbra.webp",
+					"latLng": {"lat": 40.2111931, "lng": -8.4294632}
+				}
+			]
+		},
+		"turquie": {
+			"name": "Turquie",
+			"basePath": "destinations/popular/turquie",
+			"destinations": [
+				{
+					"name": "Istanbul",
+					"code": "IST",
+					"country": "Turquie",
+					"image": "istanbul.webp",
+					"latLng": {"lat": 41.006381, "lng": 28.9758715}
+				},
+				{
+					"name": "Cappadoce",
+					"code": "NAV",
+					"country": "Turquie",
+					"image": "cappadoce.webp",
+					"latLng": {"lat": 38.6386753, "lng": 34.8457712}
+				},
+				{
+					"name": "Antalya",
+					"code": "AYT",
+					"country": "Turquie",
+					"image": "antalya.webp",
+					"latLng": {"lat": 36.8865728, "lng": 30.7030242}
+				},
+				{
+					"name": "Izmir",
+					"code": "ADB",
+					"country": "Turquie",
+					"image": "izmir.webp",
+					"latLng": {"lat": 38.423733, "lng": 27.142826}
+				},
+				{
+					"name": "Bodrum",
+					"code": "BJV",
+					"country": "Turquie",
+					"image": "bodrum.webp",
+					"latLng": {"lat": 37.036472, "lng": 27.425467}
+				},
+				{
+					"name": "Kuşadası",
+					"code": "KUS",
+					"country": "Turquie",
+					"image": "kusadasi.webp",
+					"latLng": {"lat": 37.857913, "lng": 27.261015}
+				}
+			]
+		}
+	}
+}
