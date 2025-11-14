@@ -5,7 +5,11 @@ const axios = require("axios");
 const dotenv = require("dotenv");
 dotenv.config();
 
-const BASE = process.env.ETG_BASE_PROD || "https://api.worldota.net/api/b2b/v3";
+const DEFAULT_BASE = "https://api.worldota.net/api/b2b/v3";
+const PROD_BASE = process.env.ETG_BASE_PROD || DEFAULT_BASE;
+const SANDBOX_BASE = process.env.ETG_BASE_SANDBOX || DEFAULT_BASE;
+const TARGET_ENV = (process.env.ETG_ENV || "prod").toLowerCase();
+const BASE = TARGET_ENV === "sandbox" ? SANDBOX_BASE : PROD_BASE;
 const AUTH = Buffer.from(`${process.env.ETG_PARTNER_ID}:${process.env.ETG_API_KEY}`).toString("base64");
 
 async function callETG(method, endpoint, data = null) {

@@ -14,11 +14,10 @@ const checkinEl   = $("#checkin");
 const checkoutEl  = $("#checkout");
 const langEl      = $("#language");
 const currencyEl  = $("#currency");
-
 const regionIdEl  = $("#region_id");
-const regionSuggestionsEl = $("#regionSuggestions");
 const regionStatusEl = $("#regionStatus");
-const hotelSuggestionsEl = $("#hotelSuggestions");
+const suggestionsDropdownEl = $("#suggestionsDropdown");
+const destinationFieldEl = document.querySelector("[data-suggestions-root]");
 const latEl       = $("#latitude");
 const lonEl       = $("#longitude");
 const radiusEl    = $("#radius");
@@ -30,11 +29,16 @@ const geoBlock    = $("#geoBlock");
 const btnSearch   = $("#btnSearch");
 const btnGuests   = $("#btnGuests");
 const guestsSummaryEl = $("#guestsSummary");
+const PREBOOK_SUMMARY_KEY = "booking:lastPrebook";
 
 const hotelsContainer       = $("#hotelsContainer");
 const hotelDetailsContainer = $("#hotelDetails");
 const logOutput             = $("#logOutput");
 const searchMeta            = $("#searchMeta");
+const resultsPaginationEl   = $("#resultsPagination");
+const btnResultsPrev        = $("#btnResultsPrev");
+const btnResultsNext        = $("#btnResultsNext");
+const resultsPaginationLabel = $("#resultsPaginationLabel");
 // Filters refs
 const starBoxes   = document.querySelectorAll('.flt-stars');
 const mealBoxes   = document.querySelectorAll('.flt-meal');
@@ -58,6 +62,177 @@ const guestsDoneModal = $("#guestsDoneModal");
 let adultsCount = 2;
 let childrenAges = [];
 let selectedHotel = null;
+const DEFAULT_IMAGE_SIZE = "x300";
+const HOTEL_IMAGE_LIMIT = 1;
+const DETAIL_IMAGE_SIZE = "1024x768";
+const DETAIL_IMAGE_LIMIT = 13;
+const CARD_IMAGE_LIMIT = 13;
+const HOTELS_PAGE_SIZE = 10;
+// How many hotels to fetch per request (server still caps at 100).
+const SERP_FETCH_LIMIT = 60;
+const TRANSLATIONS = {
+  en: {
+    meal_nomeal: "Room only",
+    meal_breakfast: "Breakfast",
+    meal_half_board: "Half board",
+    meal_full_board: "Full board",
+    meal_all_inclusive: "All inclusive",
+    meal_default: "Meal plan",
+    free_cancellation: "Free cancellation",
+    no_cancellation: "No cancellation",
+    capacity_prefix: "max",
+    button_view_details: "View details",
+    room_label: "Room",
+    nights_label: (n) => `for ${n} night${n > 1 ? "s" : ""}`,
+    distance_from_center: (dist) => `${dist} from center`,
+    detail_header: "Hotel details & rates",
+    detail_hint: "select a hotel",
+    detail_placeholder: "No hotel selected.",
+    detail_highlights_title: "Highlights",
+    detail_know_title: "Know before you go",
+    detail_rooms_title: "Available rooms & rates",
+    detail_no_highlights: "No extra facts for this hotel.",
+    detail_no_policies: "No special policies reported.",
+    detail_no_rates: "No rates returned for this search.",
+    detail_no_data: "No hotel data.",
+    detail_no_hotel: "No hotel found.",
+    search_no_hotels: "No hotels found.",
+    detail_gallery_loading: "Loading photos...",
+    detail_gallery_none: "No photos available.",
+    detail_gallery_error: "Unable to load photos.",
+    detail_offers_label: (count) => `Offers: ${count}`,
+    detail_from_label: (price) => `From ${price}`,
+    detail_id_label: (id) => `ID: ${id}`,
+    thumb_loading: "Loading photo...",
+    thumb_no_photo: "No photo",
+    free_cancel_before: (date) => `Free cancellation before ${date}.`,
+    cancel_charge_after: (amount, date) => `Cancellation charge ${amount} after ${date}.`,
+    tax_payable: (label, amount) => `${label}: ${amount} payable at property.`,
+    deposit_amount: (amount, type) => `Deposit (${type || "deposit"}): ${amount}.`,
+    no_show_fee: (amount, time) => `No-show fee ${amount} after ${time || "deadline"}.`,
+    payment_type: (type, cardNeeded) => `Payment type: ${type}${cardNeeded ? " (card required)" : ""}.`,
+    cancellation_fees: "Cancellation fees may apply.",
+    taxes_fees_label: "Taxes & fees",
+    bedding_label: "Bedding",
+    provider_label: "Provider",
+    selected_hotel_status: (name) => `Selected hotel: ${name}`,
+    bathroom_label: "Bathroom",
+    filter_breakfast: "Breakfast available",
+    filter_wifi: "Wi-Fi",
+    filter_bathroom: "Private bathroom",
+    filter_free_cancel: "Free cancellation",
+    filter_refundable: "Refundable",
+    rooms_left: (n) => `${n} left`,
+    sleeps_label: (n) => `Sleeps ${n}`,
+    guest_breakdown: (adults, children) => {
+      const parts = [];
+      if (adults) parts.push(`${adults} adult${adults > 1 ? "s" : ""}`);
+      if (children) parts.push(`${children} child${children > 1 ? "ren" : ""}`);
+      return parts.join(" + ");
+    },
+    requested_occupancy_label: (text) => (text ? `Requested: ${text}` : ""),
+    room_capacity_detail: (capacity, requestedText) =>
+      requestedText && requestedText.length
+        ? `Sleeps ${capacity} · ${requestedText}`
+        : `Sleeps ${capacity}`,
+    status_no_matches: "No matching regions or hotels.",
+    error_no_region: "No region found for that destination.",
+    error_no_coords: "No coordinates available for that destination.",
+    error_enter_destination: "Please enter a destination.",
+    error_enter_coords_or_destination: "Enter coordinates or a destination name.",
+    error_invalid_coords: "Please enter valid coordinates or search by destination.",
+    error_destination_lookup: "Destination lookup failed.",
+    prebook_button: "Book",
+    prebook_success: "Prebook created. Review prebook token in logs.",
+    prebook_error: "Prebook failed.",
+  },
+  fr: {
+    meal_nomeal: "Chambre seule",
+    meal_breakfast: "Petit-dejeuner",
+    meal_half_board: "Demi-pension",
+    meal_full_board: "Pension complete",
+    meal_all_inclusive: "Tout compris",
+    meal_default: "Repas",
+    free_cancellation: "Annulation gratuite",
+    no_cancellation: "Non remboursable",
+    capacity_prefix: "max",
+    button_view_details: "Voir les details",
+    room_label: "Chambre",
+    nights_label: (n) => `pour ${n} nuit${n > 1 ? "s" : ""}`,
+    distance_from_center: (dist) => `${dist} du centre`,
+    detail_header: "Details & tarifs",
+    detail_hint: "selectionnez un hotel",
+    detail_placeholder: "Aucun hotel selectionne.",
+    detail_highlights_title: "Points forts",
+    detail_know_title: "A savoir",
+    detail_rooms_title: "Chambres et tarifs",
+    detail_no_highlights: "Aucune information supplementaire.",
+    detail_no_policies: "Aucune politique particuliere.",
+    detail_no_rates: "Aucune offre pour cette recherche.",
+    detail_no_data: "Aucune donnee hotel.",
+    detail_no_hotel: "Aucun hotel trouve.",
+    search_no_hotels: "Aucun hotel trouve.",
+    detail_gallery_loading: "Chargement des photos...",
+    detail_gallery_none: "Aucune photo disponible.",
+    detail_gallery_error: "Impossible de charger les photos.",
+    detail_offers_label: (count) => `Offres : ${count}`,
+    detail_from_label: (price) => `A partir de ${price}`,
+    detail_id_label: (id) => `ID : ${id}`,
+    thumb_loading: "Chargement...",
+    thumb_no_photo: "Pas de photo",
+    free_cancel_before: (date) => `Annulation gratuite avant ${date}.`,
+    cancel_charge_after: (amount, date) => `Frais d'annulation ${amount} apres ${date}.`,
+    tax_payable: (label, amount) => `${label} : ${amount} a regler sur place.`,
+    deposit_amount: (amount, type) => `Depot (${type || "depot"}) : ${amount}.`,
+    no_show_fee: (amount, time) => `Frais de non-presentation ${amount} apres ${time || "limite"}.`,
+    payment_type: (type, cardNeeded) => `Type de paiement : ${type}${cardNeeded ? " (carte requise)" : ""}.`,
+    cancellation_fees: "Frais d'annulation possibles.",
+    taxes_fees_label: "Taxes et frais",
+    bedding_label: "Literie",
+    provider_label: "Fournisseur",
+    selected_hotel_status: (name) => `Hotel selectionne : ${name}`,
+    bathroom_label: "Salle de bain",
+    filter_breakfast: "Petit-dejeuner",
+    filter_wifi: "Wi-Fi",
+    filter_bathroom: "Salle de bain privee",
+    filter_free_cancel: "Annulation gratuite",
+    filter_refundable: "Remboursable",
+    rooms_left: (n) => `${n} restant${n > 1 ? "s" : ""}`,
+    sleeps_label: (n) => `Capacite ${n}`,
+    guest_breakdown: (adults, children) => {
+      const parts = [];
+      if (adults) parts.push(`${adults} adulte${adults > 1 ? "s" : ""}`);
+      if (children) parts.push(`${children} enfant${children > 1 ? "s" : ""}`);
+      return parts.join(" + ");
+    },
+    requested_occupancy_label: (text) => (text ? `Demande : ${text}` : ""),
+    room_capacity_detail: (capacity, requestedText) =>
+      requestedText && requestedText.length
+        ? `Capacite ${capacity} · ${requestedText}`
+        : `Capacite ${capacity}`,
+    status_no_matches: "Aucune region ou hotel correspondant.",
+    error_no_region: "Aucune region trouvee pour cette destination.",
+    error_no_coords: "Pas de coordonnees disponibles pour cette destination.",
+    error_enter_destination: "Veuillez saisir une destination.",
+    error_enter_coords_or_destination: "Saisissez des coordonnees ou une destination.",
+    error_invalid_coords: "Coordonnees invalides. Saisissez des valeurs valides ou recherchez par destination.",
+    error_destination_lookup: "Recherche de destination impossible.",
+    prebook_button: "Réserver",
+    prebook_success: "Prebook cree. Consultez le token dans les logs.",
+    prebook_error: "Echec du prebook.",
+  },
+};
+const hotelImageCache = new Map();
+let latestHotelsRenderToken = 0;
+let latestHotelDetailsToken = 0;
+let lastRenderedHotels = [];
+const cardImageState = new WeakMap();
+let currentHotelsStore = [];
+let currentHotelsPage = 0;
+let lastSearchEndpoint = "";
+let lastHotelDetailsResults = null;
+let currentHotelDetail = null;
+let currentHotelRates = [];
 
 // Toggle mode region/geo
 modeRadios.forEach(r => {
@@ -84,14 +259,6 @@ function setRegionStatus(message = "") {
   if (regionStatusEl) regionStatusEl.textContent = message;
 }
 
-function escapeOptionValue(value = "") {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
 function escapeHtml(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -99,47 +266,82 @@ function escapeHtml(value = "") {
     .replace(/>/g, "&gt;");
 }
 
+let currentRegionSuggestions = [];
+let currentHotelSuggestions = [];
+
 function renderRegionSuggestions(list = []) {
-  if (!regionSuggestionsEl) return;
-  if (!Array.isArray(list) || !list.length) {
-    regionSuggestionsEl.innerHTML = "";
-    return;
-  }
-  regionSuggestionsEl.innerHTML = list
-    .map((r) => {
-      const name = r.name || r.full_name || r.fullName || "";
-      const suffix = r.country_code ? ` (${r.country_code})` : "";
-      const value = `${name}${suffix}`;
-      return `<option value="${escapeOptionValue(value)}"></option>`;
-    })
-    .join("");
+  currentRegionSuggestions = Array.isArray(list) ? list.slice(0, 8) : [];
+  refreshSuggestionsDropdown();
 }
 
-let currentHotelSuggestions = [];
 function renderHotelSuggestions(list = []) {
-  if (!hotelSuggestionsEl) return;
   currentHotelSuggestions = Array.isArray(list) ? list.slice(0, 5) : [];
-  if (!currentHotelSuggestions.length) {
-    hotelSuggestionsEl.innerHTML = "";
-    hotelSuggestionsEl.dataset.count = "0";
+  refreshSuggestionsDropdown();
+}
+
+function clearSuggestionsDropdown() {
+  currentRegionSuggestions = [];
+  currentHotelSuggestions = [];
+  refreshSuggestionsDropdown();
+}
+
+function hideSuggestionsDropdown() {
+  if (!suggestionsDropdownEl) return;
+  suggestionsDropdownEl.classList.add("hidden");
+  suggestionsDropdownEl.setAttribute("aria-hidden", "true");
+  regionIdEl?.setAttribute("aria-expanded", "false");
+}
+
+function refreshSuggestionsDropdown() {
+  if (!suggestionsDropdownEl) return;
+  if (!currentRegionSuggestions.length && !currentHotelSuggestions.length) {
+    suggestionsDropdownEl.innerHTML = "";
+    hideSuggestionsDropdown();
     return;
   }
-  hotelSuggestionsEl.dataset.count = String(currentHotelSuggestions.length);
-  hotelSuggestionsEl.innerHTML = `
-    <div class="hotel-suggestions__group">
-      <div class="hotel-suggestions__title">Hotels</div>
-      ${currentHotelSuggestions
-        .map(
-          (hotel, idx) => `
-        <button type="button" class="hotel-suggestion" data-suggestion-index="${idx}">
-          <span class="hotel-suggestion__name">${escapeHtml(hotel.name || "Hotel")}</span>
-          <span class="hotel-suggestion__meta">
-            HID ${hotel.hid || "?"}${hotel.region_id ? ` · region ${hotel.region_id}` : ""}
-          </span>
-        </button>`
-        )
-        .join("")}
-    </div>`;
+
+  const sections = [];
+  if (currentRegionSuggestions.length) {
+    sections.push(`
+      <div class="suggestions-section">
+        <div class="suggestions-title">Regions</div>
+        ${currentRegionSuggestions
+          .map((region, idx) => {
+            const title = region.name || region.full_name || region.fullName || "Region";
+            const metaParts = [];
+            if (region.country_code) metaParts.push(region.country_code);
+            if (region.id) metaParts.push(`#${region.id}`);
+            return `
+              <button type="button" role="option" class="suggestion-option" data-suggestion-type="region" data-suggestion-index="${idx}">
+                <span class="suggestion-option__name">${escapeHtml(title)}</span>
+                <span class="suggestion-option__meta">${escapeHtml(metaParts.join(" · "))}</span>
+              </button>`;
+          })
+          .join("")}
+      </div>`);
+  }
+
+  if (currentHotelSuggestions.length) {
+    sections.push(`
+      <div class="suggestions-section">
+        <div class="suggestions-title">Hotels</div>
+        ${currentHotelSuggestions
+          .map((hotel, idx) => {
+            const idMeta = hotel.region_id ? `Region ${hotel.region_id}` : "";
+            return `
+              <button type="button" role="option" class="suggestion-option" data-suggestion-type="hotel" data-suggestion-index="${idx}">
+                <span class="suggestion-option__name">${escapeHtml(hotel.name || "Hotel")}</span>
+                <span class="suggestion-option__meta">${escapeHtml(`HID ${hotel.hid || "?"}${idMeta ? ` · ${idMeta}` : ""}`)}</span>
+              </button>`;
+          })
+          .join("")}
+      </div>`);
+  }
+
+  suggestionsDropdownEl.innerHTML = sections.join("");
+  suggestionsDropdownEl.classList.remove("hidden");
+  suggestionsDropdownEl.setAttribute("aria-hidden", "false");
+  regionIdEl?.setAttribute("aria-expanded", "true");
 }
 
 // Guests helpers
@@ -206,6 +408,25 @@ function buildGuests() {
   }];
 }
 
+function requestedGuestCounts() {
+  const adults = Math.max(1, parseInt(adultsCount, 10) || 1);
+  const children = (childrenAges || []).length;
+  return {
+    adults,
+    children,
+    total: adults + children,
+  };
+}
+
+function formatRequestedGuestsLabel() {
+  const counts = requestedGuestCounts();
+  const summary = tr("guest_breakdown", counts.adults, counts.children);
+  return {
+    summary,
+    counts,
+  };
+}
+
 // Extract/render helpers
 function extractHotels(payload) {
   if (Array.isArray(payload)) return payload;
@@ -243,13 +464,587 @@ function hotelDisplayName(hotel) {
   );
 }
 
-// Enriched results card renderer
-function renderHotelsEx(resultsMaybeNested) {
-  const hotels = extractHotels(resultsMaybeNested);
-  if (!hotels || !hotels.length) {
-    hotelsContainer.innerHTML = `<div style="font-size:.7rem;color:#64748b;">No hotels found.</div>`;
+function formatDistanceFromCenter(hotel) {
+  if (!hotel || typeof hotel !== "object") return null;
+  let meters = null;
+  const tryNumber = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+  meters = tryNumber(hotel.distance_center);
+  if (meters === null) meters = tryNumber(hotel.distance_center_meters);
+  if (meters === null) {
+    const km = tryNumber(hotel.distance_center_km);
+    meters = km !== null ? km * 1000 : null;
+  }
+  if (meters === null || !Number.isFinite(meters) || meters <= 0) return null;
+  if (meters >= 1000) {
+    const km = meters / 1000;
+    const value = `${km.toFixed(km >= 10 ? 0 : 1)} km`;
+    return tr("distance_from_center", value);
+  }
+  const value = `${Math.round(meters)} m`;
+  return tr("distance_from_center", value);
+}
+
+function getRateCapacity(rate) {
+  if (!rate) return null;
+  const candidates = [
+    rate?.rg_ext?.capacity,
+    rate?.rg_ext?.occupancy,
+    rate?.capacity,
+    rate?.max_occupancy,
+    rate?.occupancy,
+  ];
+  for (const value of candidates) {
+    const num = Number(value);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return null;
+}
+
+function renderStarIcons(stars) {
+  const value = Number(stars);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  const count = Math.max(1, Math.round(value));
+  const starsHtml = Array.from({ length: count })
+    .map(() => "<span>★</span>")
+    .join("");
+  return `<span class="star-rating" aria-label="${escapeHtml(String(value))} star rating">${starsHtml}</span>`;
+}
+
+function chipIcon(type) {
+  switch (type) {
+    case "meal":
+      return `<svg class="chip__icon" viewBox="0 0 16 16" role="presentation"><circle cx="8" cy="8" r="4.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 3.5v9M13.5 3.5v9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+    case "check":
+      return `<svg class="chip__icon" viewBox="0 0 16 16" role="presentation"><path d="M3.2 8.5l3 3 6.6-6.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    case "ban":
+      return `<svg class="chip__icon" viewBox="0 0 16 16" role="presentation"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.5 11.5l7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+    default:
+      return "";
+  }
+}
+
+function getSelectedImageSize() {
+  return DEFAULT_IMAGE_SIZE;
+}
+
+function normalizeNumericId(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const str = String(value).trim();
+  if (!str) return null;
+  if (/^\d+$/.test(str)) {
+    const num = Number(str);
+    return Number.isFinite(num) ? num : null;
+  }
+  return null;
+}
+
+function pickFirstString(...values) {
+  for (const val of values) {
+    if (val === undefined || val === null) continue;
+    const str = String(val).trim();
+    if (!str) continue;
+    return str;
+  }
+  return null;
+}
+
+function buildHotelImageIdentity(hotel) {
+  if (!hotel || typeof hotel !== "object") return { hid: null, fallbackId: null, cacheKey: null };
+  const hidCandidates = [hotel.hid, hotel.hotel_id, hotel.hotelId, hotel.id];
+  let hid = null;
+  for (const candidate of hidCandidates) {
+    const normalized = normalizeNumericId(candidate);
+    if (normalized !== null) {
+      hid = normalized;
+      break;
+    }
+  }
+  const fallbackId = pickFirstString(hotel.id, hotel.hotel_id, hotel.hotelId, hotel.hid);
+  const cacheKey = hid !== null ? `hid:${hid}` : fallbackId ? `id:${fallbackId}` : null;
+  return { hid, fallbackId, cacheKey };
+}
+
+async function requestHotelImagesFromApi(payload) {
+  const endpoint = `${API_BASE}/api/hotel/images`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const rawText = await response.text();
+  let data = null;
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch (_err) {
+    throw new Error("Invalid image payload");
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || data?._raw || "Image lookup failed");
+  }
+  const images = Array.isArray(data?.images)
+    ? data.images.filter((url) => typeof url === "string" && url.length)
+    : [];
+  return images;
+}
+
+async function fetchHotelImages(hotel, lang, size, limit = 1) {
+  const identity = buildHotelImageIdentity(hotel);
+  if (!identity.cacheKey) return [];
+  const safeLang = (lang || "en").trim() || "en";
+  const safeSize = size || DEFAULT_IMAGE_SIZE;
+  const parsedLimit = Number(limit);
+  const hasLimit = Number.isFinite(parsedLimit) && parsedLimit > 0;
+  const cappedLimit = hasLimit ? Math.max(1, Math.min(parsedLimit, 50)) : null;
+  const cacheKey = `${identity.cacheKey}|${safeLang}|${safeSize}|${cappedLimit ?? "all"}`;
+  if (hotelImageCache.has(cacheKey)) {
+    const cached = hotelImageCache.get(cacheKey);
+    return typeof cached?.then === "function" ? cached : cached;
+  }
+  if (identity.hid === null && !identity.fallbackId) return [];
+  const payload = {
+    language: safeLang,
+    size: safeSize,
+  };
+  if (cappedLimit !== null) payload.limit = cappedLimit;
+  if (identity.hid !== null) payload.hid = identity.hid;
+  else if (identity.fallbackId) payload.id = identity.fallbackId;
+  const fetchPromise = (async () => {
+    try {
+      return await requestHotelImagesFromApi(payload);
+    } catch (err) {
+      console.warn("Hotel image fetch failed", err);
+      return [];
+    }
+  })();
+  hotelImageCache.set(cacheKey, fetchPromise);
+  const result = await fetchPromise;
+  hotelImageCache.set(cacheKey, result);
+  return Array.isArray(result) ? result : [];
+}
+
+async function getHotelImageUrl(hotel, lang, size) {
+  const images = await fetchHotelImages(hotel, lang, size, HOTEL_IMAGE_LIMIT);
+  return images[0] || null;
+}
+
+function setThumbLoadingState(cardEl, message = tr("thumb_loading")) {
+  cardImageState.delete(cardEl);
+  const target = cardEl?.querySelector("[data-thumb-image]");
+  if (target) {
+    target.innerHTML = `<div class="hotel-thumb__placeholder">${escapeHtml(message)}</div>`;
+  }
+  const counter = cardEl?.querySelector("[data-thumb-counter]");
+  counter?.classList.add("is-hidden");
+  const prev = cardEl?.querySelector("[data-thumb-prev]");
+  const next = cardEl?.querySelector("[data-thumb-next]");
+  prev?.classList.add("is-hidden");
+  next?.classList.add("is-hidden");
+}
+
+function updateCardThumbUI(cardEl, state) {
+  const viewport = cardEl?.querySelector("[data-thumb-image]");
+  const counter = cardEl?.querySelector("[data-thumb-counter]");
+  const prev = cardEl?.querySelector("[data-thumb-prev]");
+  const next = cardEl?.querySelector("[data-thumb-next]");
+  if (!viewport) return;
+  if (!state || !Array.isArray(state.images) || !state.images.length) {
+    viewport.innerHTML = `<div class="hotel-thumb__placeholder">${escapeHtml(tr("thumb_no_photo"))}</div>`;
+    counter?.classList.add("is-hidden");
+    prev?.classList.add("is-hidden");
+    next?.classList.add("is-hidden");
     return;
   }
+  const total = state.images.length;
+  const currentIdx = Math.min(Math.max(state.index || 0, 0), total - 1);
+  state.index = currentIdx;
+  const currentUrl = state.images[currentIdx];
+  viewport.innerHTML = `<img src="${escapeHtml(currentUrl)}" alt="${escapeHtml(`${state.title || "Hotel"} photo ${currentIdx + 1}`)}" loading="lazy" decoding="async">`;
+  if (counter) {
+    counter.textContent = `${currentIdx + 1} / ${total}`;
+    counter.classList.toggle("is-hidden", total <= 1);
+  }
+  const hideNav = total <= 1;
+  prev?.classList.toggle("is-hidden", hideNav);
+  next?.classList.toggle("is-hidden", hideNav);
+}
+
+function setCardImages(cardEl, hotel, images) {
+  const safeImages = Array.isArray(images) ? images.filter((u) => typeof u === "string" && u.length) : [];
+  const state = {
+    images: safeImages,
+    index: 0,
+    title: hotelDisplayName(hotel),
+  };
+  cardImageState.set(cardEl, state);
+  updateCardThumbUI(cardEl, state);
+}
+
+async function loadHotelImagesForCard(hotel, index, lang, size, token) {
+  if (!hotelsContainer) return;
+  const card = hotelsContainer.querySelector(`[data-hotel-index="${index}"]`);
+  if (!card) return;
+  setThumbLoadingState(card);
+  const images = await fetchHotelImages(hotel, lang, size, CARD_IMAGE_LIMIT);
+  if (token !== latestHotelsRenderToken) return;
+  if (images.length) setCardImages(card, hotel, images);
+  else setThumbLoadingState(card, tr("thumb_no_photo"));
+}
+
+function hydrateHotelImages(hotels, token) {
+  if (!Array.isArray(hotels) || !hotels.length) return;
+  const lang = langEl?.value || "en";
+  const size = getSelectedImageSize();
+  hotels.forEach((hotel, index) => {
+    loadHotelImagesForCard(hotel, index, lang, size, token).catch(() => {});
+  });
+}
+
+function handleThumbNav(event) {
+  const control = event.target.closest("[data-thumb-prev],[data-thumb-next]");
+  if (!control) return;
+  event.preventDefault();
+  const card = control.closest(".hotel-item");
+  if (!card) return;
+  const state = cardImageState.get(card);
+  if (!state || !Array.isArray(state.images) || state.images.length <= 1) return;
+  const delta = control.hasAttribute("data-thumb-prev") ? -1 : 1;
+  const total = state.images.length;
+  state.index = (state.index + delta + total) % total;
+  updateCardThumbUI(card, state);
+}
+
+hotelsContainer?.addEventListener("click", handleThumbNav);
+btnResultsPrev?.addEventListener("click", () => {
+  if (currentHotelsPage <= 0) return;
+  renderHotelsEx(null, { page: currentHotelsPage - 1 });
+});
+btnResultsNext?.addEventListener("click", () => {
+  const totalPages = Math.ceil((currentHotelsStore.length || 0) / HOTELS_PAGE_SIZE);
+  if (currentHotelsPage >= totalPages - 1) return;
+  renderHotelsEx(null, { page: currentHotelsPage + 1 });
+});
+hotelDetailsContainer?.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-prebook-index]");
+  if (!btn) return;
+  const idx = Number(btn.getAttribute("data-prebook-index"));
+  if (!Number.isFinite(idx)) return;
+  prebookRateAtIndex(idx, btn);
+});
+
+async function hydrateHotelDetailGallery(hotel, token) {
+  if (!hotelDetailsContainer || !hotel) return;
+  const galleryEl = hotelDetailsContainer.querySelector("[data-hotel-gallery]");
+  if (!galleryEl) return;
+  galleryEl.innerHTML = `<div class="hotel-thumb__placeholder">${escapeHtml(tr("detail_gallery_loading"))}</div>`;
+  try {
+    const lang = langEl?.value || "en";
+    const images = await fetchHotelImages(hotel, lang, DETAIL_IMAGE_SIZE, DETAIL_IMAGE_LIMIT);
+    if (token !== latestHotelDetailsToken) return;
+    if (!images.length) {
+      galleryEl.innerHTML = `<div class="hotel-thumb__placeholder">${escapeHtml(tr("detail_gallery_none"))}</div>`;
+      return;
+    }
+    galleryEl.innerHTML = images
+      .map((url, idx) => {
+        const safeUrl = escapeHtml(url);
+        const alt = escapeHtml(`${hotelDisplayName(hotel)} photo ${idx + 1}`);
+        return `<div class="hotel-gallery__item"><img src="${safeUrl}" alt="${alt}" loading="lazy" decoding="async"></div>`;
+      })
+      .join("");
+  } catch (_err) {
+    if (token !== latestHotelDetailsToken) return;
+    galleryEl.innerHTML = `<div class="hotel-thumb__placeholder">${escapeHtml(tr("detail_gallery_error"))}</div>`;
+  }
+}
+
+function updatePaginationControls(totalPages) {
+  if (!resultsPaginationEl || !btnResultsPrev || !btnResultsNext || !resultsPaginationLabel) return;
+  if (!totalPages || totalPages <= 1) {
+    resultsPaginationEl.style.display = "none";
+    return;
+  }
+  resultsPaginationEl.style.display = "flex";
+  resultsPaginationLabel.textContent = `Page ${currentHotelsPage + 1} / ${totalPages}`;
+  btnResultsPrev.disabled = currentHotelsPage <= 0;
+  btnResultsNext.disabled = currentHotelsPage >= totalPages - 1;
+}
+
+async function prebookRateAtIndex(index, triggerEl) {
+  const rate = currentHotelRates?.[index];
+  const hotel = currentHotelDetail;
+  if (!rate || !hotel) return;
+  const hash = rate.book_hash || rate.hash || rate.match_hash;
+  if (!hash) {
+    setRegionStatus(tr("prebook_error"));
+    return;
+  }
+  const payload = {
+    book_hash: hash,
+    price_increase_percent: 0,
+    hp_context: {
+      id: hotel.id || hotel.hid,
+      hid: hotel.hid,
+      checkin: checkinEl?.value,
+      checkout: checkoutEl?.value,
+      guests: buildGuests(),
+      currency: currencyEl?.value,
+      language: langEl?.value,
+    },
+  };
+  log(payload, "REQUEST /api/prebook");
+  try {
+    triggerEl?.setAttribute("disabled", "disabled");
+    const { statusCode, data } = await safeJsonFetch(
+      `${API_BASE}/api/prebook`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+      "RESPONSE /api/prebook"
+    );
+    if (statusCode >= 400 || !data || data.error) {
+      setRegionStatus(`${tr("prebook_error")} (${data?.error || data?._raw || statusCode})`);
+      triggerEl?.removeAttribute("disabled");
+      return;
+    }
+    setRegionStatus(tr("prebook_success"));
+    if (data?.prebook_token) {
+      persistPrebookSummary(data, hotel, rate);
+      const baseUrl = new URL(window.location.href);
+      const parts = baseUrl.pathname.split("/").filter(Boolean);
+      if (parts.length) {
+        parts[parts.length - 1] = "booking.html";
+      } else {
+        parts.push("booking.html");
+      }
+      baseUrl.pathname = `/${parts.join("/")}`;
+      baseUrl.search = `token=${encodeURIComponent(data.prebook_token)}`;
+      window.location.assign(baseUrl.toString());
+    }
+  } catch (err) {
+    setRegionStatus(`${tr("prebook_error")} (${err.message || "ERR"})`);
+  } finally {
+    triggerEl?.removeAttribute("disabled");
+  }
+}
+
+function persistPrebookSummary(apiResponse, hotel, rate) {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    const guestLabel = (() => {
+      try {
+        return formatRequestedGuestsLabel()?.summary || "";
+      } catch (_) {
+        return "";
+      }
+    })();
+    const payment = rate?.payment_options?.payment_types?.[0] || {};
+    const summary = {
+      token: apiResponse?.prebook_token || null,
+      created_at: Date.now(),
+      hotel: {
+        id: hotel?.id || null,
+        hid: hotel?.hid || null,
+        name: hotel ? hotelDisplayName(hotel) : null,
+        city: hotel?.city_name || hotel?.city || hotel?.location || hotel?.address?.city || null,
+        address: hotel?.address || hotel?.address_line || hotel?.address_full || null,
+        country: hotel?.country || hotel?.country_name || null,
+      },
+      stay: {
+        checkin: checkinEl?.value || null,
+        checkout: checkoutEl?.value || null,
+        currency: currencyEl?.value || payment?.show_currency_code || payment?.currency_code || null,
+        guests: buildGuests(),
+        guest_label: guestLabel,
+      },
+      room: {
+        name: rate?.room_name || rate?.room_data_trans?.main_name || rate?.name || null,
+        meal: rate?.meal || null,
+        price: payment?.show_amount || payment?.amount || null,
+        currency: payment?.show_currency_code || payment?.currency_code || null,
+        amenities: rate?.amenities_data || null,
+        daily_prices: rate?.daily_prices || null,
+        guests_label: guestLabel,
+      },
+      payload: apiResponse || null,
+    };
+    sessionStorage.setItem(PREBOOK_SUMMARY_KEY, JSON.stringify(summary));
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+function formatCurrency(amount, currency) {
+  const num = Number(amount);
+  if (!Number.isFinite(num)) return amount || "";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: currency || "EUR",
+      maximumFractionDigits: 2,
+    }).format(num);
+  } catch (_) {
+    return `${num} ${currency || ""}`.trim();
+  }
+}
+
+function formatIsoDate(value, includeTime = false) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const opts = includeTime
+    ? { dateStyle: "medium", timeStyle: "short" }
+    : { dateStyle: "medium" };
+  try {
+    return new Intl.DateTimeFormat(undefined, opts).format(date);
+  } catch (_) {
+    return date.toISOString();
+  }
+}
+
+function friendlyMeal(value) {
+  switch ((value || "").toLowerCase()) {
+    case "nomeal": return tr("meal_nomeal");
+    case "breakfast": return tr("meal_breakfast");
+    case "half_board": return tr("meal_half_board");
+    case "full_board": return tr("meal_full_board");
+    case "all-inclusive":
+    case "all_inclusive": return tr("meal_all_inclusive");
+    default: return value || tr("meal_default");
+  }
+}
+
+function friendlySerpFilter(code) {
+  switch (code) {
+    case "has_breakfast": return tr("filter_breakfast");
+    case "has_internet": return tr("filter_wifi");
+    case "has_bathroom": return tr("filter_bathroom");
+    case "free_cancellation": return tr("filter_free_cancel");
+    case "refundable": return tr("filter_refundable");
+    default:
+      return code ? code.replace(/_/g, " ") : null;
+  }
+}
+
+function collectHotelHighlights(rates) {
+  const tags = new Set();
+  (rates || []).forEach((rate) => {
+    (rate?.serp_filters || []).forEach((flt) => {
+      const label = friendlySerpFilter(flt);
+      if (label) tags.add(label);
+    });
+    (rate?.amenities_data || []).forEach((amenity) => {
+      if (amenity) tags.add(amenity.replace(/_/g, " "));
+    });
+  });
+  return Array.from(tags);
+}
+
+function buildKnowBeforeList(rate) {
+  const notes = [];
+  const payment = rate?.payment_options?.payment_types?.[0];
+  const penalties = payment?.cancellation_penalties;
+  if (penalties?.free_cancellation_before) {
+    notes.push(tr("free_cancel_before", formatIsoDate(penalties.free_cancellation_before, true)));
+  } else if (Array.isArray(penalties?.policies) && penalties.policies.length) {
+    const lastPolicy = penalties.policies[penalties.policies.length - 1];
+    if (lastPolicy?.amount_show) {
+      const cutoff = formatIsoDate(lastPolicy.start_at, true) || "";
+      notes.push(tr("cancel_charge_after", formatCurrency(lastPolicy.amount_show, payment?.show_currency_code), cutoff));
+    }
+  }
+  const taxes = payment?.tax_data?.taxes || [];
+  taxes
+    .filter((tax) => tax && tax.included_by_supplier === false)
+    .forEach((tax) => {
+      const label = (tax.name || "local tax").replace(/_/g, " ");
+      notes.push(tr("tax_payable", label, formatCurrency(tax.amount, tax.currency_code)));
+    });
+  if (rate?.deposit?.price) {
+    notes.push(tr("deposit_amount", formatCurrency(rate.deposit.price, rate.deposit.currency), rate.deposit.deposit_type));
+  }
+  if (rate?.no_show?.amount) {
+    notes.push(tr("no_show_fee", formatCurrency(rate.no_show.amount, rate.no_show.currency_code), rate.no_show.from_time));
+  }
+  if (payment?.type) {
+    notes.push(tr("payment_type", payment.type, payment.is_need_credit_card_data));
+  }
+  return notes.filter(Boolean).slice(0, 6);
+}
+
+function renderRateCard(rate, index) {
+  const payment = rate?.payment_options?.payment_types?.[0];
+  const price = formatCurrency(payment?.show_amount || payment?.amount, payment?.show_currency_code || payment?.currency_code);
+  const roomName = rate?.room_name || rate?.room_data_trans?.main_name || tr("room_label");
+  const mealLabel = friendlyMeal(rate?.meal_data?.value || rate?.meal);
+  const chips = [];
+  const capacityValue = getRateCapacity(rate);
+  if (mealLabel) chips.push(mealLabel);
+  if (capacityValue) chips.push(tr("sleeps_label", capacityValue));
+  if (rate?.rg_ext?.class) chips.push(`${rate.rg_ext.class}★`);
+  if (rate?.allotment) chips.push(tr("rooms_left", rate.allotment));
+  const freeBefore = payment?.cancellation_penalties?.free_cancellation_before;
+  const cancellationText = freeBefore
+    ? tr("free_cancel_before", formatIsoDate(freeBefore, true))
+    : tr("cancellation_fees");
+  const taxes = (payment?.tax_data?.taxes || [])
+    .map((tax) => `${tax.name || "tax"} ${formatCurrency(tax.amount, tax.currency_code)}${tax.included_by_supplier ? " (included)" : ""}`)
+    .slice(0, 3);
+  const { summary: requestSummary } = formatRequestedGuestsLabel();
+  const capacityDetail = capacityValue
+    ? tr("room_capacity_detail", capacityValue, requestSummary)
+    : requestSummary
+    ? tr("requested_occupancy_label", requestSummary)
+    : "";
+  return `
+    <div class="room-card">
+      <div class="room-card__header">
+        <div class="room-card__title">${escapeHtml(roomName)}</div>
+        <div class="room-card__price">${escapeHtml(price || "?")}</div>
+      </div>
+      <div class="room-card__chips">
+        ${chips.map((chip) => `<span class="chip">${escapeHtml(chip)}</span>`).join("")}
+      </div>
+      <div class="room-card__details">
+        <div>${escapeHtml(cancellationText)}</div>
+        ${capacityDetail ? `<div>${escapeHtml(capacityDetail)}</div>` : ""}
+        ${taxes.length ? `<div>${escapeHtml(tr("taxes_fees_label"))}: ${taxes.map(escapeHtml).join(", ")}</div>` : ""}
+        ${rate?.room_data_trans?.bedding_type ? `<div>${escapeHtml(tr("bedding_label"))}: ${escapeHtml(rate.room_data_trans.bedding_type)}</div>` : ""}
+        ${rate?.room_data_trans?.bathroom ? `<div>${escapeHtml(tr("bathroom_label"))}: ${escapeHtml(rate.room_data_trans.bathroom)}</div>` : ""}
+      </div>
+      <div class="room-card__footer">${escapeHtml(rate.book_hash || rate.match_hash || "")}</div>
+      <div class="hotel-actions">
+        <button class="primary mini" data-prebook-index="${index}">${escapeHtml(tr("prebook_button"))}</button>
+      </div>
+    </div>`;
+}
+
+
+// Enriched results card renderer
+function renderHotelsEx(resultsMaybeNested, options = {}) {
+  const renderToken = ++latestHotelsRenderToken;
+  if (resultsMaybeNested) {
+    currentHotelsStore = extractHotels(resultsMaybeNested) || [];
+    currentHotelsPage = 0;
+  }
+  if (!Array.isArray(currentHotelsStore)) currentHotelsStore = [];
+  if (typeof options.page === "number" && !Number.isNaN(options.page)) {
+    currentHotelsPage = options.page;
+  }
+  const hotels = currentHotelsStore;
+  const totalPages = hotels.length ? Math.ceil(hotels.length / HOTELS_PAGE_SIZE) : 0;
+  if (!hotels.length) {
+    lastRenderedHotels = [];
+    hotelsContainer.innerHTML = `<div style="font-size:.7rem;color:#64748b;">${escapeHtml(tr("search_no_hotels") || "No hotels found.")}</div>`;
+    updatePaginationControls(totalPages);
+    if (searchMeta) searchMeta.textContent = lastSearchEndpoint ? `endpoint ${lastSearchEndpoint}` : "";
+    return;
+  }
+  currentHotelsPage = Math.max(0, Math.min(currentHotelsPage, totalPages - 1));
+  const startIndex = currentHotelsPage * HOTELS_PAGE_SIZE;
+  const pagedHotels = hotels.slice(startIndex, startIndex + HOTELS_PAGE_SIZE);
+  lastRenderedHotels = pagedHotels.slice();
 
   const ci = checkinEl?.value;
   const co = checkoutEl?.value;
@@ -263,12 +1058,13 @@ function renderHotelsEx(resultsMaybeNested) {
 
   function rateMealLabel(code) {
     switch (code) {
-      case 'nomeal': return 'Room only';
-      case 'breakfast': return 'Breakfast';
-      case 'half_board': return 'Half board';
-      case 'full_board': return 'Full board';
-      case 'all_inclusive': return 'All inclusive';
-      default: return code || '';
+      case 'nomeal': return tr('meal_nomeal');
+      case 'breakfast': return tr('meal_breakfast');
+      case 'half_board': return tr('meal_half_board');
+      case 'full_board': return tr('meal_full_board');
+      case 'all_inclusive':
+      case 'all-inclusive': return tr('meal_all_inclusive');
+      default: return code || tr('meal_default');
     }
   }
   function rateFreeCancellation(rate) {
@@ -284,51 +1080,99 @@ function renderHotelsEx(resultsMaybeNested) {
     const currency = p?.show_currency_code || p?.currency_code || 'EUR';
     return { amount: Number.isFinite(amt) ? amt : null, currency };
   }
-  function pickBestRate(rates) {
+  function pickBestRate(rates, requiredCapacity) {
     if (!Array.isArray(rates) || !rates.length) return null;
-    let best = null; let bestAmt = Infinity;
+    const need = Math.max(1, requiredCapacity || 1);
+    let best = null;
+    let bestScore = Infinity;
     for (const r of rates) {
       const { amount } = ratePrice(r);
-      if (amount !== null && amount < bestAmt) { bestAmt = amount; best = r; }
+      const priceScore = amount !== null ? amount : Number.POSITIVE_INFINITY;
+      const capacity = getRateCapacity(r) || 0;
+      const deficit = capacity >= need ? 0 : need - capacity;
+      const excess = capacity > need ? capacity - need : 0;
+      const score = deficit * 100000 + excess * 1000 + priceScore;
+      if (score < bestScore) {
+        bestScore = score;
+        best = r;
+      }
     }
     return best || rates[0];
   }
 
-  hotelsContainer.innerHTML = hotels.map((h, i) => {
+  const { counts: requestedCounts, summary: requestedSummary } = formatRequestedGuestsLabel();
+
+  hotelsContainer.innerHTML = pagedHotels.map((h, i) => {
     const name = hotelDisplayName(h);
     const hid  = h.id || h.hotel_id || h.hid || 'n/a';
     const addr = h.address || h.location || '';
     const stars = deriveHotelStars(h);
-    const best = pickBestRate(h.rates || []);
+    const best = pickBestRate(h.rates || [], requestedCounts.total);
     const mealCode = best?.meal || best?.meal_data?.value || '';
     const mealText = rateMealLabel(mealCode);
     const freeCancel = best ? rateFreeCancellation(best) : false;
     const { amount, currency } = best ? ratePrice(best) : { amount: null, currency: 'EUR' };
-    const roomName = best?.room_name || best?.room || '';
-    const capacity = best?.rg_ext?.capacity || h?.rg_ext?.capacity || null;
+    const roomName = best?.room_name || best?.room || tr("room_label");
+    const safeRoomName = escapeHtml(roomName || tr("room_label"));
+    const capacity = getRateCapacity(best) || h?.rg_ext?.capacity || null;
+    const distanceText = formatDistanceFromCenter(h);
+    const starHtml = renderStarIcons(stars);
+    const listingNumber = startIndex + i + 1;
+    const mealChip = mealText
+      ? `<span class="chip chip--meal">${chipIcon("meal")}${escapeHtml(mealText)}</span>`
+      : "";
+    const cancelChip = best
+      ? (freeCancel
+          ? `<span class="chip chip--free">${chipIcon("check")}${escapeHtml(tr("free_cancellation"))}</span>`
+          : `<span class="chip chip--danger">${chipIcon("ban")}${escapeHtml(tr("no_cancellation"))}</span>`)
+      : "";
+    const capacityChip = capacity ? `<span class="chip">${escapeHtml(`${tr("capacity_prefix")} ${capacity}`)}</span>` : "";
+    const requestedLabel = requestedSummary ? tr("requested_occupancy_label", requestedSummary) : "";
+    const capacityDetail = capacity
+      ? tr("room_capacity_detail", capacity, requestedSummary)
+      : requestedLabel;
+    const capacityDetailHtml = capacityDetail
+      ? `<div class="muted" style="margin-top:.35rem;">${escapeHtml(capacityDetail)}</div>`
+      : "";
+    const chipsHtml = [mealChip, cancelChip, capacityChip].filter(Boolean).join("");
     return `
-      <div class="hotel-item">
-        <div class="hotel-head">
-          <div class="hotel-name">${i + 1}. ${name}</div>
-          <div class="hotel-id">ID: ${hid}</div>
-        </div>
-        <div class="hotel-meta">${Number.isFinite(Number(stars)) ? `${stars}★` : ''} ${addr ? `· ${addr}` : ''}</div>
-        <div class="rate-snippet" style="margin-top:.5rem; border:1px solid rgba(148,163,184,.25); border-radius:.6rem; padding:.6rem; display:grid; grid-template-columns: 1fr auto; gap:.5rem; align-items:center; background: rgba(15,23,42,.6);">
-          <div>
-            <div style="font-weight:600;">${roomName || 'Room'}</div>
-            <div class="chips" style="margin-top:.25rem;">
-              ${mealText ? `<span class="chip">${mealText}</span>` : ''}
-              ${freeCancel ? `<span class="chip" style="border-color:#22c55e;color:#86efac;background:rgba(16,185,129,.12)">Free cancellation</span>` : ''}
-              ${capacity ? `<span class="chip">max ${capacity}</span>` : ''}
+      <div class="hotel-item" data-hotel-index="${i}">
+        <div class="hotel-item__top">
+          <div class="hotel-thumb" data-hotel-thumb>
+            <div class="hotel-thumb__viewport" data-thumb-image>
+              <div class="hotel-thumb__placeholder">${escapeHtml(tr("thumb_loading"))}</div>
+            </div>
+            <button type="button" class="hotel-thumb__nav hotel-thumb__nav--prev is-hidden" data-thumb-prev aria-label="Previous photo">‹</button>
+            <button type="button" class="hotel-thumb__nav hotel-thumb__nav--next is-hidden" data-thumb-next aria-label="Next photo">›</button>
+            <div class="hotel-thumb__counter is-hidden" data-thumb-counter></div>
+          </div>
+          <div class="hotel-summary">
+            <div class="hotel-head">
+              <div class="hotel-name">${listingNumber}. ${name}</div>
+              <div class="hotel-id">${escapeHtml(tr("detail_id_label", hid))}</div>
+            </div>
+            <div class="hotel-meta">
+              ${starHtml || ""}
+              ${distanceText ? `<span class="hotel-distance">${escapeHtml(distanceText)}</span>` : ""}
+              ${addr ? `<span>${escapeHtml(addr)}</span>` : ""}
+            </div>
+            <div class="rate-snippet" style="margin-top:.25rem; border:1px solid rgba(148,163,184,.25); border-radius:.6rem; padding:.6rem; display:grid; grid-template-columns: 1fr auto; gap:.5rem; align-items:center; background: rgba(15,23,42,.6);">
+              <div>
+                <div style="font-weight:600;">${safeRoomName}</div>
+                <div class="chips" style="margin-top:.25rem;">
+                  ${chipsHtml}
+                </div>
+                ${capacityDetailHtml}
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:1rem;font-weight:700;">${amount!=null ? `${escapeHtml(formatCurrency(amount, currency))}` : '?'}</div>
+                ${nights ? `<div class="muted" style="margin-top:.15rem;">${escapeHtml(tr('nights_label', nights))}</div>` : ''}
+              </div>
+            </div>
+            <div class="hotel-actions">
+              <button class="secondary mini" data-view-hid="${hid}">${escapeHtml(tr('button_view_details'))}</button>
             </div>
           </div>
-          <div style="text-align:right;">
-            <div style="font-size:1rem;font-weight:700;">${amount!=null ? `${amount} ${currency}` : '?'}</div>
-            ${nights ? `<div class="muted" style="margin-top:.15rem;">for ${nights} night${nights>1?'s':''}</div>` : ''}
-          </div>
-        </div>
-        <div style="margin-top:.5rem; display:flex; justify-content:flex-end;">
-          <button class="secondary mini" data-view-hid="${hid}">View details</button>
         </div>
       </div>`;
   }).join('');
@@ -336,12 +1180,23 @@ function renderHotelsEx(resultsMaybeNested) {
   hotelsContainer.querySelectorAll('button[data-view-hid]').forEach(btn => {
     btn.addEventListener('click', () => loadHotelDetails(btn.getAttribute('data-view-hid')));
   });
+  if (searchMeta) {
+    const metaParts = [];
+    if (lastSearchEndpoint) metaParts.push(`endpoint ${lastSearchEndpoint}`);
+    metaParts.push(`${hotels.length} hotel${hotels.length === 1 ? "" : "s"}`);
+    if (totalPages > 1) metaParts.push(`page ${currentHotelsPage + 1}/${totalPages}`);
+    searchMeta.textContent = metaParts.join(" · ");
+  }
+  updatePaginationControls(totalPages);
+  hydrateHotelImages(lastRenderedHotels, renderToken);
 }
 
 function renderHotels(resultsMaybeNested) {
+  const renderToken = ++latestHotelsRenderToken;
+  updatePaginationControls(0);
   const hotels = extractHotels(resultsMaybeNested);
   if (!hotels || !hotels.length) {
-    hotelsContainer.innerHTML = `<div style="font-size:.7rem;color:#64748b;">No hotels found.</div>`;
+    hotelsContainer.innerHTML = `<div style="font-size:.7rem;color:#64748b;">${escapeHtml(tr("search_no_hotels") || "No hotels found.")}</div>`;
     return;
   }
   hotelsContainer.innerHTML = hotels.map((h, i) => {
@@ -349,15 +1204,29 @@ function renderHotels(resultsMaybeNested) {
     const hid  = h.id || h.hotel_id || h.hid || "n/a";
     const addr = h.address || h.location || "";
     const stars = deriveHotelStars(h);
+    const starHtml = renderStarIcons(stars);
+    const distanceText = formatDistanceFromCenter(h);
     return `
-      <div class="hotel-item">
+      <div class="hotel-item" data-hotel-index="${i}">
+        <div class="hotel-thumb" data-hotel-thumb>
+          <div class="hotel-thumb__viewport" data-thumb-image>
+            <div class="hotel-thumb__placeholder">${escapeHtml(tr("thumb_loading"))}</div>
+          </div>
+          <button type="button" class="hotel-thumb__nav hotel-thumb__nav--prev is-hidden" data-thumb-prev aria-label="Previous photo">‹</button>
+          <button type="button" class="hotel-thumb__nav hotel-thumb__nav--next is-hidden" data-thumb-next aria-label="Next photo">›</button>
+          <div class="hotel-thumb__counter is-hidden" data-thumb-counter></div>
+        </div>
         <div class="hotel-head">
           <div class="hotel-name">${i + 1}. ${name}</div>
-          <div class="hotel-id">ID: ${hid}</div>
+          <div class="hotel-id">${escapeHtml(tr("detail_id_label", hid))}</div>
         </div>
-        <div class="hotel-meta">${stars ? `${stars}★` : ""} ${addr ? `· ${addr}` : ""}</div>
+        <div class="hotel-meta">
+          ${starHtml || ""}
+          ${distanceText ? `<span class="hotel-distance">${escapeHtml(distanceText)}</span>` : ""}
+          ${addr ? `<span>${escapeHtml(addr)}</span>` : ""}
+        </div>
         <div style="margin-top:.5rem;">
-          <button class="secondary mini" data-view-hid="${hid}">View details</button>
+          <button class="secondary mini" data-view-hid="${hid}">${escapeHtml(tr('button_view_details'))}</button>
         </div>
       </div>`;
   }).join("");
@@ -365,11 +1234,13 @@ function renderHotels(resultsMaybeNested) {
   hotelsContainer.querySelectorAll('button[data-view-hid]').forEach(btn => {
     btn.addEventListener('click', () => loadHotelDetails(btn.getAttribute('data-view-hid')));
   });
+  hydrateHotelImages(hotels, renderToken);
 }
 
 function renderHotelDetails(data) {
   if (!data || !data.results) {
-    hotelDetailsContainer.innerHTML = `<div style="font-size:.7rem;color:#64748b;">No hotel data.</div>`;
+    lastHotelDetailsResults = null;
+    hotelDetailsContainer.innerHTML = `<div style="font-size:.7rem;color:#64748b;">${escapeHtml(tr("detail_no_data"))}</div>`;
     return;
   }
   const hotelsArray = Array.isArray(data.results?.hotels)
@@ -377,40 +1248,89 @@ function renderHotelDetails(data) {
     : Array.isArray(data.results)
     ? data.results
     : data.results.hotels || [];
+  lastHotelDetailsResults = data.results || lastHotelDetailsResults;
   const hotel = Array.isArray(hotelsArray) ? hotelsArray[0] : data.results;
   if (!hotel) {
-    hotelDetailsContainer.innerHTML = `<div style="font-size:.7rem;color:#64748b;">No hotel found in response.</div>`;
+    lastHotelDetailsResults = data.results || null;
+    hotelDetailsContainer.innerHTML = `<div style="font-size:.7rem;color:#64748b;">${escapeHtml(tr("detail_no_hotel"))}</div>`;
     return;
   }
+  const detailToken = ++latestHotelDetailsToken;
   const name  = hotelDisplayName(hotel);
   const hid   = hotel.id || hotel.hid || hotel.hotel_id || "n/a";
   const addr  = hotel.address || hotel.location || "";
-  const rates = hotel.rates || [];
-  const ratesHTML = rates.length
-    ? rates.map(r => {
-        const meal = r.meal || "";
-        const roomName = r.room_name || r.room || "";
-        const price = r.sell_price || r.price || r.total || "";
-        const currency = r.currency || r.currency_code || "EUR";
-        const hash = r.hash || "";
-        return `
-          <div class="rate-item">
-            <div class="rate-head">
-              <div class="rate-left">
-                <div>${roomName || "Room"}</div>
-                <div style=\"color:#94a3b8;font-size:.7rem;\">${meal}</div>
-              </div>
-              <div class="rate-right">${price ? `${price} ${currency}` : "?"}</div>
-            </div>
-            <div class="hash">${hash}</div>
-          </div>`;
-      }).join("")
-    : `<div style="font-size:.7rem;color:#64748b;">No rates found.</div>`;
+  const rates = Array.isArray(hotel.rates) ? hotel.rates : [];
+  currentHotelDetail = hotel;
+  currentHotelRates = rates.slice();
+  const stars = deriveHotelStars(hotel);
+  const cheapestRate = rates
+    .map((rate) => {
+      const payment = rate?.payment_options?.payment_types?.[0];
+      const amount = Number(payment?.show_amount || payment?.amount);
+      const currency = payment?.show_currency_code || payment?.currency_code || "EUR";
+      return Number.isFinite(amount) ? { amount, currency } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.amount - b.amount)[0];
+  const highlightTags = collectHotelHighlights(rates).slice(0, 8);
+  const highlightChips = highlightTags.length
+    ? highlightTags.map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join("")
+    : `<span class="muted">${escapeHtml(tr("detail_no_highlights"))}</span>`;
+  const knowBefore = buildKnowBeforeList(rates[0]) || [];
+  const knowBeforeHTML = knowBefore.length
+    ? knowBefore.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+    : `<li>${escapeHtml(tr("detail_no_policies"))}</li>`;
+  const infoList = [];
+  infoList.push(tr("detail_offers_label", rates.length || 0));
+  if (addr) infoList.push(addr);
+  if (cheapestRate) infoList.push(tr("detail_from_label", formatCurrency(cheapestRate.amount, cheapestRate.currency)));
+  const metaPieces = [
+    tr("detail_id_label", hid),
+    stars ? `${stars}★` : "",
+    cheapestRate ? tr("detail_from_label", formatCurrency(cheapestRate.amount, cheapestRate.currency)) : "",
+  ].filter(Boolean);
+  const metaHTML = infoList.map((fact) => `<span>${escapeHtml(fact)}</span>`).join("");
+  const factsListHTML = infoList.length
+    ? infoList.map((fact) => `<li>${escapeHtml(fact)}</li>`).join("")
+    : `<li>${escapeHtml(tr("detail_no_highlights"))}</li>`;
+  const roomsHTML = rates.length
+    ? rates
+        .map((rate, idx) => (idx < 12 ? renderRateCard(rate, idx) : ""))
+        .filter(Boolean)
+        .join("")
+    : `<div style="font-size:.75rem;color:#94a3b8;">${escapeHtml(tr("detail_no_rates"))}</div>`;
+
   hotelDetailsContainer.innerHTML = `
-    <div style="font-size:.8rem;font-weight:600;color:#fff;">${name}</div>
-    <div style="font-size:.7rem;color:#64748b;">ID: ${hid}</div>
-    <div style="font-size:.7rem;color:#94a3b8;margin:.25rem 0 .75rem 0;">${addr}</div>
-    <div class="rates-list">${ratesHTML}</div>`;
+    <div class="hotel-detail">
+      <div class="hotel-detail__summary">
+        <div class="hotel-detail__header">
+          <div class="hotel-detail__title">${escapeHtml(name)}</div>
+          <div class="hotel-detail__meta">
+            ${metaPieces.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
+          </div>
+        </div>
+        <div class="hotel-detail__meta">${metaHTML}</div>
+        <div class="hotel-detail__chips">${highlightChips}</div>
+      </div>
+      <div class="hotel-detail__info-grid">
+        <div class="hotel-detail__info-box">
+          <h4>${escapeHtml(tr("detail_highlights_title"))}</h4>
+          <ul>${factsListHTML}</ul>
+        </div>
+        <div class="hotel-detail__info-box">
+          <h4>${escapeHtml(tr("detail_know_title"))}</h4>
+          <ul>${knowBeforeHTML}</ul>
+        </div>
+      </div>
+      <div class="hotel-gallery" data-hotel-gallery>
+        <div class="hotel-thumb__placeholder">${escapeHtml(tr("detail_gallery_loading"))}</div>
+      </div>
+      <div class="hotel-detail__rooms">
+        <h4>${escapeHtml(tr("detail_rooms_title"))}</h4>
+        ${roomsHTML}
+      </div>
+    </div>`;
+  hydrateHotelDetailGallery(hotel, detailToken);
 }
 
 async function safeJsonFetch(url, options = {}, labelForLog = "") {
@@ -502,7 +1422,7 @@ async function loadRegionSuggestions(term) {
     renderRegionSuggestions(regions.slice(0, 8));
     renderHotelSuggestions(hotels.slice(0, 5));
     if (!regions.length && !hotels.length) {
-      setRegionStatus("No matching regions or hotels.");
+      setRegionStatus(tr("status_no_matches"));
     } else {
       const pieces = [];
       if (regions.length) pieces.push(`${regions.length} region${regions.length > 1 ? "s" : ""}`);
@@ -512,8 +1432,7 @@ async function loadRegionSuggestions(term) {
   } catch (err) {
     if (lastSuggestionQuery === term) {
       setRegionStatus(err.message || "Suggestion lookup failed.");
-      renderRegionSuggestions([]);
-      renderHotelSuggestions([]);
+      clearSuggestionsDropdown();
     }
   }
 }
@@ -523,8 +1442,7 @@ regionIdEl?.addEventListener("input", () => {
   const term = (regionIdEl.value || "").trim();
   selectedHotel = null;
   if (!term || term.length < 2) {
-    renderRegionSuggestions([]);
-    renderHotelSuggestions([]);
+    clearSuggestionsDropdown();
     setRegionStatus("");
     return;
   }
@@ -537,29 +1455,65 @@ langEl?.addEventListener("change", () => {
     if (suggestionTimer) clearTimeout(suggestionTimer);
     loadRegionSuggestions(term);
   } else {
-    renderRegionSuggestions([]);
-    renderHotelSuggestions([]);
+    clearSuggestionsDropdown();
     setRegionStatus("");
+  }
+  applyStaticTranslations();
+  if (currentHotelsStore.length) {
+    renderHotelsEx(null, { page: currentHotelsPage });
+  }
+  if (lastHotelDetailsResults) {
+    renderHotelDetails({ results: lastHotelDetailsResults });
   }
 });
 
-hotelSuggestionsEl?.addEventListener("click", (event) => {
-  const btn = event.target.closest("button.hotel-suggestion");
-  if (!btn) return;
-  const idx = Number(btn.getAttribute("data-suggestion-index"));
-  const hotel = Number.isInteger(idx) ? currentHotelSuggestions[idx] : null;
-  if (!hotel) return;
-  selectedHotel = {
-    hid: Number(hotel.hid) || hotel.hid,
-    region_id: hotel.region_id || null,
-    name: hotel.name || "",
-    displayValue: hotel.name || "",
-  };
-  if (regionIdEl && selectedHotel.displayValue) {
-    regionIdEl.value = selectedHotel.displayValue;
+suggestionsDropdownEl?.addEventListener("click", (event) => {
+  const option = event.target.closest(".suggestion-option");
+  if (!option) return;
+  const type = option.getAttribute("data-suggestion-type");
+  const idx = Number(option.getAttribute("data-suggestion-index"));
+
+  if (type === "region") {
+    const region = Number.isInteger(idx) ? currentRegionSuggestions[idx] : null;
+    if (!region) return;
+    const label = region.name || region.full_name || region.fullName || region.id || "";
+    if (regionIdEl) regionIdEl.value = label;
+    selectedHotel = null;
+    setRegionStatus(region.id ? `Region ID ${region.id}` : label);
+    clearSuggestionsDropdown();
+    regionIdEl?.focus();
+    return;
   }
-  setRegionStatus(`Selected hotel: ${selectedHotel.name || selectedHotel.hid || ""}`);
-  regionIdEl?.focus();
+
+  if (type === "hotel") {
+    const hotel = Number.isInteger(idx) ? currentHotelSuggestions[idx] : null;
+    if (!hotel) return;
+    selectedHotel = {
+      hid: Number(hotel.hid) || hotel.hid,
+      region_id: hotel.region_id || null,
+      name: hotel.name || "",
+      displayValue: hotel.name || "",
+    };
+    if (regionIdEl && selectedHotel.displayValue) {
+      regionIdEl.value = selectedHotel.displayValue;
+    }
+    const selectedLabel = selectedHotel.name || selectedHotel.hid || "";
+    setRegionStatus(tr("selected_hotel_status", selectedLabel));
+    clearSuggestionsDropdown();
+    regionIdEl?.focus();
+  }
+});
+
+document.addEventListener("click", (event) => {
+  if (!destinationFieldEl) return;
+  const target = event.target;
+  if (destinationFieldEl.contains(target)) return;
+  if (suggestionsDropdownEl?.contains(target)) return;
+  hideSuggestionsDropdown();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") hideSuggestionsDropdown();
 });
 
 // Search
@@ -594,7 +1548,7 @@ btnSearch.addEventListener('click', async () => {
 
   if (mode === 'region') {
     if (!hasDestination && !hotelSelectionActive) {
-      hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">Please enter a destination.</div>`; return;
+      hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">${escapeHtml(tr("error_enter_destination"))}</div>`; return;
     }
     if (hotelSelectionActive && selectedHotel?.hid) {
       body.hids = [selectedHotel.hid];
@@ -610,20 +1564,20 @@ btnSearch.addEventListener('click', async () => {
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
       if (!hasDestination) {
-        hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">Enter coordinates or a destination name.</div>`; return;
+        hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">${escapeHtml(tr("error_enter_coords_or_destination"))}</div>`; return;
       }
       let regionMatch = null;
       try {
         regionMatch = await ensureRegionMatch();
       } catch (err) {
-        hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">${err.message || 'Destination lookup failed.'}</div>`; return;
+        hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">${escapeHtml(err.message || tr("error_destination_lookup"))}</div>`; return;
       }
       if (!regionMatch) {
-        hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">No region found for that destination.</div>`; return;
+        hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">${escapeHtml(tr("error_no_region"))}</div>`; return;
       }
       const coords = extractRegionCoordinates(regionMatch);
       if (!coords) {
-        hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">No coordinates available for that destination.</div>`; return;
+        hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">${escapeHtml(tr("error_no_coords"))}</div>`; return;
       }
       lat = coords.latitude;
       lon = coords.longitude;
@@ -634,7 +1588,7 @@ btnSearch.addEventListener('click', async () => {
     }
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">Please enter valid coordinates or search by destination.</div>`; return;
+      hotelsContainer.innerHTML = `<div style="color:#dc2626;font-size:.75rem;">${escapeHtml(tr("error_invalid_coords"))}</div>`; return;
     }
     if (!Number.isFinite(rad) || rad <= 0) rad = 1500;
 
@@ -647,7 +1601,7 @@ btnSearch.addEventListener('click', async () => {
 
   log(body, 'REQUEST /api/search/serp');
   const { statusCode, data } = await safeJsonFetch(
-    `${API_BASE}/api/search/serp?limit=10`,
+    `${API_BASE}/api/search/serp?limit=${SERP_FETCH_LIMIT}`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
     'RESPONSE /api/search/serp'
   );
@@ -655,7 +1609,7 @@ btnSearch.addEventListener('click', async () => {
     hotelsContainer.innerHTML = `<div style=\"font-size:.7rem;color:#dc2626;\">${data?.error || data?._raw || 'Search failed'}</div>`;
     return;
   }
-  searchMeta.textContent = `endpoint ${data.endpoint}`;
+  lastSearchEndpoint = data.endpoint || "";
   renderHotelsEx(data.results);
 });
 
@@ -680,6 +1634,7 @@ async function loadHotelDetails(hid) {
     hotelDetailsContainer.innerHTML = `<div style=\"font-size:.7rem;color:#dc2626;\">${data?.error || data?._raw || 'Hotel lookup failed'}</div>`;
     return;
   }
+  lastHotelDetailsResults = data.results;
   renderHotelDetails({ results: data.results });
 }
 
@@ -692,4 +1647,30 @@ btnHotelDetails?.addEventListener('click', () => {
 // Prebook logic removed for search-only scope
 
 // Init summary
+applyStaticTranslations();
 updateGuestsSummary();
+function currentLanguage() {
+  return (langEl?.value || "en").toLowerCase();
+}
+
+function tr(key, ...args) {
+  const lang = currentLanguage();
+  const dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
+  const fallback = TRANSLATIONS.en || {};
+  let value = dict?.[key];
+  if (value === undefined) value = fallback[key];
+  if (typeof value === "function") {
+    try { return value(...args); }
+    catch (_) { return ""; }
+  }
+  return value ?? "";
+}
+
+function applyStaticTranslations() {
+  const header = document.querySelector("#hotelDetailHeaderTitle");
+  if (header) header.textContent = tr("detail_header") || "Hotel details & rates";
+  const hint = document.querySelector("#hotelDetailHeaderHint");
+  if (hint) hint.textContent = tr("detail_hint") || "select a hotel";
+  const placeholder = document.querySelector("#hotelDetailsPlaceholder");
+  if (placeholder) placeholder.textContent = tr("detail_placeholder") || "No hotel selected.";
+}

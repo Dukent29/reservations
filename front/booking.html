@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en" class="hotel-app">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Booking Form · Kotan Voyages</title>
+  <link rel="stylesheet" href="public/style.css" />
+</head>
+<body>
+  <div class="app-shell booking-app">
+    <header class="app-header">
+      <div class="brand">
+        <p class="eyebrow">Kotan Voyages · RateHawk sandbox</p>
+        <h1>Booking form</h1>
+        <p class="sub">Review the ETG booking requirements and submit traveller details.</p>
+      </div>
+    </header>
+
+    <main class="workspace workspace--booking">
+      <section class="card booking-panel">
+        <div class="booking-intro">
+          <div>
+            <p class="muted" style="margin:0">Prebook token</p>
+            <code id="prebookToken" class="booking-token">-</code>
+          </div>
+          <button id="refreshForm" class="secondary mini">Refresh form</button>
+        </div>
+        <div id="bookingStatus" class="booking-status muted"></div>
+
+        <div id="bookingFormSummary" class="booking-summary hidden">
+          <div class="summary-row">
+            <div>
+              <p class="muted" style="margin:0">Partner order ID</p>
+              <code id="partnerOrderId" class="booking-token">-</code>
+            </div>
+            <button id="copyPartnerId" class="secondary mini">Copy</button>
+          </div>
+          <div class="summary-row">
+            <div>
+              <p class="muted" style="margin:0">Hotel</p>
+              <strong id="hotelName">-</strong>
+              <p id="hotelDetails" class="muted" style="margin:4px 0 0 0"></p>
+            </div>
+          </div>
+          <div id="staySummary" class="summary-grid"></div>
+        </div>
+
+        <section class="card booking-form" id="travellerForm" aria-live="polite">
+          <h3>Traveller details</h3>
+          <form id="bookingDetailsForm">
+            <div class="row">
+              <label>
+                Full name
+                <input type="text" id="customerName" placeholder="John Doe" required />
+              </label>
+              <label>
+                Email
+                <input type="email" id="customerEmail" placeholder="john@example.com" required />
+              </label>
+            </div>
+            <div class="row">
+              <label>
+                Phone number
+                <input type="tel" id="customerPhone" placeholder="+33 6 00 00 00 00" required />
+              </label>
+              <label>
+                Notes (optional)
+                <input type="text" id="bookingNotes" placeholder="Late arrival, VIP, …" />
+              </label>
+            </div>
+            <button type="button" id="startBooking" class="primary" disabled>Create booking (soon)</button>
+          </form>
+        </section>
+
+        <section class="card booking-raw">
+          <h3>Raw ETG form</h3>
+          <pre id="rawForm">// waiting for booking form…</pre>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="booking.js"></script>
+</body>
+</html>
