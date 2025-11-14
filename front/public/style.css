@@ -467,6 +467,8 @@ input[type="checkbox"], input[type="radio"] {
   overflow: visible;
   box-shadow: 0 25px 70px -25px rgba(0,0,0,.85);
   backdrop-filter: blur(16px);
+}
+.card.booking-panel {
   margin-top: 2rem;
 }
     .card h3 {

@@ -47,26 +47,6 @@ try {
   storedPrebookPayload = storedPrebookPayload || null;
 }
 
-function cachePrebookSummary(summary, payload) {
-  if (summary) storedPrebookSummary = summary;
-  if (payload) storedPrebookPayload = payload;
-  if (!storedPrebookSummary && !storedPrebookPayload) return;
-  try {
-    if (typeof sessionStorage !== "undefined") {
-      sessionStorage.setItem(
-        PREBOOK_SUMMARY_KEY,
-        JSON.stringify({
-          token,
-          summary: storedPrebookSummary,
-          payload: storedPrebookPayload,
-        })
-      );
-    }
-  } catch (_) {
-    // ignore storage errors
-  }
-}
-
 function setStatus(message, type = "info") {
   if (!statusEl) return;
   if (!message) {
@@ -150,6 +130,8 @@ function deriveHotelFromPayload(payload) {
   if (!hotels.length) return null;
   const hotel = hotels[0];
   return {
+    id: hotel?.id || null,
+    hid: hotel?.hid || null,
     name: hotel?.name || hotel?.hotel_name || hotel?.legal_info?.hotel?.name || null,
     city: hotel?.city || hotel?.city_name || hotel?.legal_info?.hotel?.city || null,
     address: hotel?.address || hotel?.legal_info?.hotel?.address || null,
@@ -162,6 +144,9 @@ function renderHotelSummary(form = {}, fallbackSummary, fallbackPayload) {
   const rooms = Array.isArray(form.rooms) ? form.rooms : [];
   const hotelPayload = form.hotel || form.order?.hotel || {};
   const roomSample = rooms[0] || {};
+  const payloadHotel = deriveHotelFromPayload(fallbackPayload);
+  const fallbackId = fallbackSummary?.hotel?.id || payloadHotel?.id || null;
+  const fallbackHid = fallbackSummary?.hotel?.hid || payloadHotel?.hid || null;
   const hotelName =
     hotelPayload.name ||
     hotelPayload.hotel_name ||
@@ -170,8 +155,9 @@ function renderHotelSummary(form = {}, fallbackSummary, fallbackPayload) {
     roomSample.hotel_name ||
     roomSample.name ||
     fallbackSummary?.hotel?.name ||
-    deriveHotelFromPayload(fallbackPayload)?.name ||
-    null;
+    payloadHotel?.name ||
+    fallbackId ||
+    (fallbackHid ? `Hotel #${fallbackHid}` : null);
   hotelNameEl.textContent = hotelName || "Hotel not specified";
 
   const checkin =
@@ -188,7 +174,6 @@ function renderHotelSummary(form = {}, fallbackSummary, fallbackPayload) {
     form.departure_date ||
     fallbackSummary?.stay?.checkout ||
     null;
-  const payloadHotel = deriveHotelFromPayload(fallbackPayload);
   const city =
     hotelPayload.city ||
     hotelPayload.location_city ||
@@ -229,9 +214,6 @@ async function fetchBookingForm() {
     const payload = await response.json();
     if (!response.ok || payload?.error) {
       throw new Error(payload?.error || payload?._raw || response.status);
-    }
-    if (payload.prebook_summary || payload.prebook_payload) {
-      cachePrebookSummary(payload.prebook_summary, payload.prebook_payload);
     }
     partnerIdEl.textContent = payload.partner_order_id || "-";
     rawFormEl.textContent = JSON.stringify(payload.form || {}, null, 2);
