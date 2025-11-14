@@ -7,159 +7,168 @@
   <link rel="stylesheet" href="public/style.css" />
 </head>
 <body>
+<div class="app-shell">
 
-<header>
-  <h1>
-    Kotan Voyages — Internal Sandbox
-    <span class="badge">ETG sandbox</span>
-  </h1>
-  <div class="sub">Recherche d'hôtel · Détails (pas encore paiement)</div>
+<header class="app-header">
+  <div class="brand">
+    <p class="eyebrow">Kotan Voyages · RateHawk sandbox</p>
+    <h1>
+      B2B hotel console
+      <span class="badge">internal</span>
+    </h1>
+    <p class="sub">Search, review details, and debug bookings in one workspace.</p>
+  </div>
+  <div class="header-actions">
+    <label class="language-switch" for="language">
+      <span>Language</span>
+      <select id="language">
+        <option value="en" selected>English</option>
+        <option value="fr">Français</option>
+      </select>
+    </label>
+  </div>
 </header>
 
-<main>
-  <!-- TOP SEARCH BAR -->
-  <section class="card searchbar">
-    <div class="search-grid">
-      <div class="field">
-        <label for="region_id">Destination (region name)</label>
-        <input
-          id="region_id"
-          type="text"
-          placeholder="e.g., Paris"
-          list="regionSuggestions"
-          autocomplete="off"
-          aria-describedby="destinationHelp regionStatus"
-        />
-        <small id="destinationHelp" class="muted" style="font-size:.7rem;">Enter a city or ETG region; we’ll resolve it automatically.</small>
-        <small id="regionStatus" class="muted" style="font-size:.7rem;"></small>
-        <div id="hotelSuggestions" class="hotel-suggestions"></div>
-        <datalist id="regionSuggestions"></datalist>
-      </div>
-      <div class="field">
-        <label for="checkin">Arrivée</label>
-        <input id="checkin" type="date" />
-      </div>
-      <div class="field">
-        <label for="checkout">Départ</label>
-        <input id="checkout" type="date" />
-      </div>
-      <div class="field compact" style="position:relative;">
-        <label for="guestsSummary">Guests</label>
-        <button id="btnGuests" class="secondary" style="text-align:left;">
-          <span id="guestsSummary">2 adults · 0 children</span>
-        </button>
-      </div>
-      <div class="field compact">
-        <label for="language">Lang</label>
-        <select id="language">
-          <option value="en" selected>EN</option>
-          <option value="fr">FR</option>
-        </select>
-      </div>
-      <div class="field compact">
-        <label for="currency">Currency</label>
-        <select id="currency">
-          <option value="EUR" selected>EUR</option>
-          <option value="USD">USD</option>
-        </select>
-      </div>
-      <div class="field action">
-        <label>&nbsp;</label>
-        <button id="btnSearch" class="primary">Rechercher</button>
-      </div>
-    </div>
-
-    <details class="extras">
-      <summary>Use Geo (optional)</summary>
-      <div class="extras-grid">
-        <div class="field">
-          <label>Search mode</label>
-          <div class="radio-row">
-            <label><input type="radio" name="mode" value="region" checked /> Region</label>
-            <label><input type="radio" name="mode" value="geo" /> Geo (lat/lon)</label>
+<main class="workspace">
+  <div class="search-shell full">
+    <section class="card searchbar">
+        <div class="search-grid">
+          <div class="field field--suggestions" data-suggestions-root>
+            <label for="region_id">Destination</label>
+            <input
+              id="region_id"
+              type="text"
+              placeholder="Try Paris, Rome, Dubai..."
+              autocomplete="off"
+              aria-describedby="destinationHelp regionStatus"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            />
+            <small id="destinationHelp" class="muted" style="font-size:.7rem;">Type a city or ETG region; we’ll autocomplete it.</small>
+            <small id="regionStatus" class="muted" style="font-size:.7rem;"></small>
+            <div id="suggestionsDropdown" class="suggestions-dropdown hidden" role="listbox" aria-label="Destination suggestions"></div>
+          </div>
+          <div class="field">
+            <label for="checkin">Check-in</label>
+            <input id="checkin" type="date" />
+          </div>
+          <div class="field">
+            <label for="checkout">Check-out</label>
+            <input id="checkout" type="date" />
+          </div>
+          <div class="field compact" style="position:relative;">
+            <label for="guestsSummary">Guests</label>
+            <button id="btnGuests" class="secondary" style="text-align:left;">
+              <span id="guestsSummary">2 adults · 0 children</span>
+            </button>
+          </div>
+          <div class="field compact">
+            <label for="currency">Currency</label>
+            <select id="currency">
+              <option value="EUR" selected>EUR</option>
+              <option value="USD">USD</option>
+            </select>
+          </div>
+          <div class="field action">
+            <label>&nbsp;</label>
+            <button id="btnSearch" class="primary">Search</button>
           </div>
         </div>
-        <div class="field" id="regionBlock">
-          <small style="color:#94a3b8;font-size:.7rem;">Uses region_id field above</small>
-        </div>
-        <div class="field" id="geoBlock" style="display:none;">
-          <div class="geo-grid">
-            <div>
-              <label for="latitude">Latitude</label>
-              <input id="latitude" type="number" step="0.000001" placeholder="48.8566" />
+
+        <details class="extras">
+          <summary>Advanced search</summary>
+          <div class="extras-grid">
+            <div class="field">
+              <label>Search mode</label>
+              <div class="radio-row">
+                <label><input type="radio" name="mode" value="region" checked /> Region</label>
+                <label><input type="radio" name="mode" value="geo" /> Geo (lat/lon)</label>
+              </div>
             </div>
-            <div>
-              <label for="longitude">Longitude</label>
-              <input id="longitude" type="number" step="0.000001" placeholder="2.3522" />
+            <div class="field" id="regionBlock">
+              <small style="color:#94a3b8;font-size:.7rem;">Uses region_id field above</small>
             </div>
-            <div>
-              <label for="radius">Radius (m)</label>
-              <input id="radius" type="number" min="100" max="5000" value="1500" />
+            <div class="field" id="geoBlock" style="display:none;">
+              <div class="geo-grid">
+                <div>
+                  <label for="latitude">Latitude</label>
+                  <input id="latitude" type="number" step="0.000001" placeholder="48.8566" />
+                </div>
+                <div>
+                  <label for="longitude">Longitude</label>
+                  <input id="longitude" type="number" step="0.000001" placeholder="2.3522" />
+                </div>
+                <div>
+                  <label for="radius">Radius (m)</label>
+                  <input id="radius" type="number" min="100" max="5000" value="1500" />
+                </div>
+              </div>
             </div>
           </div>
+        </details>
+
+        <!-- FILTERS UI -->
+        <div class="filters">
+          <div class="filter-group">
+            <p class="filter-title">Star rating</p>
+            <div class="filter-options">
+              <label><input type="checkbox" class="flt-stars" value="2"> 2★</label>
+              <label><input type="checkbox" class="flt-stars" value="3"> 3★</label>
+              <label><input type="checkbox" class="flt-stars" value="4"> 4★</label>
+              <label><input type="checkbox" class="flt-stars" value="5"> 5★</label>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <p class="filter-title">Meal plan</p>
+            <div class="filter-options">
+              <label><input type="checkbox" class="flt-meal" value="nomeal"> RO</label>
+              <label><input type="checkbox" class="flt-meal" value="breakfast"> BB</label>
+              <label><input type="checkbox" class="flt-meal" value="half_board"> HB</label>
+              <label><input type="checkbox" class="flt-meal" value="full_board"> FB</label>
+              <label><input type="checkbox" class="flt-meal" value="all_inclusive"> AI</label>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <p class="filter-title">Policies</p>
+            <label class="checkbox-inline">
+              <input type="checkbox" id="flt_free_cancel"> Free cancellation only
+            </label>
+          </div>
+        </div>
+    </section>
+  </div>
+
+  <section class="workspace__content">
+    <div class="results-grid">
+      <div class="card results-card">
+        <h3>
+          Search results
+          <span id="searchMeta" style="color:#64748b;font-size:.7rem;font-weight:400;"></span>
+        </h3>
+        <div id="hotelsContainer" class="hotel-list">
+          <div style="font-size:.7rem;color:#64748b;">No results yet. Do a search</div>
+        </div>
+        <div id="resultsPagination" class="pagination" style="display:none;">
+          <button id="btnResultsPrev" class="secondary mini" type="button">Previous</button>
+          <span id="resultsPaginationLabel">Page 1 / 1</span>
+          <button id="btnResultsNext" class="secondary mini" type="button">Next</button>
         </div>
       </div>
-    </details>
 
-    <!-- FILTERS UI -->
-    <div class="row" style="margin-top:.75rem; gap:.75rem; flex-wrap:wrap; display:flex;">
-      <div>
-        <label>Stars</label>
-        <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
-          <label><input type="checkbox" class="flt-stars" value="2"> 2★</label>
-          <label><input type="checkbox" class="flt-stars" value="3"> 3★</label>
-          <label><input type="checkbox" class="flt-stars" value="4"> 4★</label>
-          <label><input type="checkbox" class="flt-stars" value="5"> 5★</label>
+      <div class="card details-card">
+        <h3>
+          <span id="hotelDetailHeaderTitle">Hotel details & rates</span>
+          <span id="hotelDetailHeaderHint" style="color:#64748b;font-size:.7rem;font-weight:400;">select a hotel</span>
+        </h3>
+        <div id="hotelDetails">
+          <div id="hotelDetailsPlaceholder" style="font-size:.7rem;color:#64748b;">No hotel selected.</div>
         </div>
       </div>
-
-      <div>
-        <label>Meal plan</label>
-        <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
-          <label><input type="checkbox" class="flt-meal" value="nomeal"> RO</label>
-          <label><input type="checkbox" class="flt-meal" value="breakfast"> BB</label>
-          <label><input type="checkbox" class="flt-meal" value="half_board"> HB</label>
-          <label><input type="checkbox" class="flt-meal" value="full_board"> FB</label>
-          <label><input type="checkbox" class="flt-meal" value="all_inclusive"> AI</label>
-        </div>
-      </div>
-
-      <div style="align-self:flex-end;">
-        <label style="display:flex; gap:.5rem; align-items:center;">
-          <input type="checkbox" id="flt_free_cancel"> Free cancellation
-        </label>
-      </div>
-    </div>
-  </section>
-
-  <!-- RESULTS + DETAILS SIDE BY SIDE -->
-  <section class="results-grid">
-    <div class="card">
-      <h3>
-        Search results
-        <span id="searchMeta" style="color:#64748b;font-size:.7rem;font-weight:400;"></span>
-      </h3>
-      <div id="hotelsContainer" class="hotel-list">
-        <div style="font-size:.7rem;color:#64748b;">No results yet. Do a search</div>
-      </div>
-      <div id="resultsPagination" class="pagination" style="display:none;">
-        <button id="btnResultsPrev" class="secondary mini" type="button">Previous</button>
-        <span id="resultsPaginationLabel">Page 1 / 1</span>
-        <button id="btnResultsNext" class="secondary mini" type="button">Next</button>
-      </div>
     </div>
 
-    <div class="card">
-      <h3>
-        <span id="hotelDetailHeaderTitle">Hotel details & rates</span>
-        <span id="hotelDetailHeaderHint" style="color:#64748b;font-size:.7rem;font-weight:400;">select a hotel</span>
-      </h3>
-      <div id="hotelDetails">
-        <div id="hotelDetailsPlaceholder" style="font-size:.7rem;color:#64748b;">No hotel selected.</div>
-      </div>
-    </div>
-
-    <div class="card span-2">
+    <div class="card log-card">
       <h3>
         Debug / Log output
         <span style="color:#64748b;font-size:.7rem;font-weight:400;">for dev only</span>
@@ -167,8 +176,9 @@
       <pre id="logOutput">// logs will show here</pre>
     </div>
   </section>
-
 </main>
+
+</div>
 
 <!-- Guests small modal -->
 <div id="guestModal" class="modal hidden" aria-hidden="true" role="dialog" aria-modal="true">

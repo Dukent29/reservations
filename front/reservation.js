@@ -15,9 +15,9 @@ const checkoutEl  = $("#checkout");
 const langEl      = $("#language");
 const currencyEl  = $("#currency");
 const regionIdEl  = $("#region_id");
-const regionSuggestionsEl = $("#regionSuggestions");
 const regionStatusEl = $("#regionStatus");
-const hotelSuggestionsEl = $("#hotelSuggestions");
+const suggestionsDropdownEl = $("#suggestionsDropdown");
+const destinationFieldEl = document.querySelector("[data-suggestions-root]");
 const latEl       = $("#latitude");
 const lonEl       = $("#longitude");
 const radiusEl    = $("#radius");
@@ -29,6 +29,7 @@ const geoBlock    = $("#geoBlock");
 const btnSearch   = $("#btnSearch");
 const btnGuests   = $("#btnGuests");
 const guestsSummaryEl = $("#guestsSummary");
+const PREBOOK_SUMMARY_KEY = "booking:lastPrebook";
 
 const hotelsContainer       = $("#hotelsContainer");
 const hotelDetailsContainer = $("#hotelDetails");
@@ -67,7 +68,8 @@ const DETAIL_IMAGE_SIZE = "1024x768";
 const DETAIL_IMAGE_LIMIT = 13;
 const CARD_IMAGE_LIMIT = 13;
 const HOTELS_PAGE_SIZE = 10;
-const SERP_FETCH_LIMIT = 10;
+// How many hotels to fetch per request (server still caps at 100).
+const SERP_FETCH_LIMIT = 60;
 const TRANSLATIONS = {
   en: {
     meal_nomeal: "Room only",
@@ -122,6 +124,17 @@ const TRANSLATIONS = {
     filter_refundable: "Refundable",
     rooms_left: (n) => `${n} left`,
     sleeps_label: (n) => `Sleeps ${n}`,
+    guest_breakdown: (adults, children) => {
+      const parts = [];
+      if (adults) parts.push(`${adults} adult${adults > 1 ? "s" : ""}`);
+      if (children) parts.push(`${children} child${children > 1 ? "ren" : ""}`);
+      return parts.join(" + ");
+    },
+    requested_occupancy_label: (text) => (text ? `Requested: ${text}` : ""),
+    room_capacity_detail: (capacity, requestedText) =>
+      requestedText && requestedText.length
+        ? `Sleeps ${capacity} · ${requestedText}`
+        : `Sleeps ${capacity}`,
     status_no_matches: "No matching regions or hotels.",
     error_no_region: "No region found for that destination.",
     error_no_coords: "No coordinates available for that destination.",
@@ -186,6 +199,17 @@ const TRANSLATIONS = {
     filter_refundable: "Remboursable",
     rooms_left: (n) => `${n} restant${n > 1 ? "s" : ""}`,
     sleeps_label: (n) => `Capacite ${n}`,
+    guest_breakdown: (adults, children) => {
+      const parts = [];
+      if (adults) parts.push(`${adults} adulte${adults > 1 ? "s" : ""}`);
+      if (children) parts.push(`${children} enfant${children > 1 ? "s" : ""}`);
+      return parts.join(" + ");
+    },
+    requested_occupancy_label: (text) => (text ? `Demande : ${text}` : ""),
+    room_capacity_detail: (capacity, requestedText) =>
+      requestedText && requestedText.length
+        ? `Capacite ${capacity} · ${requestedText}`
+        : `Capacite ${capacity}`,
     status_no_matches: "Aucune region ou hotel correspondant.",
     error_no_region: "Aucune region trouvee pour cette destination.",
     error_no_coords: "Pas de coordonnees disponibles pour cette destination.",
@@ -235,14 +259,6 @@ function setRegionStatus(message = "") {
   if (regionStatusEl) regionStatusEl.textContent = message;
 }
 
-function escapeOptionValue(value = "") {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
 function escapeHtml(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -250,47 +266,82 @@ function escapeHtml(value = "") {
     .replace(/>/g, "&gt;");
 }
 
+let currentRegionSuggestions = [];
+let currentHotelSuggestions = [];
+
 function renderRegionSuggestions(list = []) {
-  if (!regionSuggestionsEl) return;
-  if (!Array.isArray(list) || !list.length) {
-    regionSuggestionsEl.innerHTML = "";
-    return;
-  }
-  regionSuggestionsEl.innerHTML = list
-    .map((r) => {
-      const name = r.name || r.full_name || r.fullName || "";
-      const suffix = r.country_code ? ` (${r.country_code})` : "";
-      const value = `${name}${suffix}`;
-      return `<option value="${escapeOptionValue(value)}"></option>`;
-    })
-    .join("");
+  currentRegionSuggestions = Array.isArray(list) ? list.slice(0, 8) : [];
+  refreshSuggestionsDropdown();
 }
 
-let currentHotelSuggestions = [];
 function renderHotelSuggestions(list = []) {
-  if (!hotelSuggestionsEl) return;
   currentHotelSuggestions = Array.isArray(list) ? list.slice(0, 5) : [];
-  if (!currentHotelSuggestions.length) {
-    hotelSuggestionsEl.innerHTML = "";
-    hotelSuggestionsEl.dataset.count = "0";
+  refreshSuggestionsDropdown();
+}
+
+function clearSuggestionsDropdown() {
+  currentRegionSuggestions = [];
+  currentHotelSuggestions = [];
+  refreshSuggestionsDropdown();
+}
+
+function hideSuggestionsDropdown() {
+  if (!suggestionsDropdownEl) return;
+  suggestionsDropdownEl.classList.add("hidden");
+  suggestionsDropdownEl.setAttribute("aria-hidden", "true");
+  regionIdEl?.setAttribute("aria-expanded", "false");
+}
+
+function refreshSuggestionsDropdown() {
+  if (!suggestionsDropdownEl) return;
+  if (!currentRegionSuggestions.length && !currentHotelSuggestions.length) {
+    suggestionsDropdownEl.innerHTML = "";
+    hideSuggestionsDropdown();
     return;
   }
-  hotelSuggestionsEl.dataset.count = String(currentHotelSuggestions.length);
-  hotelSuggestionsEl.innerHTML = `
-    <div class="hotel-suggestions__group">
-      <div class="hotel-suggestions__title">Hotels</div>
-      ${currentHotelSuggestions
-        .map(
-          (hotel, idx) => `
-        <button type="button" class="hotel-suggestion" data-suggestion-index="${idx}">
-          <span class="hotel-suggestion__name">${escapeHtml(hotel.name || "Hotel")}</span>
-          <span class="hotel-suggestion__meta">
-            HID ${hotel.hid || "?"}${hotel.region_id ? ` · region ${hotel.region_id}` : ""}
-          </span>
-        </button>`
-        )
-        .join("")}
-    </div>`;
+
+  const sections = [];
+  if (currentRegionSuggestions.length) {
+    sections.push(`
+      <div class="suggestions-section">
+        <div class="suggestions-title">Regions</div>
+        ${currentRegionSuggestions
+          .map((region, idx) => {
+            const title = region.name || region.full_name || region.fullName || "Region";
+            const metaParts = [];
+            if (region.country_code) metaParts.push(region.country_code);
+            if (region.id) metaParts.push(`#${region.id}`);
+            return `
+              <button type="button" role="option" class="suggestion-option" data-suggestion-type="region" data-suggestion-index="${idx}">
+                <span class="suggestion-option__name">${escapeHtml(title)}</span>
+                <span class="suggestion-option__meta">${escapeHtml(metaParts.join(" · "))}</span>
+              </button>`;
+          })
+          .join("")}
+      </div>`);
+  }
+
+  if (currentHotelSuggestions.length) {
+    sections.push(`
+      <div class="suggestions-section">
+        <div class="suggestions-title">Hotels</div>
+        ${currentHotelSuggestions
+          .map((hotel, idx) => {
+            const idMeta = hotel.region_id ? `Region ${hotel.region_id}` : "";
+            return `
+              <button type="button" role="option" class="suggestion-option" data-suggestion-type="hotel" data-suggestion-index="${idx}">
+                <span class="suggestion-option__name">${escapeHtml(hotel.name || "Hotel")}</span>
+                <span class="suggestion-option__meta">${escapeHtml(`HID ${hotel.hid || "?"}${idMeta ? ` · ${idMeta}` : ""}`)}</span>
+              </button>`;
+          })
+          .join("")}
+      </div>`);
+  }
+
+  suggestionsDropdownEl.innerHTML = sections.join("");
+  suggestionsDropdownEl.classList.remove("hidden");
+  suggestionsDropdownEl.setAttribute("aria-hidden", "false");
+  regionIdEl?.setAttribute("aria-expanded", "true");
 }
 
 // Guests helpers
@@ -357,6 +408,25 @@ function buildGuests() {
   }];
 }
 
+function requestedGuestCounts() {
+  const adults = Math.max(1, parseInt(adultsCount, 10) || 1);
+  const children = (childrenAges || []).length;
+  return {
+    adults,
+    children,
+    total: adults + children,
+  };
+}
+
+function formatRequestedGuestsLabel() {
+  const counts = requestedGuestCounts();
+  const summary = tr("guest_breakdown", counts.adults, counts.children);
+  return {
+    summary,
+    counts,
+  };
+}
+
 // Extract/render helpers
 function extractHotels(payload) {
   if (Array.isArray(payload)) return payload;
@@ -415,6 +485,22 @@ function formatDistanceFromCenter(hotel) {
   }
   const value = `${Math.round(meters)} m`;
   return tr("distance_from_center", value);
+}
+
+function getRateCapacity(rate) {
+  if (!rate) return null;
+  const candidates = [
+    rate?.rg_ext?.capacity,
+    rate?.rg_ext?.occupancy,
+    rate?.capacity,
+    rate?.max_occupancy,
+    rate?.occupancy,
+  ];
+  for (const value of candidates) {
+    const num = Number(value);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return null;
 }
 
 function renderStarIcons(stars) {
@@ -723,10 +809,69 @@ async function prebookRateAtIndex(index, triggerEl) {
       return;
     }
     setRegionStatus(tr("prebook_success"));
+    if (data?.prebook_token) {
+      persistPrebookSummary(data, hotel, rate);
+      const baseUrl = new URL(window.location.href);
+      const parts = baseUrl.pathname.split("/").filter(Boolean);
+      if (parts.length) {
+        parts[parts.length - 1] = "booking.html";
+      } else {
+        parts.push("booking.html");
+      }
+      baseUrl.pathname = `/${parts.join("/")}`;
+      baseUrl.search = `token=${encodeURIComponent(data.prebook_token)}`;
+      window.location.assign(baseUrl.toString());
+    }
   } catch (err) {
     setRegionStatus(`${tr("prebook_error")} (${err.message || "ERR"})`);
   } finally {
     triggerEl?.removeAttribute("disabled");
+  }
+}
+
+function persistPrebookSummary(apiResponse, hotel, rate) {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    const guestLabel = (() => {
+      try {
+        return formatRequestedGuestsLabel()?.summary || "";
+      } catch (_) {
+        return "";
+      }
+    })();
+    const payment = rate?.payment_options?.payment_types?.[0] || {};
+    const summary = {
+      token: apiResponse?.prebook_token || null,
+      created_at: Date.now(),
+      hotel: {
+        id: hotel?.id || null,
+        hid: hotel?.hid || null,
+        name: hotel ? hotelDisplayName(hotel) : null,
+        city: hotel?.city_name || hotel?.city || hotel?.location || hotel?.address?.city || null,
+        address: hotel?.address || hotel?.address_line || hotel?.address_full || null,
+        country: hotel?.country || hotel?.country_name || null,
+      },
+      stay: {
+        checkin: checkinEl?.value || null,
+        checkout: checkoutEl?.value || null,
+        currency: currencyEl?.value || payment?.show_currency_code || payment?.currency_code || null,
+        guests: buildGuests(),
+        guest_label: guestLabel,
+      },
+      room: {
+        name: rate?.room_name || rate?.room_data_trans?.main_name || rate?.name || null,
+        meal: rate?.meal || null,
+        price: payment?.show_amount || payment?.amount || null,
+        currency: payment?.show_currency_code || payment?.currency_code || null,
+        amenities: rate?.amenities_data || null,
+        daily_prices: rate?.daily_prices || null,
+        guests_label: guestLabel,
+      },
+      payload: apiResponse || null,
+    };
+    sessionStorage.setItem(PREBOOK_SUMMARY_KEY, JSON.stringify(summary));
+  } catch (_) {
+    /* ignore */
   }
 }
 
@@ -834,8 +979,9 @@ function renderRateCard(rate, index) {
   const roomName = rate?.room_name || rate?.room_data_trans?.main_name || tr("room_label");
   const mealLabel = friendlyMeal(rate?.meal_data?.value || rate?.meal);
   const chips = [];
+  const capacityValue = getRateCapacity(rate);
   if (mealLabel) chips.push(mealLabel);
-  if (rate?.rg_ext?.capacity) chips.push(tr("sleeps_label", rate.rg_ext.capacity));
+  if (capacityValue) chips.push(tr("sleeps_label", capacityValue));
   if (rate?.rg_ext?.class) chips.push(`${rate.rg_ext.class}★`);
   if (rate?.allotment) chips.push(tr("rooms_left", rate.allotment));
   const freeBefore = payment?.cancellation_penalties?.free_cancellation_before;
@@ -845,6 +991,12 @@ function renderRateCard(rate, index) {
   const taxes = (payment?.tax_data?.taxes || [])
     .map((tax) => `${tax.name || "tax"} ${formatCurrency(tax.amount, tax.currency_code)}${tax.included_by_supplier ? " (included)" : ""}`)
     .slice(0, 3);
+  const { summary: requestSummary } = formatRequestedGuestsLabel();
+  const capacityDetail = capacityValue
+    ? tr("room_capacity_detail", capacityValue, requestSummary)
+    : requestSummary
+    ? tr("requested_occupancy_label", requestSummary)
+    : "";
   return `
     <div class="room-card">
       <div class="room-card__header">
@@ -856,6 +1008,7 @@ function renderRateCard(rate, index) {
       </div>
       <div class="room-card__details">
         <div>${escapeHtml(cancellationText)}</div>
+        ${capacityDetail ? `<div>${escapeHtml(capacityDetail)}</div>` : ""}
         ${taxes.length ? `<div>${escapeHtml(tr("taxes_fees_label"))}: ${taxes.map(escapeHtml).join(", ")}</div>` : ""}
         ${rate?.room_data_trans?.bedding_type ? `<div>${escapeHtml(tr("bedding_label"))}: ${escapeHtml(rate.room_data_trans.bedding_type)}</div>` : ""}
         ${rate?.room_data_trans?.bathroom ? `<div>${escapeHtml(tr("bathroom_label"))}: ${escapeHtml(rate.room_data_trans.bathroom)}</div>` : ""}
@@ -927,29 +1080,41 @@ function renderHotelsEx(resultsMaybeNested, options = {}) {
     const currency = p?.show_currency_code || p?.currency_code || 'EUR';
     return { amount: Number.isFinite(amt) ? amt : null, currency };
   }
-  function pickBestRate(rates) {
+  function pickBestRate(rates, requiredCapacity) {
     if (!Array.isArray(rates) || !rates.length) return null;
-    let best = null; let bestAmt = Infinity;
+    const need = Math.max(1, requiredCapacity || 1);
+    let best = null;
+    let bestScore = Infinity;
     for (const r of rates) {
       const { amount } = ratePrice(r);
-      if (amount !== null && amount < bestAmt) { bestAmt = amount; best = r; }
+      const priceScore = amount !== null ? amount : Number.POSITIVE_INFINITY;
+      const capacity = getRateCapacity(r) || 0;
+      const deficit = capacity >= need ? 0 : need - capacity;
+      const excess = capacity > need ? capacity - need : 0;
+      const score = deficit * 100000 + excess * 1000 + priceScore;
+      if (score < bestScore) {
+        bestScore = score;
+        best = r;
+      }
     }
     return best || rates[0];
   }
+
+  const { counts: requestedCounts, summary: requestedSummary } = formatRequestedGuestsLabel();
 
   hotelsContainer.innerHTML = pagedHotels.map((h, i) => {
     const name = hotelDisplayName(h);
     const hid  = h.id || h.hotel_id || h.hid || 'n/a';
     const addr = h.address || h.location || '';
     const stars = deriveHotelStars(h);
-    const best = pickBestRate(h.rates || []);
+    const best = pickBestRate(h.rates || [], requestedCounts.total);
     const mealCode = best?.meal || best?.meal_data?.value || '';
     const mealText = rateMealLabel(mealCode);
     const freeCancel = best ? rateFreeCancellation(best) : false;
     const { amount, currency } = best ? ratePrice(best) : { amount: null, currency: 'EUR' };
     const roomName = best?.room_name || best?.room || tr("room_label");
     const safeRoomName = escapeHtml(roomName || tr("room_label"));
-    const capacity = best?.rg_ext?.capacity || h?.rg_ext?.capacity || null;
+    const capacity = getRateCapacity(best) || h?.rg_ext?.capacity || null;
     const distanceText = formatDistanceFromCenter(h);
     const starHtml = renderStarIcons(stars);
     const listingNumber = startIndex + i + 1;
@@ -962,6 +1127,13 @@ function renderHotelsEx(resultsMaybeNested, options = {}) {
           : `<span class="chip chip--danger">${chipIcon("ban")}${escapeHtml(tr("no_cancellation"))}</span>`)
       : "";
     const capacityChip = capacity ? `<span class="chip">${escapeHtml(`${tr("capacity_prefix")} ${capacity}`)}</span>` : "";
+    const requestedLabel = requestedSummary ? tr("requested_occupancy_label", requestedSummary) : "";
+    const capacityDetail = capacity
+      ? tr("room_capacity_detail", capacity, requestedSummary)
+      : requestedLabel;
+    const capacityDetailHtml = capacityDetail
+      ? `<div class="muted" style="margin-top:.35rem;">${escapeHtml(capacityDetail)}</div>`
+      : "";
     const chipsHtml = [mealChip, cancelChip, capacityChip].filter(Boolean).join("");
     return `
       <div class="hotel-item" data-hotel-index="${i}">
@@ -990,9 +1162,10 @@ function renderHotelsEx(resultsMaybeNested, options = {}) {
                 <div class="chips" style="margin-top:.25rem;">
                   ${chipsHtml}
                 </div>
+                ${capacityDetailHtml}
               </div>
               <div style="text-align:right;">
-                <div style="font-size:1rem;font-weight:700;">${amount!=null ? `${amount} ${currency}` : '?'}</div>
+                <div style="font-size:1rem;font-weight:700;">${amount!=null ? `${escapeHtml(formatCurrency(amount, currency))}` : '?'}</div>
                 ${nights ? `<div class="muted" style="margin-top:.15rem;">${escapeHtml(tr('nights_label', nights))}</div>` : ''}
               </div>
             </div>
@@ -1259,8 +1432,7 @@ async function loadRegionSuggestions(term) {
   } catch (err) {
     if (lastSuggestionQuery === term) {
       setRegionStatus(err.message || "Suggestion lookup failed.");
-      renderRegionSuggestions([]);
-      renderHotelSuggestions([]);
+      clearSuggestionsDropdown();
     }
   }
 }
@@ -1270,8 +1442,7 @@ regionIdEl?.addEventListener("input", () => {
   const term = (regionIdEl.value || "").trim();
   selectedHotel = null;
   if (!term || term.length < 2) {
-    renderRegionSuggestions([]);
-    renderHotelSuggestions([]);
+    clearSuggestionsDropdown();
     setRegionStatus("");
     return;
   }
@@ -1284,8 +1455,7 @@ langEl?.addEventListener("change", () => {
     if (suggestionTimer) clearTimeout(suggestionTimer);
     loadRegionSuggestions(term);
   } else {
-    renderRegionSuggestions([]);
-    renderHotelSuggestions([]);
+    clearSuggestionsDropdown();
     setRegionStatus("");
   }
   applyStaticTranslations();
@@ -1297,24 +1467,53 @@ langEl?.addEventListener("change", () => {
   }
 });
 
-hotelSuggestionsEl?.addEventListener("click", (event) => {
-  const btn = event.target.closest("button.hotel-suggestion");
-  if (!btn) return;
-  const idx = Number(btn.getAttribute("data-suggestion-index"));
-  const hotel = Number.isInteger(idx) ? currentHotelSuggestions[idx] : null;
-  if (!hotel) return;
-  selectedHotel = {
-    hid: Number(hotel.hid) || hotel.hid,
-    region_id: hotel.region_id || null,
-    name: hotel.name || "",
-    displayValue: hotel.name || "",
-  };
-  if (regionIdEl && selectedHotel.displayValue) {
-    regionIdEl.value = selectedHotel.displayValue;
+suggestionsDropdownEl?.addEventListener("click", (event) => {
+  const option = event.target.closest(".suggestion-option");
+  if (!option) return;
+  const type = option.getAttribute("data-suggestion-type");
+  const idx = Number(option.getAttribute("data-suggestion-index"));
+
+  if (type === "region") {
+    const region = Number.isInteger(idx) ? currentRegionSuggestions[idx] : null;
+    if (!region) return;
+    const label = region.name || region.full_name || region.fullName || region.id || "";
+    if (regionIdEl) regionIdEl.value = label;
+    selectedHotel = null;
+    setRegionStatus(region.id ? `Region ID ${region.id}` : label);
+    clearSuggestionsDropdown();
+    regionIdEl?.focus();
+    return;
   }
-  const selectedLabel = selectedHotel.name || selectedHotel.hid || "";
-  setRegionStatus(tr("selected_hotel_status", selectedLabel));
-  regionIdEl?.focus();
+
+  if (type === "hotel") {
+    const hotel = Number.isInteger(idx) ? currentHotelSuggestions[idx] : null;
+    if (!hotel) return;
+    selectedHotel = {
+      hid: Number(hotel.hid) || hotel.hid,
+      region_id: hotel.region_id || null,
+      name: hotel.name || "",
+      displayValue: hotel.name || "",
+    };
+    if (regionIdEl && selectedHotel.displayValue) {
+      regionIdEl.value = selectedHotel.displayValue;
+    }
+    const selectedLabel = selectedHotel.name || selectedHotel.hid || "";
+    setRegionStatus(tr("selected_hotel_status", selectedLabel));
+    clearSuggestionsDropdown();
+    regionIdEl?.focus();
+  }
+});
+
+document.addEventListener("click", (event) => {
+  if (!destinationFieldEl) return;
+  const target = event.target;
+  if (destinationFieldEl.contains(target)) return;
+  if (suggestionsDropdownEl?.contains(target)) return;
+  hideSuggestionsDropdown();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") hideSuggestionsDropdown();
 });
 
 // Search
