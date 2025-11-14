@@ -3,7 +3,6 @@
 const { randomUUID } = require("crypto");
 const bookingModel = require("../models/bookingModel");
 const httpError = require("../src/utils/httpError");
-const { getPrebookSummary } = require("../utils/repo");
 
 /**
  * Create a prebook token from an ETG hash. Tries to refresh rates when stale.
@@ -28,7 +27,7 @@ async function prebook(req, res, next) {
     }
 
     try {
-      const { token, response, summary } = await bookingModel.createPrebook(
+      const { token, response } = await bookingModel.createPrebook(
         normalizedHash,
         price_increase_percent,
         {
@@ -44,8 +43,6 @@ async function prebook(req, res, next) {
         ...etgPayload,
         endpoint: "/hotel/prebook/",
         prebook_token: token,
-        prebook_summary: summary,
-        prebook_payload: response,
       });
     } catch (error) {
       if (!bookingModel.shouldRefreshAfterPrebookError(error, normalizedHash, hp_context)) {
@@ -63,8 +60,6 @@ async function prebook(req, res, next) {
         ...etgPayload,
         endpoint: "/hotel/prebook/",
         prebook_token: refreshed.token,
-        prebook_summary: refreshed.summary,
-        prebook_payload: refreshed.response,
         refreshed: true,
         picked: refreshed.picked,
       });
@@ -91,18 +86,10 @@ async function bookingForm(req, res, next) {
     };
 
     const form = await bookingModel.requestBookingForm(payload);
-    let prebookSummaryDetails = null;
-    try {
-      prebookSummaryDetails = await getPrebookSummary(normalized);
-    } catch (_) {
-      prebookSummaryDetails = null;
-    }
     res.json({
       status: "ok",
       partner_order_id,
       form,
-      prebook_summary: prebookSummaryDetails?.summary || null,
-      prebook_payload: prebookSummaryDetails?.payload || null,
     });
   } catch (error) {
     next(error);
