@@ -1,5 +1,8 @@
 "use strict";
 
+const dotenv = require("dotenv");
+dotenv.config();
+
 const express = require("express");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
