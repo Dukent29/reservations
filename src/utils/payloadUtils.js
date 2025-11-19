@@ -1,9 +1,10 @@
 "use strict";
 
-const DEFAULT_HOTEL_LIMIT = 15;
+const DEFAULT_HOTEL_LIMIT = 20;
 const DEFAULT_OFFERS_LIMIT = 50;
 const DEFAULT_RATE_LIMIT = 40;
 const DEFAULT_HP_RATE_LIMIT = 25;
+const MAX_HOTEL_LIMIT = 100;
 
 function limitHotels(hotels = [], hotelsLimit = DEFAULT_HOTEL_LIMIT, ratesLimit = DEFAULT_RATE_LIMIT) {
   return hotels
@@ -16,8 +17,20 @@ function limitHotels(hotels = [], hotelsLimit = DEFAULT_HOTEL_LIMIT, ratesLimit 
     }));
 }
 
+function sanitizeLimit(limit, fallback = DEFAULT_HOTEL_LIMIT) {
+  const parsed = Number(limit);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.max(1, Math.min(MAX_HOTEL_LIMIT, Math.floor(parsed)));
+}
+
+function sanitizePage(page) {
+  const parsed = Number(page);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 1;
+  return Math.floor(parsed);
+}
+
 function trimSerpPayload(payload, options = {}) {
-  const hotelsLimit = Number(options.hotelsLimit) || DEFAULT_HOTEL_LIMIT;
+  const hotelsLimit = sanitizeLimit(options.hotelsLimit, DEFAULT_HOTEL_LIMIT);
   const offersLimit = Number(options.offersLimit) || DEFAULT_OFFERS_LIMIT;
   const ratesLimit = Number(options.ratesLimit) || DEFAULT_RATE_LIMIT;
 
@@ -61,6 +74,55 @@ function rateHasFreeCancellation(rate) {
 
 function rateMealCode(rate) {
   return rate?.meal || rate?.meal_data?.value || null;
+}
+
+function rateCapacityFromRate(rate) {
+  if (!rate) return null;
+  const candidates = [
+    rate?.rg_ext?.capacity,
+    rate?.rg_ext?.occupancy,
+    rate?.capacity,
+    rate?.max_occupancy,
+    rate?.occupancy,
+  ];
+  for (const value of candidates) {
+    const num = Number(value);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return null;
+}
+
+function ratePriceAmount(rate) {
+  const payment = rate?.payment_options?.payment_types?.[0];
+  const val = Number(payment?.show_amount ?? payment?.amount);
+  return Number.isFinite(val) ? val : 0;
+}
+
+function rankHotelsByOccupancy(hotels = [], requiredCapacity = 1) {
+  if (!Array.isArray(hotels) || !hotels.length) return hotels;
+  const need = Math.max(1, Number(requiredCapacity) || 1);
+
+  const scored = hotels.map((hotel, idx) => {
+    const rates = Array.isArray(hotel?.rates) ? hotel.rates : [];
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (const rate of rates) {
+      const capacity = rateCapacityFromRate(rate) || 0;
+      const deficit = capacity >= need ? 0 : need - capacity;
+      const excess = capacity > need ? capacity - need : 0;
+      const price = ratePriceAmount(rate);
+      const score = deficit * 100000 + excess * 1000 + price;
+      if (score < bestScore) bestScore = score;
+    }
+    if (!rates.length) bestScore = 1e12 + idx;
+    return { hotel, bestScore, idx };
+  });
+
+  return scored
+    .sort((a, b) => {
+      if (a.bestScore === b.bestScore) return a.idx - b.idx;
+      return a.bestScore - b.bestScore;
+    })
+    .map((entry) => entry.hotel);
 }
 
 function filterHotelsByPreferences(hotels = [], filters = {}) {
@@ -114,8 +176,31 @@ function sanitizeHpResults(results = {}, options = {}) {
   return clone;
 }
 
+function paginateCollection(items = [], options = {}) {
+  const total = Array.isArray(items) ? items.length : 0;
+  const perPage = sanitizeLimit(options.limit, DEFAULT_HOTEL_LIMIT);
+  const totalPages = total === 0 ? 0 : Math.max(1, Math.ceil(total / perPage));
+  const currentPage = totalPages === 0
+    ? 1
+    : Math.min(sanitizePage(options.page), totalPages);
+  const start = (currentPage - 1) * perPage;
+  const pagedItems = Array.isArray(items) ? items.slice(start, start + perPage) : [];
+
+  return {
+    items: pagedItems,
+    page: currentPage,
+    perPage,
+    total,
+    totalPages,
+    hasNext: currentPage < totalPages,
+    hasPrev: currentPage > 1,
+  };
+}
+
 module.exports = {
   trimSerpPayload,
   filterHotelsByPreferences,
   sanitizeHpResults,
+  paginateCollection,
+  rankHotelsByOccupancy,
 };
