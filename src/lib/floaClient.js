@@ -173,7 +173,7 @@ async function simulatePlan(payload = {}) {
 }
 
 async function checkProductEligibility(payload = {}) {
-  // Floa clearly accepts this as POST in your env
+  // This calls Floa's /api/v1/product-eligibilities endpoint
   return floaRequest("POST", "/api/v1/product-eligibilities", payload);
 }
 
@@ -206,10 +206,6 @@ async function createDeal(payload = {}) {
   if (implementationType) {
     config.headers["Implementation-type"] = implementationType;
   }
-
-  // Some Floa setups expect productCode in the request body rather than (or in addition to) query params.
-  // Add it to the body to increase compatibility.
-  if (productCode && !body.productCode) body.productCode = productCode;
 
   // Let floaRequest handle errors
   return floaRequest("POST", "/api/v1/deals", body, config);

@@ -39,71 +39,46 @@ async function createDeal(req, res, next) {
         ? payload.itemCount
         : items.length;
 
-    const country_code = payload.shippingAddress?.countryCode || "FR";
-
     // --- 1. Build the eligibility payload ---
     const eligibilityPayload = {
-      customers: [customer],
+      customers: [customer], // Floa expects an array
       merchantFinancedAmount,
       itemCount,
       items,
       device: payload.device || "Desktop",
-      country_code,
+      country_code: payload.shippingAddress?.countryCode || "FR",
       currency: payload.currency || "EUR",
     };
 
     // --- 2. Call product eligibilities ---
     const eligibility = await floaService.checkProductEligibility(eligibilityPayload);
 
-    const productEligibilities = eligibility.productEligibilities || [];
-
-    // Find a matching product in the list
-    const matching = productEligibilities.find(
-      (p) =>
-        p.productCode === payload.productCode &&
-        p.countryCode === country_code &&
-        p.hasAgreement === true &&
-        !p.errors
-    );
-
-    if (!matching) {
-      // Floa answered, but this specific productCode/country is not offered
+    if (!eligibility?.id) {
       return res.status(400).json({
         status: "nok",
-        reason: "Not eligible for this product / country",
-        floa: eligibility,
+        reason: "Not eligible",
+        floa: eligibility
       });
     }
-
-    // ✔ The ID to use is the ROOT `id`, not matching.id
-    const productEligibilityId = eligibility.id;
 
     // --- 3. Create deal with eligibility id ---
     const deal = await floaService.createDeal({
       ...payload,
-      productEligibilityId,
+      productEligibilityId: eligibility.id
     });
 
     res.json({ status: "ok", deal });
+
   } catch (error) {
     next(error);
   }
 }
 
 
-
-
 async function finalizeDeal(req, res, next) {
   try {
-    const { dealReference } = req.params;
-    if (!dealReference) {
-      throw httpError(400, "dealReference is required");
-    }
-
     const payload = req.body || {};
-
-    const result = await floaService.finalizeDeal(dealReference, payload);
-
+    const result = await floaService.finalizeDeal(payload);
     res.json({ status: "ok", result });
   } catch (error) {
     next(error);
