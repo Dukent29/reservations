@@ -172,6 +172,11 @@ async function simulatePlan(payload = {}) {
   return data;
 }
 
+async function checkProductEligibility(payload = {}) {
+  // This calls Floa's /api/v1/product-eligibilities endpoint
+  return floaRequest("POST", "/api/v1/product-eligibilities", payload);
+}
+
 // ---------- CREATE DEAL (REAL) ----------
 
 async function createDeal(payload = {}) {
@@ -194,8 +199,8 @@ async function createDeal(payload = {}) {
   }
 
   const config = {
-    params: { productCode },   // → ?productCode=BC3XF
-    headers: {}
+    params: { productCode }, // → ?productCode=XYZ
+    headers: {},
   };
 
   if (implementationType) {
@@ -207,10 +212,7 @@ async function createDeal(payload = {}) {
 }
 
 
-
-// ---------- STUBS FOR LATER ----------
-
-// src/lib/floaClient.js
+// ---------- FINALIZE / RETRIEVE / CANCEL ----------
 
 async function finalizeDeal(dealReference, payload = {}) {
   if (!dealReference) {
@@ -359,4 +361,5 @@ module.exports = {
   finalizeDeal,
   retrieveDeal,
   cancelDeal,
+  checkProductEligibility,
 };
