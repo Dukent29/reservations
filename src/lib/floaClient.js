@@ -206,6 +206,11 @@ async function createDeal(payload = {}) {
   return floaRequest("POST", "/api/v1/deals", body, config);
 }
 
+async function checkProductEligibility(payload = {}) {
+  // Floa clearly accepts this as POST in your env
+  return floaRequest("POST", "/api/v1/product-eligibilities", payload);
+}
+
 
 
 // ---------- STUBS FOR LATER ----------
@@ -359,4 +364,5 @@ module.exports = {
   finalizeDeal,
   retrieveDeal,
   cancelDeal,
+  checkProductEligibility, // <- you forgot this one
 };
