@@ -130,6 +130,7 @@ async function floaRequest(method, endpoint, data = {}, config = {}) {
   }
 }
 
+
 // ---------- SIMULATE PLAN (kept as before) ----------
 
 async function simulatePlan(payload = {}) {
@@ -209,9 +210,126 @@ async function createDeal(payload = {}) {
 
 // ---------- STUBS FOR LATER ----------
 
-async function finalizeDeal(payload = {}) {
-  throw httpError(501, "FLOA_FINALIZE_DEAL_NOT_IMPLEMENTED", payload);
+// src/lib/floaClient.js
+
+async function finalizeDeal(dealReference, payload = {}) {
+  if (!dealReference) {
+    throw httpError(
+      400,
+      "dealReference is required to finalize a Floa deal"
+    );
+  }
+
+  const {
+    // Main FLOA fields
+    merchantReference,
+    merchantFinancedAmount,
+    freeText,
+    amountDetails,
+
+    // Nested configuration block (preferred)
+    configuration = {},
+    // Shortcuts that can be passed at root
+    culture,
+    sessionModes,
+    backUrl,
+    returnUrl,
+    notificationUrl,
+    notificationURL, // legacy variant – mapped to notificationUrl
+
+    // PSP details
+    pspDetails,
+    threatPreventionSessionId,
+    pachirapayPaymentRequestId,
+
+    ...rest
+  } = payload || {};
+
+  // Build body exactly for Floa
+  const body = {};
+
+  // 0. Required / core fields for FLOA finalize
+  if (merchantReference) {
+    body.merchantReference = merchantReference;
+  }
+  if (merchantFinancedAmount != null) {
+    body.merchantFinancedAmount = merchantFinancedAmount;
+  }
+  if (freeText) {
+    body.freeText = freeText;
+  }
+  if (amountDetails && typeof amountDetails === "object") {
+    body.amountDetails = amountDetails;
+  }
+
+  // 1. configuration (culture, URLs, sessionModes, etc.)
+  const finalConfig = {
+    ...(configuration || {}),
+  };
+
+  const finalCulture = culture || configuration.culture;
+  if (finalCulture && !finalConfig.culture) {
+    finalConfig.culture = finalCulture;
+  }
+
+  const finalSessionModes =
+    configuration.sessionModes ||
+    sessionModes ||
+    ["WebPage"]; // default: show payment page on your site
+
+  finalConfig.sessionModes = finalSessionModes;
+
+  const notifUrl = notificationUrl || notificationURL || configuration.notificationUrl;
+  if (notifUrl && !finalConfig.notificationUrl) {
+    finalConfig.notificationUrl = notifUrl;
+  }
+  const finalBackUrl = backUrl || configuration.backUrl;
+  if (finalBackUrl && !finalConfig.backUrl) {
+    finalConfig.backUrl = finalBackUrl;
+  }
+  const finalReturnUrl = returnUrl || configuration.returnUrl;
+  if (finalReturnUrl && !finalConfig.returnUrl) {
+    finalConfig.returnUrl = finalReturnUrl;
+  }
+
+  if (Object.keys(finalConfig).length > 0) {
+    body.configuration = finalConfig;
+  }
+
+  // 2. PSP details
+  const finalPsp = {
+    ...(pspDetails && typeof pspDetails === "object" ? pspDetails : {}),
+  };
+
+  const threatId =
+    threatPreventionSessionId ||
+    finalPsp.threatPreventionSessionId;
+  if (threatId && !finalPsp.threatPreventionSessionId) {
+    finalPsp.threatPreventionSessionId = threatId;
+  }
+
+  if (pachirapayPaymentRequestId) {
+    finalPsp.pachirapay = finalPsp.pachirapay || {};
+    if (!finalPsp.pachirapay.paymentRequestId) {
+      finalPsp.pachirapay.paymentRequestId = pachirapayPaymentRequestId;
+    }
+  }
+
+  if (Object.keys(finalPsp).length > 0) {
+    body.pspDetails = finalPsp;
+  }
+
+  // If you later need to pass extra fields Floa accepts in finalize, you can
+  // whitelist them here from `rest` and add to body.
+
+  const endpoint = `/api/v1/deals/${encodeURIComponent(
+    dealReference
+  )}/finalize`;
+
+  // Let floaRequest handle errors & auth
+  return floaRequest("POST", endpoint, body);
 }
+
 
 async function retrieveDeal(dealReference) {
   if (!dealReference) {
