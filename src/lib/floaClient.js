@@ -106,6 +106,7 @@ async function floaRequest(method, endpoint, data = {}, config = {}) {
   const token = await fetchAccessToken();
   const extraHeaders = config.headers || {};
   const { headers, ...restConfig } = config || {};
+  console.log("[FLOA] REQUEST", method, `${FLOA_BASE_URL}${endpoint}`);
 
   try {
     const response = await axios({
@@ -351,7 +352,19 @@ async function retrieveDeal(dealReference) {
 
 
 async function cancelDeal(dealReference, payload = {}) {
-  throw httpError(501, "FLOA_CANCEL_DEAL_NOT_IMPLEMENTED", { dealReference, payload });
+  if (!dealReference) {
+    throw httpError(
+      400,
+      "dealReference is required to cancel a Floa deal"
+    );
+  }
+
+  const endpoint = `/api/v1/deals/${encodeURIComponent(
+    dealReference
+  )}/cancel`;
+
+  // Floa accepts an empty body, but we forward payload in case you add reasons later
+  return floaRequest("POST", endpoint, payload);
 }
 
 // ---------- EXPORTS ----------

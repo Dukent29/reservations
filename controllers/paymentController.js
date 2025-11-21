@@ -124,7 +124,6 @@ async function getInstallment(req, res, next) {
 }
   
 
-
 async function cancelDeal(req, res, next) {
   try {
     const { dealReference } = req.params;
