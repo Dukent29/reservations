@@ -9,6 +9,20 @@ body {
   position: relative;
   background: #010c1f;
 }
+
+#top-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0;
+  background: #4f46e5;
+  box-shadow: 0 0 0 1px rgba(15,23,42,.8);
+  transition: width 0.2s ease, opacity 0.2s ease;
+  z-index: 9999;
+  opacity: 0;
+}
+
 body::before {
   content: "";
   position: fixed;
@@ -481,6 +495,56 @@ input[type="checkbox"], input[type="radio"] {
       justify-content: space-between;
       flex-wrap: wrap;
       gap: .5rem;
+    }
+
+    /* Skeleton loaders for results */
+    .skeleton {
+      position: relative;
+      overflow: hidden;
+      background: rgba(148,163,184,.2);
+    }
+    .skeleton::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      transform: translateX(-100%);
+      background: linear-gradient(90deg, transparent, rgba(148,163,184,.6), transparent);
+      animation: skeleton-shimmer 1.4s infinite;
+    }
+    @keyframes skeleton-shimmer {
+      100% {
+        transform: translateX(100%);
+      }
+    }
+    .skeleton-text {
+      height: .6rem;
+      border-radius: 999px;
+      margin-bottom: .35rem;
+    }
+    .skeleton-text-lg {
+      height: .8rem;
+      width: 70%;
+    }
+    .skeleton-badge-row {
+      display: flex;
+      gap: .35rem;
+      margin-top: .25rem;
+    }
+    .skeleton-badge {
+      height: .9rem;
+      width: 3.5rem;
+      border-radius: 999px;
+    }
+    .skeleton-thumb {
+      width: 100%;
+      height: 100%;
+      border-radius: .6rem;
+    }
+    .hotel-skeleton .hotel-thumb {
+      min-height: 140px;
+    }
+    .hotel-skeleton .hotel-summary {
+      gap: .4rem;
     }
 
     .hotel-list { display: grid; gap: .75rem; }

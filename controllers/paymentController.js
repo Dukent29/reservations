@@ -2,6 +2,7 @@
 
 const httpError = require("../src/utils/httpError");
 const floaService = require("../src/lib/floaClient");
+const payotaClient = require("../src/lib/payotaClient");
 
 async function simulatePlan(req, res, next) {
   try {
@@ -138,10 +139,42 @@ async function cancelDeal(req, res, next) {
   }
 }
 
+async function createCreditCardToken(req, res, next) {
+  try {
+    const payload = req.body || {};
+
+    const requiredFields = [
+      "object_id",
+      "pay_uuid",
+      "init_uuid",
+      "user_first_name",
+      "user_last_name",
+      "credit_card_data_core",
+      "is_cvc_required",
+    ];
+
+    for (const field of requiredFields) {
+      if (payload[field] === undefined || payload[field] === null) {
+        throw httpError(400, `Missing required field: ${field}`);
+      }
+    }
+
+    const result = await payotaClient.createCreditCardToken(payload);
+
+    res.json({
+      status: "ok",
+      payota: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   simulatePlan,
   createDeal,
   finalizeDeal,
   getInstallment,
   cancelDeal,
+   createCreditCardToken,
 };

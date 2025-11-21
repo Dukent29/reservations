@@ -39,6 +39,7 @@ const resultsPaginationEl   = $("#resultsPagination");
 const btnResultsPrev        = $("#btnResultsPrev");
 const btnResultsNext        = $("#btnResultsNext");
 const resultsPaginationLabel = $("#resultsPaginationLabel");
+const topProgressBarEl      = document.getElementById("top-progress-bar");
 // Filters refs
 const starBoxes   = document.querySelectorAll('.flt-stars');
 const mealBoxes   = document.querySelectorAll('.flt-meal');
@@ -70,6 +71,40 @@ const CARD_IMAGE_LIMIT = 13;
 const HOTELS_PAGE_SIZE = 10;
 // How many hotels to fetch per request (server still caps at 100).
 const SERP_FETCH_LIMIT = 60;
+let activeProgressRequests = 0;
+let progressSlowTimer = null;
+
+function startTopProgress() {
+  if (!topProgressBarEl) return;
+  activeProgressRequests++;
+  if (activeProgressRequests > 1) return;
+  topProgressBarEl.style.transition = "none";
+  topProgressBarEl.style.opacity = "1";
+  topProgressBarEl.style.width = "0";
+  // force reflow
+  void topProgressBarEl.offsetWidth;
+  topProgressBarEl.style.transition = "width 0.2s ease, opacity 0.2s ease";
+  topProgressBarEl.style.width = "40%";
+  if (progressSlowTimer) clearTimeout(progressSlowTimer);
+  progressSlowTimer = setTimeout(() => {
+    topProgressBarEl.style.width = "75%";
+  }, 500);
+}
+
+function finishTopProgress() {
+  if (!topProgressBarEl) return;
+  if (activeProgressRequests > 0) activeProgressRequests--;
+  if (activeProgressRequests > 0) return;
+  if (progressSlowTimer) {
+    clearTimeout(progressSlowTimer);
+    progressSlowTimer = null;
+  }
+  topProgressBarEl.style.width = "100%";
+  setTimeout(() => {
+    topProgressBarEl.style.opacity = "0";
+    topProgressBarEl.style.width = "0";
+  }, 300);
+}
 const TRANSLATIONS = {
   en: {
     meal_nomeal: "Room only",
@@ -1191,6 +1226,33 @@ function renderHotelsEx(resultsMaybeNested, options = {}) {
   hydrateHotelImages(lastRenderedHotels, renderToken);
 }
 
+function renderHotelsSkeleton(count = 6) {
+  if (!hotelsContainer) return;
+  const items = Array.from({ length: count }).map((_, idx) => `
+      <div class="hotel-item hotel-skeleton" aria-hidden="true">
+        <div class="hotel-item__top">
+          <div class="hotel-thumb">
+            <div class="hotel-thumb__viewport">
+              <div class="skeleton skeleton-thumb"></div>
+            </div>
+          </div>
+          <div class="hotel-summary">
+            <div class="skeleton skeleton-text skeleton-text-lg"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton-badge-row">
+              <span class="skeleton skeleton-badge"></span>
+              <span class="skeleton skeleton-badge"></span>
+              <span class="skeleton skeleton-badge"></span>
+            </div>
+          </div>
+        </div>
+      </div>`).join("");
+  hotelsContainer.innerHTML = items;
+  if (resultsPaginationEl) resultsPaginationEl.style.display = "none";
+  if (searchMeta) searchMeta.textContent = "Loading results…";
+}
+
 function renderHotels(resultsMaybeNested) {
   const renderToken = ++latestHotelsRenderToken;
   updatePaginationControls(0);
@@ -1334,7 +1396,13 @@ function renderHotelDetails(data) {
 }
 
 async function safeJsonFetch(url, options = {}, labelForLog = "") {
-  const r = await fetch(url, options);
+  startTopProgress();
+  let r;
+  try {
+    r = await fetch(url, options);
+  } finally {
+    finishTopProgress();
+  }
   const statusCode = r.status;
   const rawText = await r.text();
   let data;
@@ -1599,6 +1667,7 @@ btnSearch.addEventListener('click', async () => {
     body.hids = [selectedHotel.hid];
   }
 
+  renderHotelsSkeleton();
   log(body, 'REQUEST /api/search/serp');
   const { statusCode, data } = await safeJsonFetch(
     `${API_BASE}/api/search/serp?limit=${SERP_FETCH_LIMIT}`,
@@ -1616,6 +1685,30 @@ btnSearch.addEventListener('click', async () => {
 // Hotel details by hotel id (from results button)
 async function loadHotelDetails(hid) {
   if (!hid) return;
+  if (hotelDetailsContainer) {
+    hotelDetailsContainer.innerHTML = `
+      <div class="hotel-detail hotel-detail--skeleton" aria-hidden="true">
+        <div class="hotel-detail__summary">
+          <div class="skeleton skeleton-text skeleton-text-lg"></div>
+          <div class="skeleton skeleton-text"></div>
+        </div>
+        <div class="hotel-detail__info-grid">
+          <div class="hotel-detail__info-box">
+            <div class="skeleton skeleton-text skeleton-text-lg"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text"></div>
+          </div>
+          <div class="hotel-detail__info-box">
+            <div class="skeleton skeleton-text skeleton-text-lg"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text"></div>
+          </div>
+        </div>
+        <div class="hotel-gallery">
+          <div class="skeleton skeleton-thumb"></div>
+        </div>
+      </div>`;
+  }
   const body = {
     id: hid,
     checkin: checkinEl?.value,
