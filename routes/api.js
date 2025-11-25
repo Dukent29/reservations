@@ -10,6 +10,7 @@ const bookingRoutes = require("./bookingRoutes");
 const paymentRoutes = require("./paymentRoutes");
 const contentRoutes = require("./contentRoutes");
 const webhookRoutes = require("./webhookRoutes");
+const systempayRoutes = require("./systempayRoutes.js");
 
 router.use(systemRoutes);
 router.use(apiKeyAuth);
@@ -19,5 +20,6 @@ router.use(bookingRoutes);
 router.use(paymentRoutes);
 router.use(contentRoutes);
 router.use(webhookRoutes);
+router.use(systempayRoutes);
 
 module.exports = router;

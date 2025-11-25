@@ -3,6 +3,7 @@
 const { randomUUID } = require("crypto");
 const bookingModel = require("../models/bookingModel");
 const httpError = require("../src/utils/httpError");
+const { saveBookingForm } = require("../utils/repo");
 
 /**
  * Create a prebook token from an ETG hash. Tries to refresh rates when stale.
@@ -74,7 +75,7 @@ async function prebook(req, res, next) {
  */
 async function bookingForm(req, res, next) {
   try {
-    const { prebook_token, token, book_hash, language = "en" } = req.body || {};
+    const { prebook_token, token, book_hash, language = "fr" } = req.body || {};
     const raw = book_hash || prebook_token || token;
     const normalized = bookingModel.ensurePrebookHash(raw);
     const partner_order_id = randomUUID();
@@ -86,6 +87,19 @@ async function bookingForm(req, res, next) {
     };
 
     const form = await bookingModel.requestBookingForm(payload);
+
+    // NEW: persist for later payment / post‑payment steps
+    try {
+      await saveBookingForm({
+        partnerOrderId: partner_order_id,
+        prebookToken: normalized,
+        form,
+      });
+    } catch (e) {
+      console.error("[DB] failed to persist booking form:", e.message);
+      // keep request flowing even if logging fails
+    }
+
     res.json({
       status: "ok",
       partner_order_id,
@@ -95,6 +109,7 @@ async function bookingForm(req, res, next) {
     next(error);
   }
 }
+
 
 /**
  * Final booking call (aka finish) with rooms, user, and payment payloads.

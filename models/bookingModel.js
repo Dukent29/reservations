@@ -196,7 +196,7 @@ async function requestBookingForm(payload) {
 function buildBookingStartPayload(body = {}) {
   const {
     partner_order_id,
-    language = "en",
+    language = "fr",
     user,
     rooms,
     payment_type,

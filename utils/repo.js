@@ -19,6 +19,7 @@ let prebookSchemaEnsured = false;
 let prebookTokenColumn = "prebook_token";
 let prebookDetailsColumn = null;
 let prebookExpiryColumn = null;
+let paymentsSchemaEnsured = false;
 
 async function ensurePrebookSchema() {
   if (prebookSchemaEnsured) return;
@@ -171,4 +172,122 @@ async function getPrebookSummary(prebookToken) {
   }
 }
 
-module.exports = { saveSerpSearch, savePrebook, getPrebookSummary };
+async function ensurePaymentsSchema() {
+  if (paymentsSchemaEnsured) return;
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id BIGSERIAL PRIMARY KEY,
+        provider TEXT,
+        status TEXT,
+        partner_order_id TEXT,
+        prebook_token TEXT,
+        etg_order_id BIGINT,
+        item_id BIGINT,
+        amount NUMERIC,
+        currency_code TEXT,
+        external_reference TEXT,
+        payload JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+  } catch (err) {
+    console.error("[DB] ensurePaymentsSchema failed:", err.message);
+  }
+  paymentsSchemaEnsured = true;
+}
+
+async function savePayment({
+  provider,
+  status,
+  partnerOrderId,
+  prebookToken,
+  etgOrderId,
+  itemId,
+  amount,
+  currencyCode,
+  externalReference,
+  payload,
+}) {
+  try {
+    await ensurePaymentsSchema();
+    await db.query(
+      `
+      INSERT INTO payments (
+        provider,
+        status,
+        partner_order_id,
+        prebook_token,
+        etg_order_id,
+        item_id,
+        amount,
+        currency_code,
+        external_reference,
+        payload
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `,
+      [
+        provider || null,
+        status || null,
+        partnerOrderId || null,
+        prebookToken || null,
+        etgOrderId || null,
+        itemId || null,
+        typeof amount === "number" ? amount : amount != null ? Number(amount) : null,
+        currencyCode || null,
+        externalReference || null,
+        payload ? JSON.stringify(payload) : null,
+      ]
+    );
+  } catch (err) {
+    console.error("[DB] savePayment failed:", err.message);
+  }
+}
+
+async function saveBookingForm({ partnerOrderId, prebookToken, form }) {
+  console.log("[DB] saveBookingForm called with", { partnerOrderId, prebookToken });
+  try {
+    // Ensure table exists (simple, one‑time)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS booking_forms (
+        id BIGSERIAL PRIMARY KEY,
+        partner_order_id TEXT,
+        prebook_token TEXT,
+        etg_order_id BIGINT,
+        item_id BIGINT,
+        amount NUMERIC,
+        currency_code TEXT,
+        form JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    const paymentType = Array.isArray(form.payment_types) ? form.payment_types[0] : null;
+
+    await db.query(
+      `INSERT INTO booking_forms (
+         partner_order_id,
+         prebook_token,
+         etg_order_id,
+         item_id,
+         amount,
+         currency_code,
+         form
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [
+        partnerOrderId,
+        prebookToken,
+        form.order_id || null,
+        form.item_id || null,
+        paymentType ? Number(paymentType.amount) : null,
+        paymentType ? paymentType.currency_code : null,
+        JSON.stringify(form),
+      ]
+    );
+  } catch (e) {
+    console.error("[DB] saveBookingForm failed:", e);
+  }
+}
+
+module.exports = { saveSerpSearch, savePrebook, getPrebookSummary, ensurePaymentsSchema, savePayment, saveBookingForm };
