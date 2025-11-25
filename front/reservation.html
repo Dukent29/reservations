@@ -50,12 +50,18 @@
             <div id="suggestionsDropdown" class="suggestions-dropdown hidden" role="listbox" aria-label="Destination suggestions"></div>
           </div>
           <div class="field">
-            <label for="checkin">Arrivée</label>
-            <input id="checkin" type="date" />
-          </div>
-          <div class="field">
-            <label for="checkout">Départ</label>
-            <input id="checkout" type="date" />
+            <label for="dateRange">Séjour</label>
+            <div class="date-range-wrapper">
+              <input
+                id="dateRange"
+                type="text"
+                placeholder="Choisissez les dates"
+                autocomplete="off"
+                readonly
+              />
+              <input id="checkin" type="hidden" />
+              <input id="checkout" type="hidden" />
+            </div>
           </div>
           <div class="field compact" style="position:relative;">
             <label for="guestsSummary">Voyageurs</label>
@@ -123,11 +129,36 @@
           <div class="filter-group">
             <p class="filter-title">Régime</p>
             <div class="filter-options">
-              <label><input type="checkbox" class="flt-meal" value="nomeal"> RO</label>
-              <label><input type="checkbox" class="flt-meal" value="breakfast"> BB</label>
-              <label><input type="checkbox" class="flt-meal" value="half_board"> HB</label>
-              <label><input type="checkbox" class="flt-meal" value="full_board"> FB</label>
-              <label><input type="checkbox" class="flt-meal" value="all_inclusive"> AI</label>
+              <label class="meal-chip">
+                <input type="checkbox" class="flt-meal" value="nomeal">
+                <span class="meal-chip__code">RO</span>
+                <span class="meal-chip__underline"></span>
+                <span class="info-icon" title="RO — Room only : hébergement seul, sans repas.">i</span>
+              </label>
+              <label class="meal-chip">
+                <input type="checkbox" class="flt-meal" value="breakfast">
+                <span class="meal-chip__code">BB</span>
+                <span class="meal-chip__underline"></span>
+                <span class="info-icon" title="BB — Bed &amp; Breakfast : petit-déjeuner inclus.">i</span>
+              </label>
+              <label class="meal-chip">
+                <input type="checkbox" class="flt-meal" value="half_board">
+                <span class="meal-chip__code">HB</span>
+                <span class="meal-chip__underline"></span>
+                <span class="info-icon" title="HB — Half board : petit-déjeuner et dîner (ou déjeuner) inclus.">i</span>
+              </label>
+              <label class="meal-chip">
+                <input type="checkbox" class="flt-meal" value="full_board">
+                <span class="meal-chip__code">FB</span>
+                <span class="meal-chip__underline"></span>
+                <span class="info-icon" title="FB — Full board : petit-déjeuner, déjeuner et dîner inclus.">i</span>
+              </label>
+              <label class="meal-chip">
+                <input type="checkbox" class="flt-meal" value="all_inclusive">
+                <span class="meal-chip__code">AI</span>
+                <span class="meal-chip__underline"></span>
+                <span class="info-icon" title="AI — All inclusive : repas, snacks et souvent boissons inclus.">i</span>
+              </label>
             </div>
           </div>
 
@@ -138,6 +169,7 @@
             </label>
           </div>
         </div>
+
     </section>
   </div>
 
@@ -207,6 +239,23 @@
     </div>
     <div class="modal__footer">
       <button id="guestsDoneModal" class="primary">Valider</button>
+    </div>
+  </div>
+</div>
+
+<!-- Date range modal -->
+<div id="dateModal" class="modal hidden" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="modal__backdrop"></div>
+  <div class="modal__dialog" style="width:min(360px,92vw)">
+    <div class="modal__header">
+      <div class="modal__title">Séjour</div>
+      <button id="dateModalClose" class="secondary mini" aria-label="Fermer">✕</button>
+    </div>
+    <div class="modal__body" style="gap:1rem;">
+      <div id="dateCalendar" class="date-calendar" aria-label="Sélection de la période"></div>
+    </div>
+    <div class="modal__footer">
+      <button id="dateModalApply" class="primary">Valider</button>
     </div>
   </div>
 </div>

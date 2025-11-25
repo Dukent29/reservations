@@ -231,6 +231,155 @@ input[type="checkbox"], input[type="radio"] {
   margin: 0;
 }
 
+.meal-chip {
+  padding: .35rem .7rem;
+  border-radius: .5rem;
+  border: 1px solid rgba(30,64,175,.5);
+  background: rgba(15,23,42,.85);
+  cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+.meal-chip input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.meal-chip__code {
+  font-weight: 600;
+  letter-spacing: .06em;
+}
+.meal-chip__underline {
+  flex: 1;
+  max-width: 2rem;
+  height: .25rem;
+  border-radius: 999px;
+  background: rgba(30,64,175,.4);
+  position: relative;
+  overflow: hidden;
+}
+.meal-chip__underline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(59,130,246,.6), rgba(56,189,248,.7));
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.meal-chip input[type="checkbox"]:checked ~ .meal-chip__code {
+  color: #bfdbfe;
+}
+
+/* Active look when meal is selected (whole button lit) */
+.meal-chip--active {
+  border-width: 2px;
+  border-color: rgba(96,165,250,1);
+  box-shadow:
+    rgba(37, 99, 235, 0.46) 0px 10px 26px 0px,
+    rgba(37, 99, 235, 0.55) 0px 0px 0px 1px;
+  background: radial-gradient(circle at 20% 0%, rgba(59,130,246,.35), transparent 55%),
+              rgba(15,23,42,.95);
+}
+.meal-chip--active .meal-chip__code {
+  color: #e0f2fe;
+}
+.meal-chip--active .meal-chip__underline::after {
+  opacity: 1;
+}
+.meal-chip--active .info-icon {
+  border-color: rgba(96,165,250,.8);
+  color: #bfdbfe;
+}
+
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148,163,184,.8);
+  font-size: .6rem;
+  line-height: 1;
+  cursor: help;
+  color: #e2e8f0;
+}
+.date-range-wrapper {
+  position: relative;
+}
+.date-range-wrapper input[type="text"] {
+  position: relative;
+  z-index: 1;
+}
+
+.date-calendar {
+  width: 100%;
+  background: rgba(15,23,42,.8);
+  border-radius: .75rem;
+  border: 1px solid rgba(148,163,184,.4);
+  padding: .75rem;
+  font-size: .8rem;
+}
+.date-calendar__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: .5rem;
+  color: #e2e8f0;
+}
+.date-calendar__nav {
+  display: flex;
+  gap: .25rem;
+}
+.date-calendar__nav button {
+  background: transparent;
+  border: 1px solid rgba(148,163,184,.5);
+  color: #e2e8f0;
+  border-radius: 999px;
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: .7rem;
+  cursor: pointer;
+}
+.date-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: .15rem;
+}
+.date-calendar__dow {
+  text-align: center;
+  font-size: .65rem;
+  text-transform: uppercase;
+  color: #64748b;
+  padding-bottom: .15rem;
+}
+.date-calendar__day {
+  border-radius: .45rem;
+  border: none;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: .75rem;
+  padding: .25rem 0;
+  cursor: pointer;
+}
+.date-calendar__day--outside {
+  opacity: .25;
+  cursor: default;
+}
+.date-calendar__day--start,
+.date-calendar__day--end {
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+.date-calendar__day--inrange {
+  background: rgba(37,99,235,.25);
+}
+.date-calendar__day--disabled {
+  opacity: .25;
+  cursor: default;
+}
+
     button.primary {
       background: radial-gradient(circle at 20% 20%, rgba(59,130,246,.4) 0%, rgba(15,23,42,0) 70%);
       background-color: rgba(37,99,235,.2);

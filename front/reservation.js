@@ -12,6 +12,11 @@ const API_BASE = (function () {
 // DOM refs
 const checkinEl   = $("#checkin");
 const checkoutEl  = $("#checkout");
+const dateRangeEl = $("#dateRange");
+const dateModal   = $("#dateModal");
+const dateModalClose = $("#dateModalClose");
+const dateModalApply = $("#dateModalApply");
+const dateCalendarEl = $("#dateCalendar");
 const langEl      = $("#language");
 const currencyEl  = $("#currency");
 const regionIdEl  = $("#region_id");
@@ -74,6 +79,57 @@ const SERP_FETCH_LIMIT = 60;
 let activeProgressRequests = 0;
 let progressSlowTimer = null;
 
+// Initialize meal-plan button active styles
+document.querySelectorAll(".meal-chip input.flt-meal").forEach((input) => {
+  const label = input.closest(".meal-chip");
+  if (!label) return;
+  if (input.checked) {
+    label.classList.add("meal-chip--active");
+  }
+  input.addEventListener("change", () => {
+    label.classList.toggle("meal-chip--active", input.checked);
+  });
+});
+
+// Star rating filter (1–5 stars, visual)
+(function initStarFilter() {
+  const container = document.querySelector("[data-star-filter]");
+  if (!container) return;
+  const starButtons = Array.from(container.querySelectorAll(".star-filter__star"));
+  const starCheckboxes = Array.from(container.querySelectorAll("input.flt-stars"));
+
+  function applyStarSelection(maxStars) {
+    // Visual: highlight all stars up to clicked value
+    starButtons.forEach((btn) => {
+      const value = Number(btn.getAttribute("data-star-value"));
+      btn.classList.toggle("star-filter__star--active", value <= maxStars);
+    });
+    // Data: check underlying checkboxes whose value <= maxStars
+    starCheckboxes.forEach((cb) => {
+      const value = Number(cb.value);
+      if (!Number.isFinite(value)) return;
+      cb.checked = value <= maxStars && maxStars > 0;
+    });
+  }
+
+  starButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const value = Number(btn.getAttribute("data-star-value"));
+      const isActive = btn.classList.contains("star-filter__star--active");
+      const activeCount = starButtons.filter((b) => b.classList.contains("star-filter__star--active")).length;
+      const newMax = isActive && value === activeCount ? 0 : value;
+      applyStarSelection(newMax);
+    });
+  });
+})();
+
+// Date range selection state
+let calendarBaseDate = new Date();
+calendarBaseDate.setDate(1);
+let rangeStartDate = null;
+let rangeEndDate = null;
+let hoverDate = null;
+
 function startTopProgress() {
   if (!topProgressBarEl) return;
   activeProgressRequests++;
@@ -105,6 +161,248 @@ function finishTopProgress() {
     topProgressBarEl.style.width = "0";
   }, 300);
 }
+
+function formatDateForDisplay(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  try {
+    return date.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "numeric" });
+  } catch (_) {
+    return value;
+  }
+}
+
+function syncDateRangeDisplay() {
+  if (!dateRangeEl) return;
+  const checkin = checkinEl?.value;
+  const checkout = checkoutEl?.value;
+  if (!checkin && !checkout) {
+    dateRangeEl.value = "";
+    return;
+  }
+  const from = formatDateForDisplay(checkin);
+  const to = formatDateForDisplay(checkout);
+  dateRangeEl.value = from && to ? `${from} \u2192 ${to}` : from || to || "";
+}
+
+function toISODate(date) {
+  if (!(date instanceof Date)) return null;
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseISODate(str) {
+  if (!str) return null;
+  const date = new Date(str);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isSameDay(a, b) {
+  if (!a || !b) return false;
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+}
+
+function isBetween(date, start, end) {
+  if (!date || !start || !end) return false;
+  const t = date.getTime();
+  const s = start.getTime();
+  const e = end.getTime();
+  return t > Math.min(s, e) && t < Math.max(s, e);
+}
+
+function renderDateCalendar() {
+  if (!dateCalendarEl) return;
+  const month = calendarBaseDate.getMonth();
+  const year = calendarBaseDate.getFullYear();
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = firstDay.getDay() || 7; // 1..7, Monday-based
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+  const todayIso = toISODate(today);
+
+  const lang = (langEl?.value || "fr").toLowerCase();
+  const monthFormatter = new Intl.DateTimeFormat(lang === "fr" ? "fr-FR" : undefined, {
+    month: "long",
+    year: "numeric",
+  });
+  const monthLabel = monthFormatter.format(firstDay);
+
+  const container = document.createElement("div");
+
+  const header = document.createElement("div");
+  header.className = "date-calendar__header";
+  const title = document.createElement("div");
+  title.textContent = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+  const nav = document.createElement("div");
+  nav.className = "date-calendar__nav";
+  const prevBtn = document.createElement("button");
+  prevBtn.type = "button";
+  prevBtn.textContent = "<";
+  prevBtn.addEventListener("click", () => {
+    calendarBaseDate.setMonth(calendarBaseDate.getMonth() - 1);
+    renderDateCalendar();
+  });
+  const nextBtn = document.createElement("button");
+  nextBtn.type = "button";
+  nextBtn.textContent = ">";
+  nextBtn.addEventListener("click", () => {
+    calendarBaseDate.setMonth(calendarBaseDate.getMonth() + 1);
+    renderDateCalendar();
+  });
+  nav.appendChild(prevBtn);
+  nav.appendChild(nextBtn);
+  header.appendChild(title);
+  header.appendChild(nav);
+
+  const grid = document.createElement("div");
+  grid.className = "date-calendar__grid";
+
+  // Day of week headers (Mon..Sun)
+  const dowFormatter = new Intl.DateTimeFormat(lang === "fr" ? "fr-FR" : undefined, {
+    weekday: "short",
+  });
+  const baseDow = new Date(2023, 0, 2); // Monday
+  for (let i = 0; i < 7; i++) {
+    const span = document.createElement("div");
+    span.className = "date-calendar__dow";
+    const d = new Date(baseDow);
+    d.setDate(baseDow.getDate() + i);
+    span.textContent = dowFormatter.format(d);
+    grid.appendChild(span);
+  }
+
+  // Empty slots before first day
+  for (let i = 1; i < startWeekday; i++) {
+    const empty = document.createElement("div");
+    grid.appendChild(empty);
+  }
+
+  const minDate = todayIso ? parseISODate(todayIso) : null;
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month, day);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = String(day);
+    btn.className = "date-calendar__day";
+
+    let disabled = false;
+    if (minDate && date.setHours(0,0,0,0) < minDate.setHours(0,0,0,0)) {
+      disabled = true;
+    }
+    if (disabled) {
+      btn.classList.add("date-calendar__day--disabled");
+    } else {
+      const start = rangeStartDate;
+      const end = rangeEndDate || hoverDate;
+      if (start && isSameDay(date, start)) {
+        btn.classList.add("date-calendar__day--start");
+      }
+      if (end && isSameDay(date, end)) {
+        btn.classList.add("date-calendar__day--end");
+      }
+      if (start && end && isBetween(date, start, end)) {
+        btn.classList.add("date-calendar__day--inrange");
+      }
+
+      btn.addEventListener("click", () => {
+        if (!rangeStartDate || (rangeStartDate && rangeEndDate)) {
+          rangeStartDate = date;
+          rangeEndDate = null;
+          hoverDate = null;
+        } else {
+          if (date < rangeStartDate) {
+            rangeEndDate = rangeStartDate;
+            rangeStartDate = date;
+          } else if (date.getTime() === rangeStartDate.getTime()) {
+            rangeEndDate = date;
+          } else {
+            rangeEndDate = date;
+          }
+        }
+        renderDateCalendar();
+      });
+
+      btn.addEventListener("mouseenter", () => {
+        if (rangeStartDate && !rangeEndDate) {
+          hoverDate = date;
+          renderDateCalendar();
+        }
+      });
+    }
+
+    grid.appendChild(btn);
+  }
+
+  container.appendChild(header);
+  container.appendChild(grid);
+  dateCalendarEl.innerHTML = "";
+  dateCalendarEl.appendChild(container);
+}
+function openDateModal() {
+  if (!dateModal) return;
+  // Pre-fill selection from hidden values
+  rangeStartDate = parseISODate(checkinEl?.value || "");
+  rangeEndDate = parseISODate(checkoutEl?.value || "");
+  hoverDate = null;
+  // Base month from start date or today
+  const base = rangeStartDate || new Date();
+  calendarBaseDate = new Date(base.getFullYear(), base.getMonth(), 1);
+  renderDateCalendar();
+  dateModal.classList.remove("hidden");
+  dateModal.setAttribute("aria-hidden", "false");
+}
+
+function closeDateModal() {
+  if (!dateModal) return;
+  dateModal.classList.add("hidden");
+  dateModal.setAttribute("aria-hidden", "true");
+}
+
+if (dateRangeEl) {
+  dateRangeEl.addEventListener("click", (event) => {
+    event.preventDefault();
+    openDateModal();
+  });
+  dateRangeEl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openDateModal();
+    }
+  });
+}
+
+if (dateModalClose) {
+  dateModalClose.addEventListener("click", () => closeDateModal());
+}
+
+if (dateModalApply) {
+  dateModalApply.addEventListener("click", () => {
+    const start = rangeStartDate;
+    const end = rangeEndDate || hoverDate;
+    if (!start || !end) {
+      closeDateModal();
+      return;
+    }
+    const startIso = toISODate(start);
+    const endIso = toISODate(end);
+    if (checkinEl) checkinEl.value = startIso;
+    if (checkoutEl) checkinEl && (checkoutEl.value = endIso);
+    syncDateRangeDisplay();
+    closeDateModal();
+  });
+}
+
+dateModal?.addEventListener("click", (event) => {
+  if (event.target === dateModal || event.target.classList?.contains("modal__backdrop")) {
+    closeDateModal();
+  }
+});
 const TRANSLATIONS = {
   en: {
     meal_nomeal: "Room only",
