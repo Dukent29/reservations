@@ -7,14 +7,14 @@ const { systempayConfig } = require("../config/systempay");
 
 /**
  * TEMP: test route to get a formToken from Systempay
- * Full URL: POST /api/payments/systempay/create-order
+ * Full URL (with api router): POST /api/payments/systempay/create-order
  */
 router.post("/payments/systempay/create-order", async (req, res) => {
   try {
     const fakeBooking = {
       id: "TEST_BOOKING_123",
-      price_client: 10.0,
-      customer_email: "test@example.com",
+      price_client: 10.0, // 10 EUR
+      customer_email: "sample@example.com",
     };
 
     const amountInCents = Math.round(Number(fakeBooking.price_client) * 100);
@@ -22,32 +22,52 @@ router.post("/payments/systempay/create-order", async (req, res) => {
     const payload = {
       amount: amountInCents,
       currency: "EUR",
+      orderId: `BKG-${fakeBooking.id}`,
       customer: {
         email: fakeBooking.customer_email,
       },
-      orderId: `BKG-${fakeBooking.id}`,
-      paymentMethods: ["CARD"],
-      ipnTargetUrl: systempayConfig.ipnUrl,
       metadata: {
         booking_id: fakeBooking.id,
       },
     };
 
-    const response = await axios.post(systempayConfig.createPaymentUrl, payload, {
-      auth: {
-        username: systempayConfig.restUsername,
-        password: systempayConfig.restPassword,
-      },
+    console.log("[Systempay] Using auth from config:", {
+      username: systempayConfig.restUsername,
+      password: systempayConfig.restPassword,
+      url: systempayConfig.createPaymentUrl,
     });
 
-    const { formToken } = response.data || {};
+    // 🔹 HERE is the Basic Auth replacement you asked about
+    const basicAuth = Buffer.from(
+      `${systempayConfig.restUsername}:${systempayConfig.restPassword}`,
+      "utf8"
+    ).toString("base64");
 
-    if (!formToken) {
-      console.error("[Systempay] No formToken:", response.data);
+    console.log("[Systempay] Basic header:", `Basic ${basicAuth}`);
+
+    const response = await axios.post(
+      systempayConfig.createPaymentUrl,
+      payload,
+      {
+        headers: {
+          Authorization: `Basic ${basicAuth}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const raw = response.data || {};
+    console.log("[Systempay] Raw response:", raw);
+
+    const status = raw.status;
+    const formToken = raw.answer && raw.answer.formToken;
+
+    if (status !== "SUCCESS" || !formToken) {
+      console.error("[Systempay] Unexpected response (no valid formToken):", raw);
       return res.status(500).json({
         success: false,
-        message: "Systempay did not return a formToken",
-        raw: response.data,
+        message: "Systempay did not return a valid formToken",
+        raw,
       });
     }
 
@@ -55,10 +75,13 @@ router.post("/payments/systempay/create-order", async (req, res) => {
       success: true,
       formToken,
       publicKey: systempayConfig.sdkPublicKey,
-      raw: response.data,
+      raw,
     });
   } catch (err) {
-    console.error("[Systempay] create-order error:", err.response?.data || err.message);
+    console.error(
+      "[Systempay] create-order error:",
+      err.response?.data || err.message
+    );
     return res.status(500).json({
       success: false,
       message: "Failed to create Systempay payment",

@@ -50,6 +50,15 @@
           <form id="bookingDetailsForm">
             <div class="row">
               <label>
+                Civility
+                <select id="customerCivility" required>
+                  <option value="">Select…</option>
+                  <option value="Mr">Mr</option>
+                  <option value="Mrs">Mrs</option>
+                  <option value="Ms">Ms</option>
+                </select>
+              </label>
+              <label>
                 Full name
                 <input type="text" id="customerName" placeholder="John Doe" required />
               </label>
@@ -68,7 +77,34 @@
                 <input type="text" id="bookingNotes" placeholder="Late arrival, VIP, …" />
               </label>
             </div>
-            <button type="button" id="startBooking" class="primary" disabled>Create booking (soon)</button>
+            <div class="row">
+              <label>
+                Address
+                <input type="text" id="customerAddressLine1" placeholder="1 Rue de la Paix" />
+              </label>
+              <label>
+                ZIP / City
+                <input type="text" id="customerAddressZipCity" placeholder="33000 Bordeaux" />
+              </label>
+              <label>
+                Country code
+                <input type="text" id="customerCountryCode" placeholder="FR" maxlength="2" />
+              </label>
+            </div>
+            <div class="row">
+              <label>
+                Floa product
+                <select id="floaProduct">
+                  <option value="">Choose a product…</option>
+                  <option value="BC1XF">Paiement comptant (BC1XF)</option>
+                  <option value="BC3XF">Paiement en 3x (BC3XF)</option>
+                  <option value="BC4XF">Paiement en 4x (BC4XF)</option>
+                </select>
+              </label>
+              <div style="display:flex;align-items:flex-end;gap:.5rem;">
+                <button type="button" id="btnFloaPay" class="primary">Pay with Floa</button>
+              </div>
+            </div>
           </form>
         </section>
 

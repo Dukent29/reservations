@@ -2,6 +2,26 @@
 
 const db = require("./db");
 
+function parseAmount(raw) {
+  if (raw == null) return null;
+  let s = String(raw).trim();
+  if (!s) return null;
+  s = s.replace(/\s/g, "");
+  s = s.replace(/[^0-9,.\-]/g, "");
+  if (!s) return null;
+  if (s.includes(",") && !s.includes(".")) {
+    const lastComma = s.lastIndexOf(",");
+    s =
+      s.slice(0, lastComma).replace(/[,\.]/g, "") +
+      "." +
+      s.slice(lastComma + 1).replace(/[,\.]/g, "");
+  } else {
+    s = s.replace(/,/g, "");
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
 // save one SERP search (trim data to avoid huge rows)
 async function saveSerpSearch({ endpoint, payload, resultsSample, requestId, ip }) {
   try {
@@ -234,7 +254,7 @@ async function savePayment({
         prebookToken || null,
         etgOrderId || null,
         itemId || null,
-        typeof amount === "number" ? amount : amount != null ? Number(amount) : null,
+        parseAmount(amount),
         currencyCode || null,
         externalReference || null,
         payload ? JSON.stringify(payload) : null,
@@ -280,7 +300,7 @@ async function saveBookingForm({ partnerOrderId, prebookToken, form }) {
         prebookToken,
         form.order_id || null,
         form.item_id || null,
-        paymentType ? Number(paymentType.amount) : null,
+        paymentType ? parseAmount(paymentType.amount) : null,
         paymentType ? paymentType.currency_code : null,
         JSON.stringify(form),
       ]
@@ -290,4 +310,4 @@ async function saveBookingForm({ partnerOrderId, prebookToken, form }) {
   }
 }
 
-module.exports = { saveSerpSearch, savePrebook, getPrebookSummary, ensurePaymentsSchema, savePayment, saveBookingForm };
+module.exports = { saveSerpSearch, savePrebook, getPrebookSummary, ensurePaymentsSchema, savePayment, saveBookingForm, parseAmount };
