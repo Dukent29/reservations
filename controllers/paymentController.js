@@ -3,6 +3,23 @@
 const httpError = require("../src/utils/httpError");
 const floaService = require("../src/lib/floaClient");
 const payotaClient = require("../src/lib/payotaClient");
+const db = require("../utils/db");
+const { savePayment, parseAmount } = require("../utils/repo");
+
+async function getBookingFormByPartnerOrderId(partnerOrderId) {
+  const sql = `
+    SELECT *
+    FROM booking_forms
+    WHERE partner_order_id = $1
+    ORDER BY id DESC
+    LIMIT 1
+  `;
+  const result = await db.query(sql, [partnerOrderId]);
+  if (!result.rows.length) {
+    throw httpError(404, "booking_form_not_found");
+  }
+  return result.rows[0];
+}
 
 async function simulatePlan(req, res, next) {
   try {
@@ -15,6 +32,199 @@ async function simulatePlan(req, res, next) {
 }
 
 // controllers/paymentController.js
+
+async function createHotelDeal(req, res, next) {
+  try {
+    const { partner_order_id, productCode, customer, device = "Desktop" } = req.body || {};
+
+    if (!partner_order_id) {
+      throw httpError(400, "partner_order_id is required");
+    }
+    if (!productCode) {
+      throw httpError(400, "productCode is required");
+    }
+    if (!customer) {
+      throw httpError(400, "customer is required");
+    }
+    if (!customer.civility) {
+      throw httpError(400, "customer.civility is required for Floa eligibility (e.g., 'Mr' or 'Mrs')");
+    }
+
+    // 1. Load ETG booking form row
+    const bf = await getBookingFormByPartnerOrderId(partner_order_id);
+
+    // Try a few places for the amount coming from the ETG booking form
+    const paymentType = bf?.form && Array.isArray(bf.form.payment_types) && bf.form.payment_types.length > 0
+      ? bf.form.payment_types[0]
+      : null;
+
+    const candidates = [];
+    if (paymentType && paymentType.amount !== undefined) candidates.push(paymentType.amount);
+    if (bf.amount !== undefined) candidates.push(bf.amount);
+    // legacy or other fields sometimes used by ETG
+    if (bf.form && bf.form.total_amount !== undefined) candidates.push(bf.form.total_amount);
+    if (bf.form && bf.form.order_amount !== undefined) candidates.push(bf.form.order_amount);
+
+    let amount = null;
+    let usedSource = null;
+    for (const c of candidates) {
+      const parsed = parseAmount(c);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        amount = parsed;
+        usedSource = c;
+        break;
+      }
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      // Try a fallback: some systems store amount as integer cents (e.g. 10000 meaning 100.00)
+      const first = candidates.length ? candidates[0] : null;
+      let fallbackAmount = null;
+      if (first !== null && first !== undefined) {
+        // numeric string like "10000"
+        if (typeof first === "string" && /^\d+$/.test(first)) {
+          const asInt = Number(first);
+          if (Number.isFinite(asInt) && asInt > 0) fallbackAmount = asInt / 100;
+        }
+        // raw number like 10000
+        if (typeof first === "number" && Number.isFinite(first) && Number.isInteger(first) && first > 100) {
+          fallbackAmount = first / 100;
+        }
+      }
+
+      if (fallbackAmount && Number.isFinite(fallbackAmount) && fallbackAmount > 0) {
+        amount = fallbackAmount;
+        console.warn("[HotelDeal] used cents-fallback for booking_form amount", { partner_order_id, fallbackAmount, original: first });
+      } else {
+        console.error("[HotelDeal] invalid booking_form amount", {
+          partner_order_id,
+          booking_form_row: bf,
+          tried_candidates: candidates,
+          parsedAmount: amount,
+        });
+        throw httpError(400, "invalid_amount_in_booking_form", { tried_candidates: candidates, booking_form: bf });
+      }
+    }
+    const currency = bf.currency_code || "EUR";
+
+    const merchantFinancedAmount = Math.round(amount * 100);
+
+    const items = [
+      {
+        name: "Séjour hôtel",
+        amount: amount,
+        quantity: 1,
+        reference: String(bf.item_id || bf.etg_order_id || partner_order_id),
+        category: "Travel",
+        subCategory: "Hotel",
+        customCategory: "Hotel stay",
+      },
+    ];
+
+    const itemCount = items.length;
+
+    const safeCustomer = {
+      civility: customer.civility,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      email: customer.email,
+      mobilePhoneNumber: customer.mobilePhoneNumber,
+      homeAddress: customer.homeAddress || { countryCode: "FR" },
+    };
+
+    const shippingAddress = customer.homeAddress || { countryCode: "FR" };
+    const country_code = shippingAddress.countryCode || "FR";
+
+    // 2. Eligibility check for chosen productCode
+    const eligibilityPayload = {
+      customers: [safeCustomer],
+      merchantFinancedAmount,
+      itemCount,
+      items,
+      device,
+      country_code,
+      currency,
+    };
+
+    console.log(
+      "[FLOA] eligibilityPayload",
+      JSON.stringify(eligibilityPayload, null, 2)
+    );
+
+    let eligibility;
+    try {
+      eligibility = await floaService.checkProductEligibility(eligibilityPayload);
+    } catch (err) {
+      // Floa sometimes returns 400 with a body that still contains
+      // productEligibilities (with per-product errors / constraints).
+      // In that case we can still inspect the payload instead of failing hard.
+      if (err?.http === 400 && err?.debug?.productEligibilities) {
+        eligibility = err.debug;
+      } else {
+        throw err;
+      }
+    }
+    const productEligibilities = eligibility.productEligibilities || [];
+
+    const matching = productEligibilities.find(
+      (p) =>
+        p.productCode === productCode &&
+        p.countryCode === country_code &&
+        p.hasAgreement === true &&
+        !p.errors
+    );
+
+    if (!matching) {
+      return res.status(400).json({
+        status: "nok",
+        reason: "Not eligible for this product / country",
+        floa: eligibility,
+      });
+    }
+
+    const productEligibilityId = eligibility.id;
+
+    // 3. Create Floa deal
+    const deal = await floaService.createDeal({
+      productCode,
+      implementationType: "CustomerInformationForm",
+      merchantReference: partner_order_id,
+      merchantFinancedAmount,
+      itemCount,
+      items,
+      customers: [safeCustomer],
+      device,
+      shippingMethod: "STD",
+      shippingAddress,
+      currency,
+      productEligibilityId,
+    });
+
+    const dealReference = deal.dealReference || deal.reference || null;
+
+    // 4. Persist payment row
+    await savePayment({
+      provider: "floa",
+      status: "pending",
+      partnerOrderId: partner_order_id,
+      prebookToken: bf.prebook_token || null,
+      etgOrderId: bf.etg_order_id || null,
+      itemId: bf.item_id || null,
+      amount,
+      currencyCode: currency,
+      externalReference: dealReference,
+      payload: { deal, eligibility },
+    });
+
+    res.json({
+      status: "ok",
+      partner_order_id,
+      deal,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
 
 async function createDeal(req, res, next) {
   try {
@@ -54,7 +264,23 @@ async function createDeal(req, res, next) {
     };
 
     // --- 2. Call product eligibilities ---
-    const eligibility = await floaService.checkProductEligibility(eligibilityPayload);
+    let eligibility;
+    try {
+      eligibility = await floaService.checkProductEligibility(eligibilityPayload);
+    } catch (err) {
+      // Floa sometimes returns 400 with a body that still contains
+      // productEligibilities (per-product errors / constraints).
+      if (err?.http === 400 && err?.debug?.productEligibilities) {
+        eligibility = err.debug;
+      } else {
+        throw err;
+      }
+    }
+
+    console.log(
+      "[FLOA] eligibilityResult",
+      JSON.stringify(eligibility, null, 2)
+    );
 
     const productEligibilities = eligibility.productEligibilities || [];
 
@@ -69,6 +295,10 @@ async function createDeal(req, res, next) {
 
     if (!matching) {
       // Floa answered, but this specific productCode/country is not offered
+      console.warn(
+        "[FLOA] product not eligible",
+        JSON.stringify({ productCode, country_code, matching, productEligibilities }, null, 2)
+      );
       return res.status(400).json({
         status: "nok",
         reason: "Not eligible for this product / country",
@@ -172,8 +402,9 @@ async function createCreditCardToken(req, res, next) {
 module.exports = {
   simulatePlan,
   createDeal,
+  createHotelDeal,
   finalizeDeal,
   getInstallment,
   cancelDeal,
-   createCreditCardToken,
+  createCreditCardToken,
 };

@@ -22,6 +22,20 @@ const formSummaryEl = $("#bookingFormSummary");
 const staySummaryEl = $("#staySummary");
 const refreshButton = $("#refreshForm");
 const copyButton = $("#copyPartnerId");
+const civilityEl = $("#customerCivility");
+const nameEl = $("#customerName");
+const emailEl = $("#customerEmail");
+const phoneEl = $("#customerPhone");
+const addrLine1El = $("#customerAddressLine1");
+const addrZipCityEl = $("#customerAddressZipCity");
+const countryCodeEl = $("#customerCountryCode");
+const floaProductEl = $("#floaProduct");
+const floaPayButton = $("#btnPay");
+const paymentMethodFloaEl = $("#paymentMethodFloa");
+const paymentMethodSystempayEl = $("#paymentMethodSystempay");
+const floaOptionsRowEl = $("#floaOptionsRow");
+
+let currentPartnerOrderId = null;
 
 let storedPrebookSummary = null;
 let storedPrebookPayload = null;
@@ -215,7 +229,8 @@ async function fetchBookingForm() {
     if (!response.ok || payload?.error) {
       throw new Error(payload?.error || payload?._raw || response.status);
     }
-    partnerIdEl.textContent = payload.partner_order_id || "-";
+    currentPartnerOrderId = payload.partner_order_id || null;
+    partnerIdEl.textContent = currentPartnerOrderId || "-";
     rawFormEl.textContent = JSON.stringify(payload.form || {}, null, 2);
     formSummaryEl.classList.remove("hidden");
     renderStaySummary(payload.form || {}, storedPrebookSummary, storedPrebookPayload);
@@ -235,6 +250,159 @@ copyButton?.addEventListener("click", () => {
   navigator.clipboard?.writeText(text).then(() => setStatus("Partner order ID copied."));
 });
 
+function getSelectedPaymentMethod() {
+  if (paymentMethodFloaEl?.checked) return "floa";
+  if (paymentMethodSystempayEl?.checked) return "systempay";
+  return null;
+}
+
+function updatePaymentUI() {
+  const method = getSelectedPaymentMethod();
+  if (floaOptionsRowEl) {
+    floaOptionsRowEl.style.display = method === "floa" ? "" : "none";
+  }
+}
+
+paymentMethodFloaEl?.addEventListener("change", updatePaymentUI);
+paymentMethodSystempayEl?.addEventListener("change", updatePaymentUI);
+
+async function startPayment() {
+  try {
+    const partnerOrderId = currentPartnerOrderId || partnerIdEl?.textContent?.trim();
+    if (!partnerOrderId || partnerOrderId === "-") {
+      setStatus("Missing partner order ID. Load booking form first.", "error");
+      return;
+    }
+
+    const method = getSelectedPaymentMethod();
+    if (!method) {
+      setStatus("Please choose a payment method.", "error");
+      return;
+    }
+
+    const productCode = floaProductEl?.value || "";
+    const civility = civilityEl?.value || "";
+    if (!civility) {
+      setStatus("Please select a civility for the traveller.", "error");
+      return;
+    }
+    const fullName = nameEl?.value?.trim() || "";
+    const [firstName, ...restName] = fullName.split(" ");
+    const lastName = restName.join(" ") || firstName || "Traveller";
+    const email = emailEl?.value?.trim();
+    const phone = phoneEl?.value?.trim();
+    if (!email || !phone || !fullName) {
+      setStatus("Please fill traveller name, email, and phone before payment.", "error");
+      return;
+    }
+    const addrLine1 = addrLine1El?.value?.trim() || "";
+    const zipCity = addrZipCityEl?.value?.trim() || "";
+    let zipCode = "";
+    let city = "";
+    if (zipCity) {
+      const parts = zipCity.split(" ");
+      zipCode = parts.shift() || "";
+      city = parts.join(" ") || "";
+    }
+    let countryCode = (countryCodeEl?.value || "FR").trim().toUpperCase() || "FR";
+
+    // Try to auto-extract ZIP/city for FR if user typed full address in one field
+    if (countryCode === "FR") {
+      const fromAddr = addrLine1.match(/(\d{5})\s+(.+)/);
+      const fromZipCity = zipCity.match(/(\d{5})\s+(.+)/);
+      if (fromZipCity) {
+        zipCode = fromZipCity[1];
+        city = fromZipCity[2];
+      } else if (fromAddr) {
+        zipCode = fromAddr[1];
+        city = fromAddr[2];
+      }
+
+      if (!/^\d{5}$/.test(zipCode || "")) {
+        setStatus("Please enter a valid 5‑digit French ZIP code (e.g. 76710).", "error");
+        return;
+      }
+      if (!city) {
+        setStatus("Please enter a city name (e.g. Bordeaux).", "error");
+        return;
+      }
+    }
+
+    const customer = {
+      civility,
+      firstName,
+      lastName,
+      email,
+      mobilePhoneNumber: phone,
+      homeAddress: {
+        line1: addrLine1,
+        zipCode: zipCode || "",
+        city: city || "",
+        countryCode,
+      },
+    };
+
+    if (method === "systempay") {
+      const url = new URL(window.location.origin + "/systempay-test.html");
+      url.searchParams.set("partner_order_id", partnerOrderId);
+      url.searchParams.set("email", email);
+      window.location.href = url.toString();
+      return;
+    }
+
+    // Floa flow (installments)
+    if (!productCode) {
+      setStatus("Choose a Floa product before starting payment.", "error");
+      return;
+    }
+
+    const body = {
+      partner_order_id: partnerOrderId,
+      productCode,
+      device: "Desktop",
+      customer,
+    };
+
+    // Frontend debug: see exactly what we send to backend
+    console.log("[FLOA][front] /payments/floa/hotel/deal body:", body);
+
+    setStatus("Contacting FloaBank for eligibility and deal creation…");
+    floaPayButton?.setAttribute("disabled", "disabled");
+
+    const response = await fetch(`${API_BASE}/api/payments/floa/hotel/deal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json();
+
+    if (!response.ok || payload?.status === "nok" || payload?.error) {
+      const reason =
+        payload?.reason ||
+        payload?.error ||
+        payload?._raw ||
+        `HTTP ${response.status}`;
+      setStatus(`Floa payment not available: ${reason}`, "error");
+      return;
+    }
+
+    setStatus("Floa deal created. You can now continue the booking flow (finalization to be wired).");
+    // Optionally show deal JSON in the raw form panel for debugging
+    if (rawFormEl) {
+      rawFormEl.textContent = JSON.stringify(payload.deal || payload, null, 2);
+    }
+  } catch (err) {
+    setStatus(`Payment error: ${err.message || err}`, "error");
+  } finally {
+    floaPayButton?.removeAttribute("disabled");
+  }
+}
+
+floaPayButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  startPayment();
+});
+
 document.addEventListener("DOMContentLoaded", () => {
   if (tokenEl) tokenEl.textContent = token || "-";
   if (storedPrebookSummary || storedPrebookPayload) {
@@ -243,4 +411,5 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (token) fetchBookingForm();
   else setStatus("Provide a prebook token in the URL to load the booking form.", "error");
+  updatePaymentUI();
 });
