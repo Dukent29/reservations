@@ -30,7 +30,10 @@ const addrLine1El = $("#customerAddressLine1");
 const addrZipCityEl = $("#customerAddressZipCity");
 const countryCodeEl = $("#customerCountryCode");
 const floaProductEl = $("#floaProduct");
-const floaPayButton = $("#btnFloaPay");
+const floaPayButton = $("#btnPay");
+const paymentMethodFloaEl = $("#paymentMethodFloa");
+const paymentMethodSystempayEl = $("#paymentMethodSystempay");
+const floaOptionsRowEl = $("#floaOptionsRow");
 
 let currentPartnerOrderId = null;
 
@@ -247,18 +250,37 @@ copyButton?.addEventListener("click", () => {
   navigator.clipboard?.writeText(text).then(() => setStatus("Partner order ID copied."));
 });
 
-async function startFloaPayment() {
+function getSelectedPaymentMethod() {
+  if (paymentMethodFloaEl?.checked) return "floa";
+  if (paymentMethodSystempayEl?.checked) return "systempay";
+  return null;
+}
+
+function updatePaymentUI() {
+  const method = getSelectedPaymentMethod();
+  if (floaOptionsRowEl) {
+    floaOptionsRowEl.style.display = method === "floa" ? "" : "none";
+  }
+}
+
+paymentMethodFloaEl?.addEventListener("change", updatePaymentUI);
+paymentMethodSystempayEl?.addEventListener("change", updatePaymentUI);
+
+async function startPayment() {
   try {
     const partnerOrderId = currentPartnerOrderId || partnerIdEl?.textContent?.trim();
     if (!partnerOrderId || partnerOrderId === "-") {
       setStatus("Missing partner order ID. Load booking form first.", "error");
       return;
     }
-    const productCode = floaProductEl?.value || "";
-    if (!productCode) {
-      setStatus("Choose a Floa product before starting payment.", "error");
+
+    const method = getSelectedPaymentMethod();
+    if (!method) {
+      setStatus("Please choose a payment method.", "error");
       return;
     }
+
+    const productCode = floaProductEl?.value || "";
     const civility = civilityEl?.value || "";
     if (!civility) {
       setStatus("Please select a civility for the traveller.", "error");
@@ -320,6 +342,20 @@ async function startFloaPayment() {
       },
     };
 
+    if (method === "systempay") {
+      const url = new URL(window.location.origin + "/systempay-test.html");
+      url.searchParams.set("partner_order_id", partnerOrderId);
+      url.searchParams.set("email", email);
+      window.location.href = url.toString();
+      return;
+    }
+
+    // Floa flow (installments)
+    if (!productCode) {
+      setStatus("Choose a Floa product before starting payment.", "error");
+      return;
+    }
+
     const body = {
       partner_order_id: partnerOrderId,
       productCode,
@@ -356,7 +392,7 @@ async function startFloaPayment() {
       rawFormEl.textContent = JSON.stringify(payload.deal || payload, null, 2);
     }
   } catch (err) {
-    setStatus(`Floa payment error: ${err.message || err}`, "error");
+    setStatus(`Payment error: ${err.message || err}`, "error");
   } finally {
     floaPayButton?.removeAttribute("disabled");
   }
@@ -364,7 +400,7 @@ async function startFloaPayment() {
 
 floaPayButton?.addEventListener("click", (event) => {
   event.preventDefault();
-  startFloaPayment();
+  startPayment();
 });
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -375,4 +411,5 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (token) fetchBookingForm();
   else setStatus("Provide a prebook token in the URL to load the booking form.", "error");
+  updatePaymentUI();
 });

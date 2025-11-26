@@ -4,30 +4,87 @@
 const router = require("express").Router();
 const axios = require("axios");
 const { systempayConfig } = require("../config/systempay");
+const db = require("../utils/db");
+const { parseAmount } = require("../utils/repo");
 
-/**
- * TEMP: test route to get a formToken from Systempay
- * Full URL (with api router): POST /api/payments/systempay/create-order
- */
 router.post("/payments/systempay/create-order", async (req, res) => {
   try {
-    const fakeBooking = {
-      id: "TEST_BOOKING_123",
-      price_client: 10.0, // 10 EUR
-      customer_email: "sample@example.com",
-    };
+    const { partner_order_id, customerEmail } = req.body || {};
 
-    const amountInCents = Math.round(Number(fakeBooking.price_client) * 100);
+    if (!partner_order_id) {
+      return res.status(400).json({ success: false, message: "partner_order_id is required" });
+    }
+
+    const bfResult = await db.query(
+      `SELECT *
+       FROM booking_forms
+       WHERE partner_order_id = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [partner_order_id]
+    );
+
+    if (!bfResult.rows.length) {
+      return res.status(404).json({ success: false, message: "booking_form_not_found_for_partner_order_id" });
+    }
+
+    const bf = bfResult.rows[0];
+
+    const form = bf.form || {};
+    const paymentType =
+      form &&
+      Array.isArray(form.payment_types) &&
+      form.payment_types.length > 0
+        ? form.payment_types[0]
+        : null;
+
+    const candidates = [];
+    if (paymentType && paymentType.amount !== undefined) candidates.push(paymentType.amount);
+    if (bf.amount !== undefined) candidates.push(bf.amount);
+    if (form && form.total_amount !== undefined) candidates.push(form.total_amount);
+    if (form && form.order_amount !== undefined) candidates.push(form.order_amount);
+
+    let amount = null;
+    for (const c of candidates) {
+      const parsed = parseAmount(c);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        amount = parsed;
+        break;
+      }
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      console.error("[Systempay] invalid booking_form amount", {
+        partner_order_id,
+        booking_form_row: bf,
+        tried_candidates: candidates,
+        parsedAmount: amount,
+      });
+      return res.status(400).json({
+        success: false,
+        message: "invalid_amount_in_booking_form_for_systempay",
+        debug: { tried_candidates: candidates, booking_form: bf },
+      });
+    }
+
+    const currency = bf.currency_code || (paymentType && paymentType.currency_code) || "EUR";
+    const amountInCents = Math.round(amount * 100);
+
+    const email = customerEmail || "sample@example.com";
 
     const payload = {
       amount: amountInCents,
-      currency: "EUR",
-      orderId: `BKG-${fakeBooking.id}`,
+      currency,
+      paymentMethods: ["CARDS"],
       customer: {
-        email: fakeBooking.customer_email,
+        email,
       },
+      orderId: partner_order_id,
       metadata: {
-        booking_id: fakeBooking.id,
+        partner_order_id,
+        prebook_token: bf.prebook_token || null,
+        etg_order_id: bf.etg_order_id || null,
+        item_id: bf.item_id || null,
       },
     };
 
