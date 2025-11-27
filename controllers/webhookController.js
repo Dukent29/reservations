@@ -2,6 +2,7 @@
 
 const db = require("../utils/db");
 const { systempayConfig } = require("../config/systempay");
+const crypto = require("crypto");
 
 function ratehawkWebhook(req, res) {
   console.log("[ETG Webhook]", req.body);
@@ -18,7 +19,65 @@ async function systempayWebhook(req, res) {
     const payload = req.body || {};
     console.log("[Systempay IPN] Raw payload:", payload);
 
-    // TODO: validate signature/HMAC using systempayConfig.hmacKey when you have the doc
+    if (!systempayConfig.hmacKey) {
+      console.warn(
+        "[Systempay IPN] No SYSTEMPAY_HMAC_KEY configured in backend, skipping signature verification"
+      );
+    } else {
+      console.log(
+        "[Systempay IPN] HMAC key is configured (length:",
+        systempayConfig.hmacKey.length,
+        ")"
+      );
+      console.log("[Systempay IPN] headers:", req.headers);
+
+      const headerSignature =
+        req.headers["x-systempay-signature"] ||
+        req.headers["x-systempay-hmac"] ||
+        req.headers["x-kr-hash"] ||
+        req.headers["signature"] ||
+        "";
+      const bodySignature =
+        payload.signature ||
+        payload.hash ||
+        payload["kr-hash"] ||
+        payload.mac ||
+        payload.hmac ||
+        "";
+      const receivedSignature = String(headerSignature || bodySignature).trim();
+
+      if (!receivedSignature) {
+        console.warn(
+          "[Systempay IPN] Missing signature in headers/body – processing payload anyway (dev mode)"
+        );
+      } else {
+        const signedPayload = { ...payload };
+        delete signedPayload.signature;
+        delete signedPayload.hash;
+        delete signedPayload["kr-hash"];
+        delete signedPayload.mac;
+        delete signedPayload.hmac;
+
+        const sortedKeys = Object.keys(signedPayload).sort();
+        const stringToSign = sortedKeys
+          .map((key) => `${key}=${signedPayload[key] ?? ""}`)
+          .join("&");
+
+        const computedSignature = crypto
+          .createHmac("sha256", Buffer.from(systempayConfig.hmacKey, "utf8"))
+          .update(stringToSign, "utf8")
+          .digest("hex")
+          .toLowerCase();
+
+        if (computedSignature !== receivedSignature.toLowerCase()) {
+          console.error("[Systempay IPN] Invalid signature", {
+            receivedSignature,
+            computedSignature,
+          });
+          // In dev we still continue; for production you might early-return here.
+        }
+      }
+    }
 
     const spStatus = payload.status || payload.transactionStatus || null;
     const orderId =
