@@ -5,7 +5,7 @@ const router = require("express").Router();
 const axios = require("axios");
 const { systempayConfig } = require("../config/systempay");
 const db = require("../utils/db");
-const { parseAmount } = require("../utils/repo");
+const { parseAmount, savePayment } = require("../utils/repo");
 
 router.post("/payments/systempay/create-order", async (req, res) => {
   try {
@@ -126,6 +126,35 @@ router.post("/payments/systempay/create-order", async (req, res) => {
         message: "Systempay did not return a valid formToken",
         raw,
       });
+    }
+
+    // Persist payment row (initiated / pending)
+    try {
+      const answer = raw.answer || {};
+      const externalReference =
+        answer.transactionId ||
+        answer.uuid ||
+        answer.orderId ||
+        raw.transactionId ||
+        raw.uuid ||
+        raw.orderId ||
+        partner_order_id;
+
+      await savePayment({
+        provider: "systempay",
+        status: "pending",
+        partnerOrderId: partner_order_id,
+        prebookToken: bf.prebook_token || null,
+        etgOrderId: bf.etg_order_id || null,
+        itemId: bf.item_id || null,
+        amount,
+        currencyCode: currency,
+        externalReference,
+        payload: raw,
+      });
+    } catch (e) {
+      console.error("[Systempay] savePayment failed:", e.message);
+      // Do not block the payment flow if logging fails
     }
 
     return res.json({

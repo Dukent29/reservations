@@ -21,6 +21,16 @@ const searchLimiter = rateLimit({
 
 app.use(compression());
 app.use(express.json({ limit: "500kb" }));
+
+// Systempay return URLs (Systempay envoie un POST ou un GET sur ces chemins)
+app.all("/payment-success.html", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "front", "payment-success.html"));
+});
+
+app.all("/payment-error.html", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "front", "payment-error.html"));
+});
+
 app.use(express.static(path.join(__dirname, "..", "front")));
 
 app.use((req, res, next) => {

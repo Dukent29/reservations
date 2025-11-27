@@ -40,6 +40,7 @@ let prebookTokenColumn = "prebook_token";
 let prebookDetailsColumn = null;
 let prebookExpiryColumn = null;
 let paymentsSchemaEnsured = false;
+let bookingsSchemaEnsured = false;
 
 async function ensurePrebookSchema() {
   if (prebookSchemaEnsured) return;
@@ -218,6 +219,31 @@ async function ensurePaymentsSchema() {
   paymentsSchemaEnsured = true;
 }
 
+async function ensureBookingsSchema() {
+  if (bookingsSchemaEnsured) return;
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS bookings (
+        id BIGSERIAL PRIMARY KEY,
+        partner_order_id TEXT,
+        prebook_token TEXT,
+        etg_order_id BIGINT,
+        status TEXT,
+        user_email TEXT,
+        user_phone TEXT,
+        user_name TEXT,
+        amount NUMERIC,
+        currency_code TEXT,
+        raw JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    bookingsSchemaEnsured = true;
+  } catch (err) {
+    console.error("[DB] ensureBookingsSchema failed:", err.message);
+  }
+}
+
 async function savePayment({
   provider,
   status,
@@ -262,6 +288,53 @@ async function savePayment({
     );
   } catch (err) {
     console.error("[DB] savePayment failed:", err.message);
+  }
+}
+
+async function saveBooking({
+  partnerOrderId,
+  prebookToken,
+  etgOrderId,
+  status,
+  userEmail,
+  userPhone,
+  userName,
+  amount,
+  currencyCode,
+  raw,
+}) {
+  try {
+    await ensureBookingsSchema();
+    await db.query(
+      `
+      INSERT INTO bookings (
+        partner_order_id,
+        prebook_token,
+        etg_order_id,
+        status,
+        user_email,
+        user_phone,
+        user_name,
+        amount,
+        currency_code,
+        raw
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `,
+      [
+        partnerOrderId || null,
+        prebookToken || null,
+        etgOrderId || null,
+        status || null,
+        userEmail || null,
+        userPhone || null,
+        userName || null,
+        parseAmount(amount),
+        currencyCode || null,
+        raw ? JSON.stringify(raw) : null,
+      ]
+    );
+  } catch (err) {
+    console.error("[DB] saveBooking failed:", err.message);
   }
 }
 
@@ -310,4 +383,13 @@ async function saveBookingForm({ partnerOrderId, prebookToken, form }) {
   }
 }
 
-module.exports = { saveSerpSearch, savePrebook, getPrebookSummary, ensurePaymentsSchema, savePayment, saveBookingForm, parseAmount };
+module.exports = {
+  saveSerpSearch,
+  savePrebook,
+  getPrebookSummary,
+  ensurePaymentsSchema,
+  savePayment,
+  saveBooking,
+  saveBookingForm,
+  parseAmount,
+};
