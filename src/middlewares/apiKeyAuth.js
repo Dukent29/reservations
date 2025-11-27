@@ -2,7 +2,12 @@
 
 const crypto = require("crypto");
 
-const PUBLIC_PATHS = new Set(["/health", "/webhook/ratehawk", "/webhook/stripe"]);
+const PUBLIC_PATHS = new Set([
+  "/health",
+  "/webhook/ratehawk",
+  "/webhook/stripe",
+  "/webhook/systempay",
+]);
 
 function apiKeyAuth(req, res, next) {
   const requiredKey = process.env.INTERNAL_API_KEY;

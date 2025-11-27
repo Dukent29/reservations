@@ -3,7 +3,7 @@
 const { randomUUID } = require("crypto");
 const bookingModel = require("../models/bookingModel");
 const httpError = require("../src/utils/httpError");
-const { saveBookingForm } = require("../utils/repo");
+const { saveBookingForm, saveBooking } = require("../utils/repo");
 
 /**
  * Create a prebook token from an ETG hash. Tries to refresh rates when stale.
@@ -118,6 +118,30 @@ async function startBooking(req, res, next) {
   try {
     const payload = bookingModel.buildBookingStartPayload(req.body || {});
     const start = await bookingModel.startBookingProcess(payload);
+
+    try {
+      const partnerOrderId = payload.partner?.partner_order_id || null;
+      const etgOrderId = start?.order_id || start?.id || null;
+      const user = payload.user || {};
+      const paymentType = payload.payment_type || {};
+      const status = start?.status || "pending";
+
+      await saveBooking({
+        partnerOrderId,
+        prebookToken: payload.prebook_token || null,
+        etgOrderId,
+        status,
+        userEmail: user.email || null,
+        userPhone: user.phone || null,
+        userName: `${user.first_name || ""} ${user.last_name || ""}`.trim() || null,
+        amount: paymentType.amount,
+        currencyCode: paymentType.currency_code,
+        raw: start,
+      });
+    } catch (e) {
+      console.error("[DB] saveBooking failed:", e.message);
+    }
+
     res.json({ status: "ok", start });
   } catch (error) {
     next(error);
