@@ -49,15 +49,19 @@ function validateSystempaySignature(req) {
   }
 
   // Compare hashes (timing-safe comparison)
-  const hashesMatch =
-    receivedHash.length === expectedHash.length &&
-    crypto.timingSafeEqual(Buffer.from(receivedHash, "hex"), Buffer.from(expectedHash, "hex"));
+  // Wrap in try-catch to handle invalid hex characters in receivedHash
+  let hashesMatch = false;
+  try {
+    hashesMatch =
+      receivedHash.length === expectedHash.length &&
+      crypto.timingSafeEqual(Buffer.from(receivedHash, "hex"), Buffer.from(expectedHash, "hex"));
+  } catch (err) {
+    console.error("[Systempay IPN] Invalid hash format:", err.message);
+    return { valid: false, message: "invalid_hash_format" };
+  }
 
   if (!hashesMatch) {
-    console.error("[Systempay IPN] Signature mismatch", {
-      receivedHash,
-      expectedHash,
-    });
+    console.error("[Systempay IPN] Signature mismatch");
     return { valid: false, message: "signature_mismatch" };
   }
 
@@ -123,7 +127,7 @@ async function systempayWebhook(req, res) {
       orderId;
 
     if (!orderId && !partnerOrderId) {
-      console.error("[Systempay IPN] Missing order reference", payload);
+      console.error("[Systempay IPN] Missing order reference");
       return res.status(200).send("OK");
     }
 

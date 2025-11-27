@@ -177,6 +177,33 @@ test("validateSystempaySignature - unsupported hash algorithm", () => {
   assert.ok(result.message.includes("unsupported_hash_algorithm"));
 });
 
+test("validateSystempaySignature - invalid hex format in hash", () => {
+  process.env.SYSTEMPAY_HMAC_KEY = "test-hmac-key-12345";
+
+  delete require.cache[require.resolve("../config/systempay")];
+  delete require.cache[require.resolve("../controllers/webhookController")];
+
+  const { validateSystempaySignature } = require("../controllers/webhookController");
+
+  const krAnswer = JSON.stringify({ orderStatus: "PAID" });
+  // Create a hash with correct length (64 chars for SHA-256 hex) but invalid hex chars
+  const invalidHexHash = "zz" + "0".repeat(62);
+
+  const mockReq = {
+    headers: {
+      "kr-hash": invalidHexHash,
+      "kr-hash-algorithm": "sha256_hmac",
+    },
+    body: {
+      "kr-answer": krAnswer,
+    },
+  };
+
+  const result = validateSystempaySignature(mockReq);
+  assert.strictEqual(result.valid, false);
+  assert.strictEqual(result.message, "invalid_hash_format");
+});
+
 // Cleanup
 test("cleanup - restore env", () => {
   if (originalEnv) {
