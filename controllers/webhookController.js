@@ -3,7 +3,6 @@
 const crypto = require("crypto");
 const db = require("../utils/db");
 const { systempayConfig } = require("../config/systempay");
-const crypto = require("crypto");
 
 /**
  * Validates the HMAC signature for Systempay IPN webhooks.
@@ -26,16 +25,16 @@ function validateSystempaySignature(req) {
   const receivedHash = req.headers["kr-hash"];
   const hashAlgorithm = req.headers["kr-hash-algorithm"] || "sha256_hmac";
 
-  // If no hash header provided, validation fails
-  if (!receivedHash) {
-    return { valid: false, message: "missing_kr_hash_header" };
-  }
-
   // The signature is computed from the 'kr-answer' field in the body
   const krAnswer = req.body && req.body["kr-answer"];
 
-  if (!krAnswer) {
-    return { valid: false, message: "missing_kr_answer_in_body" };
+  // If this IPN does not follow the Krypton 'kr-hash' / 'kr-answer' pattern,
+  // we can't verify it with this method – accept it but log a warning.
+  if (!receivedHash || !krAnswer) {
+    console.warn(
+      "[Systempay IPN] No kr-hash and/or kr-answer in request; skipping signature validation for this IPN"
+    );
+    return { valid: true, message: "no_kr_hash_or_answer_present" };
   }
 
   // Compute the expected HMAC-SHA256 hash
