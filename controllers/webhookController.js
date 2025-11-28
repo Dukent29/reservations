@@ -79,6 +79,9 @@ function stripeWebhook(req, res) {
 }
 
 async function systempayWebhook(req, res) {
+  console.log("🔥 [Systempay IPN] Handler reached, method =", req.method, "path =", req.originalUrl);
+  console.log("🔥 [Systempay IPN] Headers:", req.headers);
+  console.log("🔥 [Systempay IPN] Body:", req.body);
   try {
     const payload = req.body || {};
     console.log("[Systempay IPN] Raw payload:", payload);

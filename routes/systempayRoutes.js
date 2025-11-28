@@ -88,6 +88,10 @@ router.post("/payments/systempay/create-order", async (req, res) => {
       },
     };
 
+    if (systempayConfig.ipnUrl) {
+      payload.ipnUrl = systempayConfig.ipnUrl;
+    }
+
     console.log("[Systempay] Using auth from config:", {
       username: systempayConfig.restUsername,
       password: systempayConfig.restPassword,

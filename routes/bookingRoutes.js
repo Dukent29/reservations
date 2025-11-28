@@ -7,5 +7,6 @@ router.post("/prebook", bookingController.prebook);
 router.post("/booking/form", bookingController.bookingForm);
 router.post("/booking/start", bookingController.startBooking);
 router.post("/booking/check", bookingController.checkBooking);
+router.get("/booking/status", bookingController.getBookingStatus);
 
 module.exports = router;

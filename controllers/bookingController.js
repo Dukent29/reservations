@@ -4,6 +4,7 @@ const { randomUUID } = require("crypto");
 const bookingModel = require("../models/bookingModel");
 const httpError = require("../src/utils/httpError");
 const { saveBookingForm, saveBooking } = require("../utils/repo");
+const db = require("../utils/db");
 
 /**
  * Create a prebook token from an ETG hash. Tries to refresh rates when stale.
@@ -164,9 +165,66 @@ async function checkBooking(req, res, next) {
   }
 }
 
+/**
+ * Return booking/payment status from our DB for a given partner_order_id.
+ */
+async function getBookingStatus(req, res, next) {
+  try {
+    const partner_order_id =
+      req.query.partner_order_id || (req.body && req.body.partner_order_id);
+
+    if (!partner_order_id) {
+      throw httpError(400, "partner_order_id is required");
+    }
+
+    const bookingResult = await db.query(
+      `SELECT *
+       FROM bookings
+       WHERE partner_order_id = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [partner_order_id]
+    );
+
+    const paymentResult = await db.query(
+      `SELECT *
+       FROM payments
+       WHERE partner_order_id = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [partner_order_id]
+    );
+
+    const booking = bookingResult.rows[0] || null;
+    const payment = paymentResult.rows[0] || null;
+
+    // Simple synthesized status for frontend convenience
+    let combinedStatus = "unknown";
+    const paymentStatus = payment && payment.status;
+    const bookingStatus = booking && booking.status;
+
+    if (bookingStatus) {
+      combinedStatus = bookingStatus;
+    } else if (paymentStatus) {
+      combinedStatus = paymentStatus;
+    }
+
+    res.json({
+      status: "ok",
+      partner_order_id,
+      combined_status: combinedStatus,
+      booking,
+      payment,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   prebook,
   bookingForm,
   startBooking,
   checkBooking,
+  getBookingStatus,
 };
