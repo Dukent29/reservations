@@ -31,8 +31,21 @@
 </header>
 
 <main class="workspace">
-  <div class="search-shell full">
-    <section class="card searchbar">
+  <section class="hero" aria-label="Destination highlight">
+    <div class="hero__bg hero__bg--1"></div>
+    <div class="hero__bg hero__bg--2"></div>
+    <div class="hero__bg hero__bg--3"></div>
+    <div class="hero__bg hero__bg--4"></div>
+    <div class="hero__bg hero__bg--5"></div>
+    <div class="hero__bg hero__bg--6"></div>
+    <div class="hero__content">
+      <p class="hero__eyebrow">Kotan Voyages</p>
+      <h2 class="hero__title">Découvrez la magie de chaque destination.</h2>
+      <p class="hero__subtitle">Trouvez rapidement l&apos;hébergement idéal pour vos clients, partout dans le monde.</p>
+
+      <div class="hero__search-shell">
+        <div class="search-shell full">
+          <section class="card searchbar">
         <div class="search-grid">
           <div class="field field--suggestions" data-suggestions-root>
             <label for="region_id">Destination</label>
@@ -113,63 +126,69 @@
             </div>
           </div>
         </details>
+          </section>
+        </div>
+      </div>
+    </div>
+  </section>
 
-        <!-- FILTERS UI -->
-        <div class="filters">
-          <div class="filter-group">
-            <p class="filter-title">Catégorie</p>
-            <div class="filter-options">
-              <label><input type="checkbox" class="flt-stars" value="2"> 2★</label>
-              <label><input type="checkbox" class="flt-stars" value="3"> 3★</label>
-              <label><input type="checkbox" class="flt-stars" value="4"> 4★</label>
-              <label><input type="checkbox" class="flt-stars" value="5"> 5★</label>
-            </div>
+  <!-- FILTERS UI IN SEPARATE CARD -->
+    <section class="card filters-card">
+      <h3>Affiner les résultats</h3>
+      <div class="filters">
+        <div class="filter-group">
+          <p class="filter-title">Catégorie</p>
+          <div class="filter-options">
+            <label><input type="checkbox" class="flt-stars" value="2"> 2★</label>
+            <label><input type="checkbox" class="flt-stars" value="3"> 3★</label>
+            <label><input type="checkbox" class="flt-stars" value="4"> 4★</label>
+            <label><input type="checkbox" class="flt-stars" value="5"> 5★</label>
           </div>
+        </div>
 
-          <div class="filter-group">
-            <p class="filter-title">Régime</p>
-            <div class="filter-options">
-              <label class="meal-chip">
-                <input type="checkbox" class="flt-meal" value="nomeal">
-                <span class="meal-chip__code">RO</span>
-                <span class="meal-chip__underline"></span>
-                <span class="info-icon" title="RO — Room only : hébergement seul, sans repas.">i</span>
-              </label>
-              <label class="meal-chip">
-                <input type="checkbox" class="flt-meal" value="breakfast">
-                <span class="meal-chip__code">BB</span>
-                <span class="meal-chip__underline"></span>
-                <span class="info-icon" title="BB — Bed &amp; Breakfast : petit-déjeuner inclus.">i</span>
-              </label>
-              <label class="meal-chip">
-                <input type="checkbox" class="flt-meal" value="half_board">
-                <span class="meal-chip__code">HB</span>
-                <span class="meal-chip__underline"></span>
-                <span class="info-icon" title="HB — Half board : petit-déjeuner et dîner (ou déjeuner) inclus.">i</span>
-              </label>
-              <label class="meal-chip">
-                <input type="checkbox" class="flt-meal" value="full_board">
-                <span class="meal-chip__code">FB</span>
-                <span class="meal-chip__underline"></span>
-                <span class="info-icon" title="FB — Full board : petit-déjeuner, déjeuner et dîner inclus.">i</span>
-              </label>
-              <label class="meal-chip">
-                <input type="checkbox" class="flt-meal" value="all_inclusive">
-                <span class="meal-chip__code">AI</span>
-                <span class="meal-chip__underline"></span>
-                <span class="info-icon" title="AI — All inclusive : repas, snacks et souvent boissons inclus.">i</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="filter-group">
-            <p class="filter-title">Politiques</p>
-            <label class="checkbox-inline">
-              <input type="checkbox" id="flt_free_cancel"> Uniquement annulation gratuite
+        <div class="filter-group">
+          <p class="filter-title">Régime</p>
+          <div class="filter-options">
+            <label class="meal-chip">
+              <input type="checkbox" class="flt-meal" value="nomeal">
+              <span class="meal-chip__code">RO</span>
+              <span class="meal-chip__underline"></span>
+              <span class="info-icon" title="RO — Room only : hébergement seul, sans repas.">i</span>
+            </label>
+            <label class="meal-chip">
+              <input type="checkbox" class="flt-meal" value="breakfast">
+              <span class="meal-chip__code">BB</span>
+              <span class="meal-chip__underline"></span>
+              <span class="info-icon" title="BB — Bed &amp; Breakfast : petit-déjeuner inclus.">i</span>
+            </label>
+            <label class="meal-chip">
+              <input type="checkbox" class="flt-meal" value="half_board">
+              <span class="meal-chip__code">HB</span>
+              <span class="meal-chip__underline"></span>
+              <span class="info-icon" title="HB — Half board : petit-déjeuner et dîner (ou déjeuner) inclus.">i</span>
+            </label>
+            <label class="meal-chip">
+              <input type="checkbox" class="flt-meal" value="full_board">
+              <span class="meal-chip__code">FB</span>
+              <span class="meal-chip__underline"></span>
+              <span class="info-icon" title="FB — Full board : petit-déjeuner, déjeuner et dîner inclus.">i</span>
+            </label>
+            <label class="meal-chip">
+              <input type="checkbox" class="flt-meal" value="all_inclusive">
+              <span class="meal-chip__code">AI</span>
+              <span class="meal-chip__underline"></span>
+              <span class="info-icon" title="AI — All inclusive : repas, snacks et souvent boissons inclus.">i</span>
             </label>
           </div>
         </div>
 
+        <div class="filter-group">
+          <p class="filter-title">Politiques</p>
+          <label class="checkbox-inline">
+            <input type="checkbox" id="flt_free_cancel"> Uniquement annulation gratuite
+          </label>
+        </div>
+      </div>
     </section>
   </div>
 

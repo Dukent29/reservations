@@ -49,6 +49,8 @@ const topProgressBarEl      = document.getElementById("top-progress-bar");
 const starBoxes   = document.querySelectorAll('.flt-stars');
 const mealBoxes   = document.querySelectorAll('.flt-meal');
 const freeCancelEl = $("#flt_free_cancel");
+const heroEl      = document.querySelector(".hero");
+const searchBarEl = document.querySelector(".searchbar");
 
 // Older optional elements removed from UI (kept null-safe in code)
 const hotelIdEl   = $("#hotel_id");
@@ -90,6 +92,22 @@ document.querySelectorAll(".meal-chip input.flt-meal").forEach((input) => {
     label.classList.toggle("meal-chip--active", input.checked);
   });
 });
+
+// Blur hero background while user interacts with search bar
+if (heroEl && searchBarEl) {
+  searchBarEl.addEventListener("focusin", () => {
+    heroEl.classList.add("hero--active");
+  });
+  searchBarEl.addEventListener("focusout", () => {
+    const active = document.activeElement;
+    if (!active || !searchBarEl.contains(active)) {
+      heroEl.classList.remove("hero--active");
+    }
+  });
+  btnSearch?.addEventListener("click", () => {
+    heroEl.classList.remove("hero--active");
+  });
+}
 
 // Star rating filter (1–5 stars, visual)
 (function initStarFilter() {

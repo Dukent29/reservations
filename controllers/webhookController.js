@@ -14,9 +14,15 @@ const { systempayConfig } = require("../config/systempay");
  * @returns {{ valid: boolean, message: string }}
  */
 function validateSystempaySignature(req) {
+  const isProd = process.env.NODE_ENV === "production";
+
+  if (!isProd) {
+    console.warn("[Systempay IPN] DEV MODE: skipping signature validation");
+    return { valid: true, message: "dev_skip" };
+  }
+
   const hmacKey = systempayConfig.hmacKey;
 
-  // If no HMAC key configured, skip validation (allows testing without key)
   if (!hmacKey) {
     console.warn("[Systempay IPN] No HMAC key configured, skipping signature validation");
     return { valid: true, message: "no_hmac_key_configured" };
@@ -24,12 +30,8 @@ function validateSystempaySignature(req) {
 
   const receivedHash = req.headers["kr-hash"];
   const hashAlgorithm = req.headers["kr-hash-algorithm"] || "sha256_hmac";
-
-  // The signature is computed from the 'kr-answer' field in the body
   const krAnswer = req.body && req.body["kr-answer"];
 
-  // If this IPN does not follow the Krypton 'kr-hash' / 'kr-answer' pattern,
-  // we can't verify it with this method – accept it but log a warning.
   if (!receivedHash || !krAnswer) {
     console.warn(
       "[Systempay IPN] No kr-hash and/or kr-answer in request; skipping signature validation for this IPN"
@@ -37,19 +39,21 @@ function validateSystempaySignature(req) {
     return { valid: true, message: "no_kr_hash_or_answer_present" };
   }
 
-  // Compute the expected HMAC-SHA256 hash
+  if (hashAlgorithm !== "sha256_hmac") {
+    return { valid: false, message: `unsupported_hash_algorithm: ${hashAlgorithm}` };
+  }
+
   let expectedHash;
-  if (hashAlgorithm === "sha256_hmac") {
+  try {
     expectedHash = crypto
       .createHmac("sha256", hmacKey)
       .update(krAnswer)
       .digest("hex");
-  } else {
-    return { valid: false, message: `unsupported_hash_algorithm: ${hashAlgorithm}` };
+  } catch (err) {
+    console.error("[Systempay IPN] Error while computing HMAC:", err.message);
+    return { valid: false, message: "hmac_computation_error" };
   }
 
-  // Compare hashes (timing-safe comparison)
-  // Wrap in try-catch to handle invalid hex characters in receivedHash
   let hashesMatch = false;
   try {
     hashesMatch =
@@ -67,6 +71,7 @@ function validateSystempaySignature(req) {
 
   return { valid: true, message: "signature_valid" };
 }
+
 
 function ratehawkWebhook(req, res) {
   console.log("[ETG Webhook]", req.body);
@@ -155,8 +160,14 @@ async function systempayWebhook(req, res) {
     }
 
     const ref = orderId || partnerOrderId;
+    console.log(
+  "[Systempay IPN] DB update with:",
+  { newStatus, ref, partnerOrderId: partnerOrderId || null }
+);
+
 
     const result = await db.query(
+      
       `
       UPDATE payments
       SET status = $1, updated_at = NOW()

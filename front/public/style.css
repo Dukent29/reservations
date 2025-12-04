@@ -117,6 +117,107 @@ body::after {
   padding-bottom: 3rem;
 }
 
+.hero {
+  position: relative;
+  min-height: 340px;
+  border-radius: 2rem;
+  overflow: hidden;
+  margin-top: 2rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 40px 80px -32px rgba(0,0,0,.85);
+}
+.hero__bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  animation: heroSlide 36s infinite;
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.02);
+  transition: filter .3s ease, transform .3s ease;
+}
+.hero__bg--1 {
+  background-image:
+    linear-gradient(to top, rgba(15,23,42,.86), rgba(15,23,42,.2)),
+    url("./images/pexels-donaldtong94-189296.jpg");
+  animation-delay: 0s;
+}
+.hero__bg--2 {
+  background-image:
+    linear-gradient(to top, rgba(15,23,42,.86), rgba(15,23,42,.2)),
+    url("./images/pexels-jimbear-1458457.jpg");
+  animation-delay: 6s;
+}
+.hero__bg--3 {
+  background-image:
+    linear-gradient(to top, rgba(15,23,42,.86), rgba(15,23,42,.2)),
+    url("./images/pexels-apasaric-1285625.jpg");
+  animation-delay: 12s;
+}
+.hero__bg--4 {
+  background-image:
+    linear-gradient(to top, rgba(15,23,42,.86), rgba(15,23,42,.2)),
+    url("./images/pexels-minan1398-774042.jpg");
+  animation-delay: 18s;
+}
+.hero__bg--5 {
+  background-image:
+    linear-gradient(to top, rgba(15,23,42,.86), rgba(15,23,42,.2)),
+    url("./images/pexels-recalmedia-60217.jpg");
+  animation-delay: 24s;
+}
+.hero__bg--6 {
+  background-image:
+    linear-gradient(to top, rgba(15,23,42,.86), rgba(15,23,42,.2)),
+    url("./images/pexels-thorsten-technoman-109353-338504.jpg");
+  animation-delay: 30s;
+}
+.hero__content {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.5rem;
+}
+.hero__eyebrow {
+  margin: 0 0 .5rem;
+  font-size: .75rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #e5e7eb;
+}
+.hero__title {
+  margin: 0;
+  font-size: clamp(1.9rem, 3vw, 2.4rem);
+  line-height: 1.1;
+  color: #f9fafb;
+}
+.hero__subtitle {
+  margin-top: .75rem;
+  font-size: .9rem;
+  color: #e5e7eb;
+}
+.hero__search-shell {
+  width: 100%;
+}
+.hero--active .hero__bg {
+  filter: blur(6px) brightness(.74);
+  transform: scale(1.06);
+}
+
+@keyframes heroSlide {
+  0% { opacity: 0; }
+  3% { opacity: 1; }
+  17% { opacity: 1; }
+  20% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
 .search-shell {
   margin-top: 2rem;
   width: 100%;
@@ -633,6 +734,13 @@ input[type="checkbox"], input[type="radio"] {
 }
 .card.booking-panel {
   margin-top: 2rem;
+}
+
+.filters-card {
+  margin-top: 1rem;
+}
+.filters-card .filters {
+  margin-top: .25rem;
 }
     .card h3 {
       margin: 0 0 .75rem 0;
