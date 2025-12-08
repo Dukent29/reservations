@@ -135,6 +135,11 @@ async function createHotelDeal(req, res, next) {
     const shippingAddress = customer.homeAddress || { countryCode: "FR" };
     const country_code = shippingAddress.countryCode || "FR";
 
+    // Use a unique merchantReference for each Floa deal to avoid
+    // "merchantReference has already been used" errors when a user
+    // retries payment for the same partner_order_id.
+    const merchantReference = `${partner_order_id}-${Date.now().toString(36)}`;
+
     // 2. Eligibility check for chosen productCode
     const eligibilityPayload = {
       customers: [safeCustomer],
@@ -188,7 +193,7 @@ async function createHotelDeal(req, res, next) {
     const deal = await floaService.createDeal({
       productCode,
       implementationType: "CustomerInformationForm",
-      merchantReference: partner_order_id,
+      merchantReference,
       merchantFinancedAmount,
       itemCount,
       items,

@@ -386,10 +386,108 @@ async function startPayment() {
       return;
     }
 
-    setStatus("Floa deal created. You can now continue the booking flow (finalization to be wired).");
-    // Optionally show deal JSON in the raw form panel for debugging
+    const deal = payload.deal || payload;
+    const dealReference =
+      deal?.dealReference ||
+      deal?.reference ||
+      deal?.deal_reference ||
+      null;
+    const dealMerchantReference =
+      deal?.merchantReference ||
+      deal?.merchant_reference ||
+      deal?.merchantreference ||
+      partnerOrderId;
+
+    if (!dealReference) {
+      setStatus("Floa deal created but no dealReference was returned. Check debug panel.", "error");
+      if (rawFormEl) {
+        rawFormEl.textContent = JSON.stringify(deal, null, 2);
+      }
+      return;
+    }
+
+    setStatus("Floa deal created. Finalizing with Floa…");
+
+    // Build a minimal finalize payload. The backend will map this
+    // to Floa's /deals/{dealReference}/finalize endpoint.
+    const finalizeBody = {
+      merchantReference: dealMerchantReference,
+      configuration: {
+        // Keep culture only; Floa requires https:// for back/return URLs,
+        // so those are configured server-side instead of from http://localhost.
+        culture: "fr-FR",
+      },
+    };
+
+    const finalizeResponse = await fetch(
+      `${API_BASE}/api/payments/floa/deal/${encodeURIComponent(dealReference)}/finalize`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(finalizeBody),
+      }
+    );
+
+    const finalizePayload = await finalizeResponse.json();
+
+    if (!finalizeResponse.ok || finalizePayload?.error) {
+      const reason =
+        finalizePayload?.reason ||
+        finalizePayload?.error ||
+        finalizePayload?._raw ||
+        `HTTP ${finalizeResponse.status}`;
+      setStatus(`Unable to finalize Floa deal: ${reason}`, "error");
+      if (rawFormEl) {
+        rawFormEl.textContent = JSON.stringify(
+          { deal, finalize: finalizePayload },
+          null,
+          2
+        );
+      }
+      return;
+    }
+
+    // Try to detect a redirect URL in the Floa response.
+    const result = finalizePayload.result || finalizePayload;
+    let redirectUrl = null;
+
+    if (typeof result.redirectUrl === "string") {
+      redirectUrl = result.redirectUrl;
+    } else if (typeof result.redirectURL === "string") {
+      redirectUrl = result.redirectURL;
+    } else if (typeof result.url === "string") {
+      redirectUrl = result.url;
+    } else if (Array.isArray(result.links)) {
+      const link =
+        result.links.find(
+          (l) =>
+            l &&
+            typeof l.href === "string" &&
+            (l.rel === "payment-page" ||
+              l.rel === "redirect" ||
+              l.rel === "webpage")
+        ) || result.links.find((l) => l && typeof l.href === "string");
+      if (link && link.href) {
+        redirectUrl = link.href;
+      }
+    }
+
     if (rawFormEl) {
-      rawFormEl.textContent = JSON.stringify(payload.deal || payload, null, 2);
+      rawFormEl.textContent = JSON.stringify(
+        { deal, finalize: finalizePayload },
+        null,
+        2
+      );
+    }
+
+    if (redirectUrl) {
+      setStatus("Redirection vers la page de paiement Floa…");
+      window.location.href = redirectUrl;
+    } else {
+      setStatus(
+        "Floa deal finalisé. Consultez la réponse dans le panneau debug pour le lien de paiement.",
+        "info"
+      );
     }
   } catch (err) {
     setStatus(`Payment error: ${err.message || err}`, "error");

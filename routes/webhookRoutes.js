@@ -14,4 +14,7 @@ router.post(
   webhookController.systempayWebhook
 );
 
+// Floa notification webhook (JSON)
+router.post("/webhook/floa", webhookController.floaWebhook);
+
 module.exports = router;
