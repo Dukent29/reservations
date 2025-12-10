@@ -255,6 +255,8 @@ async function finalizeDeal(dealReference, payload = {}) {
   const body = {};
 
   // 0. Required / core fields for FLOA finalize
+  // Floa requires merchantReference in the finalize payload.
+  // We expect the caller to pass the same value used at deal creation.
   if (merchantReference) {
     body.merchantReference = merchantReference;
   }
@@ -281,19 +283,23 @@ async function finalizeDeal(dealReference, payload = {}) {
   const finalSessionModes =
     configuration.sessionModes ||
     sessionModes ||
-    ["WebPage"]; // default: show payment page on your site
+    ["WebPage"]; // default: hosted payment page
 
   finalConfig.sessionModes = finalSessionModes;
 
-  const notifUrl = notificationUrl || notificationURL || configuration.notificationUrl;
+  const notifUrl =
+    notificationUrl ||
+    notificationURL ||
+    configuration.notificationUrl ||
+    process.env.FLOA_NOTIFICATION_URL;
   if (notifUrl && !finalConfig.notificationUrl) {
     finalConfig.notificationUrl = notifUrl;
   }
-  const finalBackUrl = backUrl || configuration.backUrl;
+  const finalBackUrl = backUrl || configuration.backUrl || process.env.FLOA_BACK_URL;
   if (finalBackUrl && !finalConfig.backUrl) {
     finalConfig.backUrl = finalBackUrl;
   }
-  const finalReturnUrl = returnUrl || configuration.returnUrl;
+  const finalReturnUrl = returnUrl || configuration.returnUrl || process.env.FLOA_RETURN_URL;
   if (finalReturnUrl && !finalConfig.returnUrl) {
     finalConfig.returnUrl = finalReturnUrl;
   }
@@ -323,6 +329,13 @@ async function finalizeDeal(dealReference, payload = {}) {
 
   if (Object.keys(finalPsp).length > 0) {
     body.pspDetails = finalPsp;
+  }
+
+  // Ensure sessionModes is also present at root level so that
+  // Floa recognizes this as a hosted WebPage flow and does not
+  // expect a PSP authorization block.
+  if (finalSessionModes && !body.sessionModes) {
+    body.sessionModes = finalSessionModes;
   }
 
   // If you later need to pass extra fields Floa accepts in finalize, you can

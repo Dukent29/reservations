@@ -83,6 +83,90 @@ function stripeWebhook(req, res) {
   res.status(200).send("OK");
 }
 
+// Floa notification webhook (payment status callback)
+async function floaWebhook(req, res) {
+  try {
+    const payload = req.body || {};
+    console.log("[Floa Webhook] payload:", payload);
+
+    // Basic shape validation: make sure required fields are present
+    const status = payload.status || null;
+    const orderRef = payload.orderRef || null; // our merchantReference (e.g. "<partner_order_id>-abc123")
+    const dealRegistration = payload.dealRegistration || payload.deal_registration || null; // FIN...
+
+    if (!status || (!orderRef && !dealRegistration)) {
+      console.warn("[Floa Webhook] missing status and/or orderRef/dealRegistration, nothing to update");
+      return res.status(200).send("OK");
+    }
+
+    let newStatus = "pending";
+    switch ((status || "").toLowerCase()) {
+      case "accepted":
+      case "validated":
+      case "ok":
+      case "success":
+        newStatus = "paid";
+        break;
+      case "refusal":
+      case "refused":
+      case "canceled":
+      case "cancelled":
+      case "abandoned":
+      case "failed":
+        newStatus = "failed";
+        break;
+      default:
+        newStatus = "pending";
+    }
+
+    // Try to recover partner_order_id from orderRef (we built merchantReference as `${partner_order_id}-${Date.now().toString(36)}`)
+    let partnerOrderId = null;
+    if (orderRef) {
+      const idx = orderRef.lastIndexOf("-");
+      if (idx > 0) {
+        partnerOrderId = orderRef.slice(0, idx);
+      }
+    }
+
+    // Update payments table for provider 'floa'.
+    // When creating the payment row we stored:
+    //   - external_reference = Floa dealReference (e.g. FIN000000001)
+    //   - partner_order_id   = UUID from bookingForm
+    // Floa sends:
+    //   - dealRegistration = FIN...
+    //   - orderRef         = our merchantReference `${partner_order_id}-...`
+    const externalRefKey = dealRegistration || orderRef || null;
+
+    const result = await db.query(
+      `
+      UPDATE payments
+      SET status = $1, updated_at = NOW()
+      WHERE provider = 'floa'
+        AND (
+          external_reference = $2
+          OR partner_order_id = $3
+        )
+    `,
+      [newStatus, externalRefKey, partnerOrderId]
+    );
+
+    console.log(
+      "[Floa Webhook] updated payments rows:",
+      result.rowCount,
+      "→",
+      newStatus,
+      "matching external_reference =",
+      externalRefKey,
+      "partner_order_id =",
+      partnerOrderId
+    );
+    return res.status(200).send("OK");
+  } catch (err) {
+    console.error("[Floa Webhook] error:", err);
+    return res.status(200).send("OK");
+  }
+}
+
 async function systempayWebhook(req, res) {
   console.log("🔥 [Systempay IPN] Handler reached, method =", req.method, "path =", req.originalUrl);
   console.log("🔥 [Systempay IPN] Headers:", req.headers);
@@ -213,4 +297,5 @@ module.exports = {
   stripeWebhook,
   systempayWebhook,
   validateSystempaySignature,
+  floaWebhook,
 };

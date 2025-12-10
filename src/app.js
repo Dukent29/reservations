@@ -31,6 +31,29 @@ app.all("/payment-error.html", (_req, res) => {
   res.sendFile(path.join(__dirname, "..", "front", "payment-error.html"));
 });
 
+// Floa return URL (used for both success and refusal)
+// Floa sends a POST with application/x-www-form-urlencoded fields, including "status".
+// We inspect status and redirect to the appropriate static page.
+app.all(
+  "/floa-return",
+  express.urlencoded({ extended: false }),
+  (req, res) => {
+    const rawStatus = (req.body && req.body.status) || req.query.status || "";
+    const status = String(rawStatus).toLowerCase();
+
+    const isFailure =
+      status === "refusal" ||
+      status === "refused" ||
+      status === "canceled" ||
+      status === "cancelled" ||
+      status === "abandoned" ||
+      status === "failed";
+
+    const target = isFailure ? "/payment-error.html" : "/payment-success.html";
+    res.redirect(target);
+  }
+);
+
 app.use(express.static(path.join(__dirname, "..", "front")));
 
 app.use((req, res, next) => {
