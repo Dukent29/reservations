@@ -38,7 +38,6 @@ const PREBOOK_SUMMARY_KEY = "booking:lastPrebook";
 
 const hotelsContainer       = $("#hotelsContainer");
 const hotelDetailsContainer = $("#hotelDetails");
-const logOutput             = $("#logOutput");
 const searchMeta            = $("#searchMeta");
 const resultsPaginationEl   = $("#resultsPagination");
 const btnResultsPrev        = $("#btnResultsPrev");
@@ -599,12 +598,8 @@ modeRadios.forEach(r => {
   });
 });
 
-// Logger
-function log(data, label = "") {
-  const time = new Date().toISOString();
-  if (!logOutput) return;
-  logOutput.textContent = `[${time}] ${label}\n` + JSON.stringify(data, null, 2) + "\n\n" + logOutput.textContent;
-}
+// Logger (no-op in production UI)
+function log() {}
 
 function setRegionStatus(message = "") {
   if (regionStatusEl) regionStatusEl.textContent = message;
