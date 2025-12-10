@@ -1,12 +1,6 @@
-const $ = (selector) => document.querySelector(selector);
+import { requestBookingForm, createFloaHotelDeal, finalizeFloaDeal } from "./lib/bookingApi.js";
 
-const API_BASE = (() => {
-  try {
-    return window.location.port === "3000" ? "" : "http://localhost:3000";
-  } catch (_) {
-    return "";
-  }
-})();
+const $ = (selector) => document.querySelector(selector);
 
 const PREBOOK_SUMMARY_KEY = "booking:lastPrebook";
 const params = new URLSearchParams(window.location.search);
@@ -34,6 +28,8 @@ const floaPayButton = $("#btnPay");
 const paymentMethodFloaEl = $("#paymentMethodFloa");
 const paymentMethodSystempayEl = $("#paymentMethodSystempay");
 const floaOptionsRowEl = $("#floaOptionsRow");
+const LAST_PARTNER_KEY = "booking:lastPartnerOrderId";
+const LAST_CUSTOMER_KEY = "booking:lastCustomer";
 
 let currentPartnerOrderId = null;
 
@@ -220,15 +216,7 @@ async function fetchBookingForm() {
   setStatus("Loading booking form...");
   rawFormEl.textContent = "// contacting /api/booking/form";
   try {
-    const response = await fetch(`${API_BASE}/api/booking/form`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prebook_token: token }),
-    });
-    const payload = await response.json();
-    if (!response.ok || payload?.error) {
-      throw new Error(payload?.error || payload?._raw || response.status);
-    }
+    const payload = await requestBookingForm(token);
     currentPartnerOrderId = payload.partner_order_id || null;
     partnerIdEl.textContent = currentPartnerOrderId || "-";
     rawFormEl.textContent = JSON.stringify(payload.form || {}, null, 2);
@@ -346,6 +334,17 @@ async function startPayment() {
       const url = new URL(window.location.origin + "/systempay-test.html");
       url.searchParams.set("partner_order_id", partnerOrderId);
       url.searchParams.set("email", email);
+      try {
+        if (typeof sessionStorage !== "undefined") {
+          sessionStorage.setItem(LAST_PARTNER_KEY, partnerOrderId);
+          sessionStorage.setItem(
+            LAST_CUSTOMER_KEY,
+            JSON.stringify({ civility, fullName, email, phone })
+          );
+        }
+      } catch (_) {
+        // best-effort only
+      }
       window.location.href = url.toString();
       return;
     }
@@ -363,28 +362,10 @@ async function startPayment() {
       customer,
     };
 
-    // Frontend debug: see exactly what we send to backend
-    console.log("[FLOA][front] /payments/floa/hotel/deal body:", body);
-
     setStatus("Contacting FloaBank for eligibility and deal creation…");
     floaPayButton?.setAttribute("disabled", "disabled");
 
-    const response = await fetch(`${API_BASE}/api/payments/floa/hotel/deal`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const payload = await response.json();
-
-    if (!response.ok || payload?.status === "nok" || payload?.error) {
-      const reason =
-        payload?.reason ||
-        payload?.error ||
-        payload?._raw ||
-        `HTTP ${response.status}`;
-      setStatus(`Floa payment not available: ${reason}`, "error");
-      return;
-    }
+    const payload = await createFloaHotelDeal(body);
 
     const deal = payload.deal || payload;
     const dealReference =
@@ -419,23 +400,14 @@ async function startPayment() {
       },
     };
 
-    const finalizeResponse = await fetch(
-      `${API_BASE}/api/payments/floa/deal/${encodeURIComponent(dealReference)}/finalize`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(finalizeBody),
-      }
-    );
+    const finalizePayload = await finalizeFloaDeal(dealReference, finalizeBody);
 
-    const finalizePayload = await finalizeResponse.json();
-
-    if (!finalizeResponse.ok || finalizePayload?.error) {
+    if (finalizePayload?.error || finalizePayload?.status === "nok") {
       const reason =
         finalizePayload?.reason ||
         finalizePayload?.error ||
         finalizePayload?._raw ||
-        `HTTP ${finalizeResponse.status}`;
+        "Unknown error";
       setStatus(`Unable to finalize Floa deal: ${reason}`, "error");
       if (rawFormEl) {
         rawFormEl.textContent = JSON.stringify(

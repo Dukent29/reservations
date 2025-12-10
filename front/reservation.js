@@ -1,13 +1,7 @@
 // reservation.js
+import { API_BASE, safeJsonFetch as baseSafeJsonFetch } from "./lib/http.js";
 
 const $ = (sel) => document.querySelector(sel);
-
-// Resolve API base for Apache/XAMPP vs Express
-const API_BASE = (function () {
-  try {
-    return window.location.port === "3000" ? "" : "http://localhost:3000";
-  } catch (_) { return ""; }
-})();
 
 // DOM refs
 const checkinEl   = $("#checkin");
@@ -1708,19 +1702,13 @@ function renderHotelDetails(data) {
 
 async function safeJsonFetch(url, options = {}, labelForLog = "") {
   startTopProgress();
-  let r;
   try {
-    r = await fetch(url, options);
+    const { statusCode, data } = await baseSafeJsonFetch(url, options);
+    log({ statusCode, data }, labelForLog);
+    return { statusCode, data };
   } finally {
     finishTopProgress();
   }
-  const statusCode = r.status;
-  const rawText = await r.text();
-  let data;
-  try { data = rawText ? JSON.parse(rawText) : null; }
-  catch (parseErr) { data = { _parseError: parseErr.message, _raw: rawText, _httpStatus: statusCode }; }
-  log({ statusCode, data }, labelForLog);
-  return { statusCode, data };
 }
 
 function pickNumber(...values) {
@@ -1901,7 +1889,6 @@ btnSearch.addEventListener('click', async () => {
   const body = {
     checkin:  checkinEl?.value,
     checkout: checkoutEl?.value,
-    currency: currencyEl?.value,
     language: langEl?.value,
     guests:   buildGuests(),
   };
@@ -2026,7 +2013,6 @@ async function loadHotelDetails(hid) {
     checkout: checkoutEl?.value,
     guests: buildGuests(),
     language: langEl?.value,
-    currency: currencyEl?.value,
   };
   log(body, 'REQUEST /api/search/hp');
   const { statusCode, data } = await safeJsonFetch(

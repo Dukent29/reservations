@@ -12,19 +12,78 @@
       <div class="brand">
         <p class="eyebrow">Kotan Voyages</p>
         <h1>Paiement réussi</h1>
-        <p class="sub">Votre paiement Systempay a été accepté.</p>
+        <p class="sub">Votre paiement Systempay a été accepté. Nous allons maintenant finaliser la réservation auprès du fournisseur hôtelier.</p>
       </div>
     </header>
 
     <main class="workspace workspace--booking">
       <section class="card booking-panel">
-        <section class="card booking-form" aria-live="polite">
-          <p>Merci pour votre réservation. Vous pouvez fermer cette fenêtre ou revenir à la page de réservation.</p>
-          <p><a href="/booking.html" class="primary">Retour à la réservation</a></p>
+        <div class="booking-intro">
+          <div>
+            <p class="muted" style="margin:0">Référence de commande partenaire</p>
+            <code id="successPartnerOrderId" class="booking-token">-</code>
+          </div>
+        </div>
+        <div id="successStatus" class="booking-status muted"></div>
+
+        <div id="successSummary" class="booking-summary hidden">
+          <div class="summary-row">
+            <div>
+              <p class="muted" style="margin:0">Hôtel</p>
+              <strong id="successHotelName">-</strong>
+              <p id="successStayDetails" class="muted" style="margin:4px 0 0 0"></p>
+            </div>
+          </div>
+          <div class="summary-row">
+            <div>
+              <p class="muted" style="margin:0">Montant payé</p>
+              <strong id="successAmount">-</strong>
+            </div>
+          </div>
+        </div>
+
+        <section class="card booking-form" id="successTravellerForm" aria-live="polite">
+          <h3>Voyageurs</h3>
+          <p class="muted">Ajoutez les noms de tous les voyageurs pour finaliser la réservation.</p>
+
+          <form id="successBookingForm">
+            <div id="guestList" class="summary-grid"></div>
+            <button type="button" id="addGuestBtn" class="secondary mini" style="margin-top:0.75rem;">Ajouter un voyageur</button>
+
+            <h3 style="margin-top:1.5rem;">Contact principal</h3>
+            <div class="row">
+              <label>
+                Email de contact
+                <input type="email" id="successContactEmail" required placeholder="client@example.com" />
+              </label>
+              <label>
+                Téléphone de contact
+                <input type="tel" id="successContactPhone" required placeholder="+33 6 00 00 00 00" />
+              </label>
+            </div>
+            <div class="row">
+              <label>
+                Commentaire (optionnel)
+                <input type="text" id="successComment" placeholder="Arrivée tardive, demandes spéciales, …" />
+              </label>
+            </div>
+
+            <div class="row" style="margin-top:1.5rem;">
+              <button type="submit" id="confirmBookingBtn" class="primary">Confirmer la réservation</button>
+            </div>
+            <p id="bookingFinalizeStatus" class="booking-status muted" style="margin-top:.5rem;"></p>
+          </form>
+        </section>
+
+        <section class="card booking-raw">
+          <h3>Debug réservation</h3>
+          <pre id="successDebug">// les données de réservation apparaîtront ici</pre>
         </section>
       </section>
     </main>
   </div>
+
+  <script src="payment-success.js"></script>
 </body>
 </html>
 
