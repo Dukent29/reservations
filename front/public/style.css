@@ -121,7 +121,7 @@ body::after {
   position: relative;
   min-height: 340px;
   border-radius: 2rem;
-  overflow: hidden;
+  overflow: visible;
   margin-top: 2rem;
   margin-bottom: 1.5rem;
   box-shadow: 0 40px 80px -32px rgba(0,0,0,.85);
@@ -130,6 +130,7 @@ body::after {
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  clip-path: inset(0 round 2rem);
   background-size: cover;
   background-position: center;
   opacity: 0;
