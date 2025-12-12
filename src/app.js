@@ -23,12 +23,29 @@ app.use(compression());
 app.use(express.json({ limit: "500kb" }));
 
 // Systempay return URLs (Systempay envoie un POST ou un GET sur ces chemins)
+// In the legacy front, these served static HTML pages.
+// For the Vue app, we redirect to the SPA routes (running e.g. on http://localhost:5173).
+const FRONT_BASE =
+  process.env.FRONT_BASE_URL || "http://localhost:5173";
+
+app.all("/payment/success", (_req, res) => {
+  const target = `${FRONT_BASE.replace(/\/$/, "")}/payment/success`;
+  return res.redirect(target);
+});
+
+app.all("/payment/error", (_req, res) => {
+  const target = `${FRONT_BASE.replace(/\/$/, "")}/payment/error`;
+  return res.redirect(target);
+});
+
 app.all("/payment-success.html", (_req, res) => {
-  res.sendFile(path.join(__dirname, "..", "front", "payment-success.html"));
+  const target = `${FRONT_BASE.replace(/\/$/, "")}/payment/success`;
+  return res.redirect(target);
 });
 
 app.all("/payment-error.html", (_req, res) => {
-  res.sendFile(path.join(__dirname, "..", "front", "payment-error.html"));
+  const target = `${FRONT_BASE.replace(/\/$/, "")}/payment/error`;
+  return res.redirect(target);
 });
 
 // Floa return URL (used for both success and refusal)
@@ -49,7 +66,8 @@ app.all(
       status === "abandoned" ||
       status === "failed";
 
-    const target = isFailure ? "/payment-error.html" : "/payment-success.html";
+    const pathTarget = isFailure ? "/payment/error" : "/payment/success";
+    const target = `${FRONT_BASE.replace(/\/$/, "")}${pathTarget}`;
     res.redirect(target);
   }
 );
