@@ -58,6 +58,16 @@ function appendDebug(label, data) {
   debugEl.textContent = `${header}${body}\n\n${debugEl.textContent || ""}`;
 }
 
+function redirectToConfirmationPage({ supplierReference, partnerOrderId, delaySeconds = 6 } = {}) {
+  const params = new URLSearchParams();
+  if (partnerOrderId) params.set("partner_order_id", partnerOrderId);
+  if (supplierReference) params.set("supplier_reference", supplierReference);
+  params.set("next", "booking.html");
+  params.set("next_label", "le formulaire de reservation");
+  params.set("delay", String(delaySeconds));
+  window.location.href = `booking-finished.html?${params.toString()}`;
+}
+
 function loadSessionData() {
   try {
     if (typeof sessionStorage === "undefined") return;
@@ -350,11 +360,10 @@ async function submitBooking(event) {
         ? `Réservation confirmée (référence fournisseur : ${etgOrderId}).`
         : "Réservation confirmée. La référence fournisseur sera disponible prochainement.";
     setFinalizeStatus(successMessage, "info");
-    try {
-      alert(successMessage);
-    } catch (_) {
-      // ignore alert failures
-    }
+    redirectToConfirmationPage({
+      supplierReference: etgOrderId || "",
+      partnerOrderId: currentPartnerOrderId || "",
+    });
   } catch (err) {
     const detail = err && err._detail ? err._detail : err?.message || String(err || "");
     const errorMessage = `Erreur lors de la finalisation de la réservation :\n${detail}`;

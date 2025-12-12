@@ -11,12 +11,21 @@
 
 <template>
   <section class="hero" aria-label="Destination highlight">
-    <div class="hero__bg hero__bg--1"></div>
-    <div class="hero__bg hero__bg--2"></div>
-    <div class="hero__bg hero__bg--3"></div>
-    <div class="hero__bg hero__bg--4"></div>
-    <div class="hero__bg hero__bg--5"></div>
-    <div class="hero__bg hero__bg--6"></div>
+    <div class="hero__bg-stage">
+      <transition
+        name="hero-bg-fade"
+        mode="out-in"
+      >
+        <div
+          v-if="currentHeroSlide"
+          :key="currentHeroSlide"
+          class="hero__bg hero__bg--dynamic"
+          :style="{ backgroundImage: `url(${currentHeroSlide})` }"
+          role="presentation"
+        ></div>
+      </transition>
+      <div class="hero__bg hero__bg--overlay" aria-hidden="true"></div>
+    </div>
 
     <div class="hero__content">
       <p class="hero__eyebrow">BedTrip</p>
@@ -24,6 +33,23 @@
       <p class="hero__subtitle">
         Recherchez rapidement l’hébergement idéal pour vos clients.
       </p>
+      <div
+        v-if="heroSlideImages.length > 1"
+        class="hero__bg-bullets"
+        role="group"
+        aria-label="Navigation du diaporama"
+      >
+        <button
+          v-for="(slide, idx) in heroSlideImages"
+          :key="slide"
+          type="button"
+          class="hero__bg-bullet"
+          :class="{ 'is-active': idx === activeSlideIndex }"
+          :aria-label="`Afficher la diapositive ${idx + 1}`"
+          :aria-pressed="idx === activeSlideIndex"
+          @click="selectSlide(idx)"
+        ></button>
+      </div>
 
       <div class="hero__search-shell">
         <div class="search-shell full">
@@ -105,39 +131,38 @@
               </div>
 
               <div class="field">
-                <label for="checkin">Arrivée</label>
-                <input
-                  id="checkin"
-                  v-model="checkin"
-                  type="date"
-                  required
-                />
-              </div>
-
-              <div class="field">
-                <label for="checkout">Départ</label>
-                <input
-                  id="checkout"
-                  v-model="checkout"
-                  type="date"
-                  required
-                />
+                <label for="dateRangeInput">Séjour</label>
+                <div
+                  class="date-range-wrapper"
+                  role="button"
+                  tabindex="0"
+                  @click.prevent="openDateModal"
+                  @keydown.enter.prevent="openDateModal"
+                  @keydown.space.prevent="openDateModal"
+                >
+                  <input
+                    id="dateRangeInput"
+                    type="text"
+                    :value="dateRangeLabel"
+                    placeholder="Choisissez les dates"
+                    autocomplete="off"
+                    readonly
+                  />
+                  <input type="hidden" :value="checkin" />
+                  <input type="hidden" :value="checkout" />
+                </div>
               </div>
 
               <div class="field compact">
-                <label for="adults">Voyageurs</label>
-                <div class="field">
-                  <input
-                    id="adults"
-                    v-model.number="adults"
-                    type="number"
-                    min="1"
-                    max="8"
-                  />
-                  <small class="muted">
-                    Adultes · enfants gérés sur la page de résultats.
-                  </small>
-                </div>
+                <label>Voyageurs</label>
+                <button
+                  type="button"
+                  class="secondary"
+                  style="text-align:left;"
+                  @click="openGuestModal"
+                >
+                  {{ guestsSummary }}
+                </button>
               </div>
 
               <div class="field action">
@@ -152,20 +177,469 @@
       </div>
     </div>
   </section>
+
+  <teleport to="body">
+    <div
+      v-if="isDateModalOpen"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dateModalTitle"
+      @click.self="closeDateModal"
+    >
+      <div class="modal__backdrop"></div>
+      <div class="modal__dialog">
+        <div class="modal__header">
+          <div class="modal__title" id="dateModalTitle">Séjour</div>
+          <button
+            type="button"
+            class="secondary mini"
+            aria-label="Fermer"
+            @click="closeDateModal"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="modal__body">
+          <div class="date-calendar" aria-label="Sélection de la période">
+            <div class="date-calendar__header">
+              <div class="date-calendar__title">{{ calendarMonthLabel }}</div>
+              <div class="date-calendar__nav">
+                <button type="button" @click="shiftCalendar(-1)">‹</button>
+                <button type="button" @click="shiftCalendar(1)">›</button>
+              </div>
+            </div>
+            <div
+              class="date-calendar__grid"
+              @mouseleave="clearHoverPreview"
+            >
+              <div
+                v-for="dow in calendarWeekdays"
+                :key="`dow-${dow}`"
+                class="date-calendar__dow"
+              >
+                {{ dow }}
+              </div>
+              <template v-for="cell in calendarCells" :key="cell.key">
+                <div v-if="cell.type === 'empty'"></div>
+                <button
+                  v-else
+                  type="button"
+                  class="date-calendar__day"
+                  :class="cell.classObject"
+                  :disabled="cell.disabled"
+                  @click="selectCalendarDate(cell.date)"
+                  @mouseenter="!cell.disabled && previewCalendarDate(cell.date)"
+                >
+                  {{ cell.label }}
+                </button>
+              </template>
+            </div>
+          </div>
+        </div>
+        <div class="modal__footer">
+          <button type="button" class="primary" @click="applyDateSelection">
+            Valider
+          </button>
+        </div>
+      </div>
+    </div>
+  </teleport>
+
+  <teleport to="body">
+    <div
+      v-if="isGuestModalOpen"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="guestModalTitle"
+      @click.self="closeGuestModal"
+    >
+      <div class="modal__backdrop"></div>
+      <div class="modal__dialog">
+        <div class="modal__header">
+          <div class="modal__title" id="guestModalTitle">Voyageurs</div>
+          <button
+            type="button"
+            class="secondary mini"
+            aria-label="Fermer"
+            @click="closeGuestModal"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="modal__body guest-modal__body">
+          <div class="guest-row">
+            <div>
+              <p class="guest-row__label">Adultes</p>
+              <small class="muted">A partir de 18 ans</small>
+            </div>
+            <div class="counter">
+              <button type="button" @click="decrementAdults">−</button>
+              <div class="value">{{ adultsCount }}</div>
+              <button type="button" @click="incrementAdults">+</button>
+            </div>
+          </div>
+          <div class="guest-row">
+            <div>
+              <p class="guest-row__label">Enfants</p>
+              <small class="muted">0 à 17 ans</small>
+            </div>
+            <div class="counter">
+              <button type="button" @click="removeChild">−</button>
+              <div class="value">{{ childrenCount }}</div>
+              <button type="button" @click="addChild">+</button>
+            </div>
+          </div>
+          <div
+            v-if="childrenAges.length"
+            class="children-ages"
+          >
+            <div
+              v-for="(age, idx) in childrenAges"
+              :key="`child-${idx}`"
+              class="child-age-row"
+            >
+              <label :for="`child-age-${idx}`">
+                Enfant {{ idx + 1 }} · âge
+              </label>
+              <select
+                :id="`child-age-${idx}`"
+                :value="age"
+                @change="updateChildAge(idx, $event.target.value)"
+              >
+                <option
+                  v-for="ageOption in childAgeOptions"
+                  :key="ageOption"
+                  :value="ageOption"
+                >
+                  {{ ageOption }} an{{ ageOption > 1 ? 's' : '' }}
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal__footer">
+          <button type="button" class="primary" @click="applyGuestSelection">
+            Valider
+          </button>
+        </div>
+      </div>
+    </div>
+  </teleport>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { API_BASE, safeJsonFetch } from '../services/httpClient.js'
 
 const router = useRouter()
 
-// Basic search parameters for landing.
-const destination = ref('')
+const heroSlideImages = [
+  '/images/pexels-apasaric-1285625.jpg',
+  '/images/pexels-donaldtong94-189296.jpg',
+  '/images/pexels-jimbear-1458457.jpg',
+  '/images/pexels-minan1398-774042.jpg',
+  '/images/pexels-recalmedia-60217.jpg',
+  '/images/pexels-thorsten-technoman-109353-338504.jpg',
+]
+const activeSlideIndex = ref(0)
+const currentHeroSlide = computed(() =>
+  heroSlideImages.length
+    ? heroSlideImages[activeSlideIndex.value % heroSlideImages.length]
+    : null,
+)
+const HERO_SLIDE_INTERVAL = 7000
+const MAX_GUESTS = 6
+const MIN_ADULTS = 1
+const DEFAULT_CHILD_AGE = 8
+const childAgeOptions = Array.from({ length: 18 }, (_, idx) => idx)
+let heroSlideTimer = null
+
 const checkin = ref('')
 const checkout = ref('')
-const adults = ref(2)
+const adultsCount = ref(2)
+const childrenAges = ref([])
+
+const isDateModalOpen = ref(false)
+const isGuestModalOpen = ref(false)
+const calendarBaseDate = ref(new Date())
+const rangeStartDate = ref(null)
+const rangeEndDate = ref(null)
+const hoverDate = ref(null)
+
+function parseISODate(value) {
+  if (!value) return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value))
+  if (!match) return null
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  if (Number.isNaN(date.getTime())) return null
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
+function toISODate(date) {
+  if (!(date instanceof Date)) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatDisplayDate(value) {
+  const date = parseISODate(value)
+  if (!date) return ''
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+  }).format(date)
+}
+
+function normalizeDate(date) {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+function isSameDay(a, b) {
+  if (!(a instanceof Date) || !(b instanceof Date)) return false
+  return a.getTime() === b.getTime()
+}
+
+function isBetween(date, start, end) {
+  if (!(date instanceof Date) || !(start instanceof Date) || !(end instanceof Date)) {
+    return false
+  }
+  const time = date.getTime()
+  return time >= start.getTime() && time <= end.getTime()
+}
+
+const childrenCount = computed(() => childrenAges.value.length)
+const totalGuests = computed(() => adultsCount.value + childrenCount.value)
+
+const dateRangeLabel = computed(() => {
+  if (checkin.value && checkout.value) {
+    return `${formatDisplayDate(checkin.value)} · ${formatDisplayDate(checkout.value)}`
+  }
+  if (checkin.value) return formatDisplayDate(checkin.value)
+  return ''
+})
+
+const guestsSummary = computed(() => {
+  const adultLabel = `${adultsCount.value} adulte${adultsCount.value > 1 ? 's' : ''}`
+  const childLabel = childrenCount.value
+    ? `${childrenCount.value} enfant${childrenCount.value > 1 ? 's' : ''}`
+    : '0 enfant'
+  return `${adultLabel} · ${childLabel}`
+})
+
+const calendarMonthLabel = computed(() => {
+  const formatter = new Intl.DateTimeFormat('fr-FR', {
+    month: 'long',
+    year: 'numeric',
+  })
+  const label = formatter.format(calendarBaseDate.value)
+  return label.charAt(0).toUpperCase() + label.slice(1)
+})
+
+const calendarWeekdays = computed(() => {
+  const formatter = new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'short',
+  })
+  const baseMonday = new Date(2023, 0, 2)
+  return Array.from({ length: 7 }, (_, idx) => {
+    const d = new Date(baseMonday)
+    d.setDate(baseMonday.getDate() + idx)
+    return formatter.format(d)
+  })
+})
+
+const calendarCells = computed(() => {
+  const cells = []
+  const month = calendarBaseDate.value.getMonth()
+  const year = calendarBaseDate.value.getFullYear()
+  const firstDay = new Date(year, month, 1)
+  const startWeekday = firstDay.getDay() || 7
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const minDate = new Date()
+  minDate.setHours(0, 0, 0, 0)
+
+  for (let i = 1; i < startWeekday; i++) {
+    cells.push({
+      key: `empty-${year}-${month}-${i}`,
+      type: 'empty',
+    })
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month, day)
+    date.setHours(0, 0, 0, 0)
+    const iso = toISODate(date)
+    const disabled = date.getTime() < minDate.getTime()
+    const start = rangeStartDate.value
+    const end = rangeEndDate.value || hoverDate.value
+    const classes = {
+      'date-calendar__day--start': false,
+      'date-calendar__day--end': false,
+      'date-calendar__day--inrange': false,
+      'date-calendar__day--disabled': disabled,
+    }
+    if (!disabled) {
+      if (start && isSameDay(date, start)) {
+        classes['date-calendar__day--start'] = true
+      }
+      if (end && isSameDay(date, end)) {
+        classes['date-calendar__day--end'] = true
+      }
+      if (start && end && isBetween(date, start, end)) {
+        classes['date-calendar__day--inrange'] = true
+      }
+    }
+
+    cells.push({
+      key: `day-${iso}`,
+      type: 'day',
+      label: day,
+      date,
+      disabled,
+      classObject: classes,
+    })
+  }
+
+  return cells
+})
+
+function nextHeroSlide() {
+  if (!heroSlideImages.length) return
+  activeSlideIndex.value =
+    (activeSlideIndex.value + 1) % heroSlideImages.length
+}
+
+function startHeroSlideshow() {
+  if (heroSlideTimer || !heroSlideImages.length) return
+  if (typeof window === 'undefined') return
+  heroSlideTimer = window.setInterval(() => {
+    nextHeroSlide()
+  }, HERO_SLIDE_INTERVAL)
+}
+
+function stopHeroSlideshow() {
+  if (heroSlideTimer && typeof window !== 'undefined') {
+    window.clearInterval(heroSlideTimer)
+    heroSlideTimer = null
+  }
+}
+
+function selectSlide(index) {
+  if (!heroSlideImages.length) return
+  activeSlideIndex.value = index % heroSlideImages.length
+  stopHeroSlideshow()
+  startHeroSlideshow()
+}
+
+function openGuestModal() {
+  isGuestModalOpen.value = true
+}
+
+function closeGuestModal() {
+  isGuestModalOpen.value = false
+}
+
+function incrementAdults() {
+  if (adultsCount.value + childrenCount.value >= MAX_GUESTS) return
+  adultsCount.value += 1
+}
+
+function decrementAdults() {
+  if (adultsCount.value <= MIN_ADULTS) return
+  adultsCount.value -= 1
+}
+
+function addChild() {
+  if (adultsCount.value + childrenCount.value >= MAX_GUESTS) return
+  childrenAges.value = [...childrenAges.value, DEFAULT_CHILD_AGE]
+}
+
+function removeChild() {
+  if (!childrenAges.value.length) return
+  childrenAges.value = childrenAges.value.slice(0, -1)
+}
+
+function updateChildAge(idx, value) {
+  const age = Math.max(0, Math.min(17, Number(value) || 0))
+  const next = [...childrenAges.value]
+  next[idx] = age
+  childrenAges.value = next
+}
+
+function applyGuestSelection() {
+  closeGuestModal()
+}
+
+function openDateModal() {
+  rangeStartDate.value = parseISODate(checkin.value) || null
+  rangeEndDate.value = parseISODate(checkout.value) || null
+  hoverDate.value = null
+  const base = rangeStartDate.value || new Date()
+  calendarBaseDate.value = new Date(base.getFullYear(), base.getMonth(), 1)
+  isDateModalOpen.value = true
+}
+
+function closeDateModal() {
+  isDateModalOpen.value = false
+  hoverDate.value = null
+}
+
+function shiftCalendar(delta) {
+  const base = calendarBaseDate.value
+  calendarBaseDate.value = new Date(base.getFullYear(), base.getMonth() + delta, 1)
+}
+
+function selectCalendarDate(date) {
+  if (!date || !(date instanceof Date)) return
+  const selected = normalizeDate(date)
+  if (!rangeStartDate.value || (rangeStartDate.value && rangeEndDate.value)) {
+    rangeStartDate.value = selected
+    rangeEndDate.value = null
+    hoverDate.value = null
+  } else if (selected < rangeStartDate.value) {
+    rangeEndDate.value = rangeStartDate.value
+    rangeStartDate.value = selected
+  } else if (isSameDay(selected, rangeStartDate.value)) {
+    rangeEndDate.value = selected
+  } else {
+    rangeEndDate.value = selected
+  }
+}
+
+function previewCalendarDate(date) {
+  if (!(date instanceof Date)) return
+  if (rangeStartDate.value && !rangeEndDate.value) {
+    hoverDate.value = normalizeDate(date)
+  }
+}
+
+function clearHoverPreview() {
+  if (rangeStartDate.value && !rangeEndDate.value) {
+    hoverDate.value = null
+  }
+}
+
+function applyDateSelection() {
+  const start = rangeStartDate.value
+  const end = rangeEndDate.value || hoverDate.value
+  if (!start || !end) {
+    closeDateModal()
+    return
+  }
+  checkin.value = toISODate(start)
+  checkout.value = toISODate(end)
+  closeDateModal()
+}
+
+// Basic search parameters for landing.
+const destination = ref('')
 
 // Suggestions state
 const regionSuggestions = ref([])
@@ -279,13 +753,20 @@ const hasSuggestions = computed(
 function goToResults() {
   if (!destination.value || !checkin.value || !checkout.value) return
 
+  const childrenParam =
+    childrenAges.value.length > 0
+      ? childrenAges.value.map((age) => String(age)).join(',')
+      : undefined
+
   router.push({
     name: 'search-results',
     query: {
       destination: destination.value,
       checkin: checkin.value,
       checkout: checkout.value,
-      adults: String(adults.value || 1),
+      adults: String(adultsCount.value || 1),
+      children: String(childrenCount.value || 0),
+      childrenAges: childrenParam,
     },
   })
 }
@@ -297,9 +778,274 @@ watch(
     scheduleSuggestions(val)
   },
 )
+
+onMounted(() => {
+  startHeroSlideshow()
+})
+
+onBeforeUnmount(() => {
+  stopHeroSlideshow()
+})
 </script>
 
 <style scoped>
-/* This view relies mainly on existing global hero/search styles.
-   Scoped rules can be added later if needed. */
+.hero {
+  position: relative;
+  overflow: visible;
+}
+
+.hero__bg-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: 2rem;
+  pointer-events: none;
+}
+
+.hero__bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.hero__bg--dynamic {
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.08);
+  filter: saturate(115%) brightness(0.9);
+  border-radius: inherit;
+}
+
+.hero__bg--overlay {
+  background: radial-gradient(circle at 20% 25%, rgba(15, 23, 42, 0.3), transparent 50%),
+    linear-gradient(135deg, rgba(2, 6, 23, 0.85), rgba(2, 6, 23, 0.35));
+  mix-blend-mode: multiply;
+  border-radius: inherit;
+}
+
+.hero__content {
+  position: relative;
+  z-index: 1;
+}
+
+.hero__search-shell {
+  display: flex;
+  justify-content: center;
+}
+
+.hero__bg-bullets {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(6px);
+  width: fit-content;
+  margin-bottom: 0.5rem;
+}
+
+.hero__bg-bullet {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 250, 252, 0.6);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.2s, transform 0.2s;
+}
+
+.hero__bg-bullet.is-active {
+  background: #f8fafc;
+  transform: scale(1.15);
+}
+
+.date-range-wrapper {
+  display: flex;
+  width: 100%;
+}
+
+.date-range-wrapper input {
+  cursor: pointer;
+}
+
+.guest-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.guest-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.guest-row__label {
+  margin: 0;
+  font-weight: 600;
+}
+
+.counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.counter button {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: rgba(15, 23, 42, 0.8);
+  color: #f8fafc;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.counter .value {
+  min-width: 1.75rem;
+  text-align: center;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.children-ages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.child-age-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.child-age-row select {
+  width: 100%;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.75);
+  backdrop-filter: blur(4px);
+}
+
+.modal__dialog {
+  position: relative;
+  width: min(360px, 92vw);
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 1.25rem;
+  padding: 1rem;
+  box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.8);
+  z-index: 1;
+}
+
+.modal__header,
+.modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal__body {
+  margin: 1rem 0;
+}
+
+.modal__title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.date-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.date-calendar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.date-calendar__nav {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.date-calendar__nav button {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.8);
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+.date-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(2.2rem, 1fr));
+  gap: 0.35rem;
+}
+
+.date-calendar__dow {
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.date-calendar__day {
+  border-radius: 0.75rem;
+  border: 1px solid transparent;
+  background: rgba(15, 23, 42, 0.7);
+  color: #f8fafc;
+  height: 2.4rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.date-calendar__day--disabled {
+  color: #475569;
+  cursor: not-allowed;
+  border-color: rgba(71, 85, 105, 0.4);
+}
+
+.date-calendar__day--start,
+.date-calendar__day--end {
+  background: #1d4ed8;
+  border-color: #93c5fd;
+}
+
+.date-calendar__day--inrange {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.hero-bg-fade-enter-active,
+.hero-bg-fade-leave-active {
+  transition: opacity 1.2s ease;
+}
+
+.hero-bg-fade-enter-from,
+.hero-bg-fade-leave-to {
+  opacity: 0;
+}
 </style>

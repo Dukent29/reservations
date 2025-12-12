@@ -184,10 +184,11 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { API_BASE } from '../services/httpClient.js'
 
 const route = useRoute()
+const router = useRouter()
 
 const PREBOOK_SUMMARY_KEY = 'booking:lastPrebook'
 const LAST_PARTNER_KEY = 'booking:lastPartnerOrderId'
@@ -219,6 +220,23 @@ const currentPaymentInfo = ref(null)
 const rawPartnerParam = computed(() =>
   String(route.query.partner_order_id || '').trim(),
 )
+
+function redirectToFinishedPage({
+  supplierReference,
+  partnerId,
+  delaySeconds = 6,
+} = {}) {
+  router.push({
+    name: 'booking-finished',
+    query: {
+      partner_order_id: partnerId || undefined,
+      supplier_reference: supplierReference || undefined,
+      delay: String(delaySeconds),
+      next: '/booking',
+      next_label: 'la page de réservation',
+    },
+  })
+}
 
 function setStatus(message, type = 'info') {
   statusMessage.value = message || ''
@@ -531,12 +549,10 @@ async function submitBooking() {
       ? `Réservation confirmée (référence fournisseur : ${etgOrderId}).`
       : 'Réservation confirmée. La référence fournisseur sera disponible prochainement.'
     setFinalizeStatus(successMessage, 'info')
-    try {
-      // eslint-disable-next-line no-alert
-      alert(successMessage)
-    } catch {
-      // ignore
-    }
+    redirectToFinishedPage({
+      supplierReference: etgOrderId || '',
+      partnerId: partnerOrderId.value,
+    })
   } catch (err) {
     const detail =
       err && err._detail

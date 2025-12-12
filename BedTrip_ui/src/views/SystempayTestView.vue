@@ -124,11 +124,11 @@ function loadKryptonScript() {
         : window.location.origin.replace(/\/$/, '')
     script.setAttribute(
       'kr-post-url-success',
-      `${backendBase}/payment/success`,
+      `${backendBase}/payment/success?ui=bedtrip`,
     )
     script.setAttribute(
       'kr-post-url-refused',
-      `${backendBase}/payment/error`,
+      `${backendBase}/payment/error?ui=bedtrip`,
     )
 
     script.onload = () => {

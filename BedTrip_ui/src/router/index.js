@@ -6,6 +6,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 // Views
 import BookingView from '../views/BookingView.vue'
+import BookingFinishedView from '../views/BookingFinishedView.vue'
 import ReservationView from '../views/ReservationView.vue'
 import PaymentSuccessView from '../views/PaymentSuccessView.vue'
 import PaymentErrorView from '../views/PaymentErrorView.vue'
@@ -29,6 +30,12 @@ const routes = [
     path: '/booking',
     name: 'booking',
     component: BookingView,
+  },
+  {
+    // Confirmation landing after booking finish
+    path: '/booking/finished',
+    name: 'booking-finished',
+    component: BookingFinishedView,
   },
   {
     // Payment success confirmation (formerly payment-success.html)

@@ -97,6 +97,16 @@ function ratePriceAmount(rate) {
   const val = Number(payment?.show_amount ?? payment?.amount);
   return Number.isFinite(val) ? val : 0;
 }
+function rateNightsCount(rate) {
+  if (Array.isArray(rate?.daily_prices) && rate.daily_prices.length > 0) {
+    return rate.daily_prices.length;
+  }
+  const stay = rate?.stay || rate?.stay_dates;
+  if (Array.isArray(stay) && stay.length > 0) {
+    return stay.length;
+  }
+  return 1;
+}
 
 function rankHotelsByOccupancy(hotels = [], requiredCapacity = 1) {
   if (!Array.isArray(hotels) || !hotels.length) return hotels;
@@ -128,6 +138,18 @@ function rankHotelsByOccupancy(hotels = [], requiredCapacity = 1) {
 function filterHotelsByPreferences(hotels = [], filters = {}) {
   let working = [...hotels];
 
+  const rawMin = filters?.budget_min ?? filters?.budgetMin;
+  const rawMax = filters?.budget_max ?? filters?.budgetMax;
+  const parsedMin = Number(rawMin);
+  const parsedMax = Number(rawMax);
+  let budgetMin = Number.isFinite(parsedMin) && parsedMin >= 0 ? parsedMin : null;
+  let budgetMax = Number.isFinite(parsedMax) && parsedMax >= 0 ? parsedMax : null;
+  if (budgetMin !== null && budgetMax !== null && budgetMax < budgetMin) {
+    const swap = budgetMin;
+    budgetMin = budgetMax;
+    budgetMax = swap;
+  }
+
   if (Array.isArray(filters?.stars) && filters.stars.length) {
     const starSet = new Set(
       filters.stars
@@ -142,14 +164,27 @@ function filterHotelsByPreferences(hotels = [], filters = {}) {
     }
   }
 
-  if ((Array.isArray(filters?.meals) && filters.meals.length) || filters?.free_cancel) {
+  const shouldFilterRates =
+    (Array.isArray(filters?.meals) && filters.meals.length) ||
+    filters?.free_cancel ||
+    budgetMin !== null ||
+    budgetMax !== null;
+
+  if (shouldFilterRates) {
     working = working
       .map((hotel) => {
         const rates = Array.isArray(hotel?.rates) ? hotel.rates : [];
         const filteredRates = rates.filter((rate) => {
           const mealOk = filters?.meals?.length ? filters.meals.includes(rateMealCode(rate)) : true;
           const cancelOk = filters?.free_cancel ? rateHasFreeCancellation(rate) : true;
-          return mealOk && cancelOk;
+          const nightlyPrice = (() => {
+            const amount = ratePriceAmount(rate);
+            const nights = Math.max(1, rateNightsCount(rate));
+            return amount / nights;
+          })();
+          const minOk = budgetMin === null || nightlyPrice >= budgetMin;
+          const maxOk = budgetMax === null || nightlyPrice <= budgetMax;
+          return mealOk && cancelOk && minOk && maxOk;
         });
         return { ...hotel, rates: filteredRates };
       })
