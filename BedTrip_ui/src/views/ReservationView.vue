@@ -1278,9 +1278,10 @@ onBeforeUnmount(() => {
 }
 
 .budget-filter button {
-  width: auto;
-  padding: 0.45rem 1rem;
-  min-width: fit-content;
+  width: 110px;
+  height: auto;
+  padding: 0.80rem 0.75rem;
+  min-width: unset;
 }
 
 .budget-sep {

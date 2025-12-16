@@ -355,6 +355,20 @@ async function startPayment() {
       return;
     }
 
+    // Persist partner order + customer info for the success page,
+    // same keys as used in payment-success.js and the Systempay path.
+    try {
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.setItem(LAST_PARTNER_KEY, partnerOrderId);
+        sessionStorage.setItem(
+          LAST_CUSTOMER_KEY,
+          JSON.stringify({ civility, fullName, email, phone })
+        );
+      }
+    } catch (_) {
+      // best-effort only
+    }
+
     const body = {
       partner_order_id: partnerOrderId,
       productCode,
