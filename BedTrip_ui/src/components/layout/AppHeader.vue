@@ -26,6 +26,37 @@
     </div>
 
     <div class="header-actions">
+      <nav
+        class="header-links"
+        aria-label="Navigation produits"
+      >
+        <span
+          class="header-link header-link--active"
+          aria-current="page"
+        >
+          <i
+            class="pi pi-moon header-link__icon header-link__icon--active"
+            aria-hidden="true"
+          ></i>
+          <span class="header-link__label">BedTrip</span>
+        </span>
+
+        <a
+          class="header-link"
+          href="https://kotan-voyages.com"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <i
+            class="pi pi-send header-link__icon"
+            aria-hidden="true"
+          ></i>
+          <span class="header-link__label">
+            Acheter un billet (Gatefly)
+          </span>
+        </a>
+      </nav>
+
       <div class="language-switch">
         <span>Langue</span>
         <select>
@@ -42,6 +73,61 @@
 </script>
 
 <style scoped>
-/* This component will rely on global `.app-header`, `.brand`, `.eyebrow`, `.badge` styles
-   defined in a shared stylesheet for consistent look and feel. */
+.header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.header-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.header-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.8);
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.header-link--active {
+  border-color: rgba(34, 197, 94, 0.65);
+  background: rgba(22, 163, 74, 0.12);
+  color: #bbf7d0;
+}
+
+.header-link__icon {
+  font-size: 0.9rem;
+}
+
+.header-link__icon--active {
+  color: #4ade80;
+}
+
+.header-link__label {
+  font-weight: 500;
+}
+
+.language-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.language-switch select {
+  min-width: 140px;
+}
 </style>

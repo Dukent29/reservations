@@ -117,11 +117,49 @@ async function bookingForm(req, res, next) {
  */
 async function startBooking(req, res, next) {
   try {
-    const payload = bookingModel.buildBookingStartPayload(req.body || {});
+    const body = req.body || {};
+    const payload = bookingModel.buildBookingStartPayload(body);
+
+    // Enforce that payment has been successfully completed before calling ETG.
+    const partnerOrderId = payload.partner?.partner_order_id || null;
+    if (!partnerOrderId) {
+      throw httpError(400, "partner_order_id is required");
+    }
+
+    try {
+      const paymentCheck = await db.query(
+        `SELECT provider, status, amount, currency_code, external_reference
+         FROM payments
+         WHERE partner_order_id = $1
+         ORDER BY id DESC
+         LIMIT 1`,
+        [partnerOrderId]
+      );
+
+      const paymentRow = paymentCheck.rows[0] || null;
+
+      // If there is no payment row, or status is not "paid", block the booking.
+      // This protects against calling /api/booking/start without going through Floa/Systempay.
+      if (!paymentRow || paymentRow.status !== "paid") {
+        const status = paymentRow ? paymentRow.status : "none";
+        throw httpError(403, "payment_required_before_booking_finish", {
+          partner_order_id: partnerOrderId,
+          payment_status: status,
+          provider: paymentRow && paymentRow.provider,
+        });
+      }
+    } catch (err) {
+      // If httpError was thrown above, let the global error handler send it.
+      if (err && err.statusCode) {
+        throw err;
+      }
+      console.error("[DB] payment check failed before booking finish:", err.message);
+      throw httpError(500, "payment_check_failed");
+    }
+
     const start = await bookingModel.startBookingProcess(payload);
 
     try {
-      const partnerOrderId = payload.partner?.partner_order_id || null;
       const etgOrderId = start?.order_id || start?.id || null;
       const user = payload.user || {};
       const paymentType = payload.payment_type || {};

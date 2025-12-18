@@ -100,123 +100,249 @@
       </div>
 
       <section class="card booking-form" aria-live="polite">
-        <h3>Détails du voyageur</h3>
-        <!-- Skeleton of traveller form; wiring to payment will follow -->
+        <h3>Récapitulatif & paiement</h3>
         <form class="booking-details-form" @submit.prevent>
-          <div class="row">
-            <label>
-              Civilité
-              <select v-model="traveller.civility" required>
-                <option value="">Sélectionner…</option>
-                <option value="Mr">Mr</option>
-                <option value="Mrs">Mrs</option>
-                <option value="Ms">Ms</option>
-              </select>
-            </label>
-            <label>
-              Nom complet
-              <input
-                v-model="traveller.fullName"
-                type="text"
-                placeholder="John Doe"
-                required
-              />
-            </label>
-            <label>
-              Email
-              <input
-                v-model="traveller.email"
-                type="email"
-                placeholder="john@example.com"
-                required
-              />
-            </label>
-          </div>
-          <div class="row">
-            <label>
-              Numéro de téléphone
-              <input
-                v-model="traveller.phone"
-                type="tel"
-                placeholder="+33 6 00 00 00 00"
-                required
-              />
-            </label>
-            <label>
-              Adresse
-              <input
-                v-model="traveller.addressLine1"
-                type="text"
-                placeholder="1 Rue de la Paix"
-              />
-            </label>
-            <label>
-              Code postal / Ville
-              <input
-                v-model="traveller.zipCity"
-                type="text"
-                placeholder="33000 Bordeaux"
-              />
-            </label>
-          </div>
-          <div class="row">
-            <label>
-              Notes (optionnel)
-              <input
-                v-model="traveller.notes"
-                type="text"
-                placeholder="Arrivée tardive, VIP, …"
-              />
-            </label>
-          </div>
-          <div class="row">
-            <label>
-              Moyen de paiement
-              <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.25rem;">
-                <label style="font-size:.85rem;">
-                  <input
-                    v-model="paymentMethod"
-                    type="radio"
-                    value="floa"
-                  />
-                  Payer en plusieurs fois avec Floa
-                </label>
-                <label style="font-size:.85rem;">
-                  <input
-                    v-model="paymentMethod"
-                    type="radio"
-                    value="systempay"
-                  />
-                  Payer par carte avec Systempay
-                </label>
+          <div class="booking-payment-layout">
+            <div class="booking-payment-layout__left">
+              <div class="payment-summary-card">
+                <p class="muted" style="margin:0;">
+                  Vous êtes sur le point de payer le produit suivant :
+                </p>
+                <p class="payment-summary-card__amount">
+                  {{ primaryPriceText || 'Montant à définir' }}
+                </p>
+                <p class="muted payment-summary-card__meta">
+                  {{ hotelSummary?.name || 'Hôtel non spécifié' }}
+                  <span v-if="hotelSummary?.details">
+                    · {{ hotelSummary.details }}
+                  </span>
+                </p>
+                <p
+                  v-if="primaryStayCard"
+                  class="muted payment-summary-card__meta"
+                  style="margin-top:.25rem;"
+                >
+                  {{ primaryStayCard.title }}
+                  <span v-if="primaryStayCard.meal">
+                    · {{ primaryStayCard.meal }}
+                  </span>
+                  <span v-if="primaryStayCard.guests">
+                    · {{ primaryStayCard.guests }}
+                  </span>
+                </p>
+                <p class="payment-summary-card__hint">
+                  Vérifiez bien les dates, le nombre de voyageurs et le montant avant
+                  de poursuivre le paiement.
+                </p>
               </div>
-            </label>
-          </div>
-          <div
-            class="row"
-            v-if="paymentMethod === 'floa'"
-          >
-            <label>
-              Produit Floa
-              <select v-model="floaProduct">
-                <option value="">Choisir un produit…</option>
-                <option value="BC1XF">Paiement comptant (BC1XF)</option>
-                <option value="BC3XF">Paiement en 3x (BC3XF)</option>
-                <option value="BC4XF">Paiement en 4x (BC4XF)</option>
-              </select>
-            </label>
-          </div>
-          <div class="row">
-            <div style="display:flex;align-items:flex-end;gap:.5rem;">
-              <button
-                type="button"
-                class="primary"
-                @click="startPayment"
-                :disabled="payLoading"
-              >
-                {{ payLoading ? 'Traitement du paiement…' : 'Payer maintenant' }}
-              </button>
+              <div class="payment-and-client__column">
+                  <h4 class="payment-and-client__title">Méthode de paiement</h4>
+                  <div class="payment-methods">
+                    <button
+                      type="button"
+                      class="payment-method-card"
+                      :class="{
+                        'payment-method-card--active':
+                          paymentMethod === 'systempay',
+                      }"
+                      @click="paymentMethod = 'systempay'"
+                    >
+                      <div class="payment-method-card__header">
+                        <span class="payment-method-card__title">
+                          <i
+                            class="pi pi-credit-card payment-method-card__icon"
+                            aria-hidden="true"
+                          ></i>
+                          Paiement par carte (Systempay)
+                        </span>
+                        <span class="payment-method-card__right">
+                          <span class="payment-method-card__brands">
+                            <span
+                              class="card-brand card-brand--visa"
+                              aria-hidden="true"
+                            >
+                              VISA
+                            </span>
+                          </span>
+                          <span class="payment-method-card__radio"></span>
+                        </span>
+                      </div>
+                      <p class="muted payment-method-card__hint">
+                        Redirection immédiate vers Systempay pour effectuer un paiement
+                        par carte bancaire classique.
+                      </p>
+                    </button>
+
+                    <div
+                      class="payment-method-card"
+                      :class="{
+                        'payment-method-card--active':
+                          paymentMethod === 'floa',
+                      }"
+                    >
+                      <button
+                        type="button"
+                        class="floa-accordion__header"
+                        @click="selectFloa"
+                      >
+                        <span class="payment-method-card__title">
+                          <i
+                            class="pi pi-percentage payment-method-card__icon"
+                            aria-hidden="true"
+                          ></i>
+                          Paiement en plusieurs fois (Floa)
+                        </span>
+                        <span class="floa-accordion__header-right">
+                          <span class="payment-method-card__radio"></span>
+                        </span>
+                      </button>
+
+                      <div
+                        v-if="paymentMethod === 'floa'"
+                        class="floa-plans"
+                      >
+                        <p class="muted floa-plans__label">
+                          Choisissez un plan de paiement Floa
+                          <span class="required-asterisk">*</span> :
+                        </p>
+                        <div class="floa-plans__options">
+                          <button
+                            type="button"
+                            class="floa-plan"
+                            :class="{ 'floa-plan--active': floaProduct === 'BC3XF' }"
+                            @click="floaProduct = 'BC3XF'"
+                          >
+                            <span class="floa-plan__title">3x</span>
+                            <span class="floa-plan__meta">Paiement en 3 mensualités</span>
+                          </button>
+                          <button
+                            type="button"
+                            class="floa-plan"
+                            :class="{ 'floa-plan--active': floaProduct === 'BC4XF' }"
+                            @click="floaProduct = 'BC4XF'"
+                          >
+                            <span class="floa-plan__title">4x</span>
+                            <span class="floa-plan__meta">Paiement en 4 mensualités</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="payment-primary-action">
+                    <button
+                      type="button"
+                      class="primary"
+                      @click="handlePrimaryAction"
+                      :disabled="isPrimaryDisabled"
+                    >
+                      {{ primaryActionLabel }}
+                    </button>
+                  </div>
+                </div>
             </div>
+
+            <aside class="booking-payment-layout__right">
+              <div class="payment-and-client">
+
+                <div class="payment-and-client__column">
+                  <h4 class="payment-and-client__title">Informations client</h4>
+                  <div class="row">
+                    <label>
+                      Civilité
+                      <span class="required-asterisk">*</span>
+                      <select
+                        v-model="traveller.civility"
+                        required
+                      >
+                        <option value="">Sélectionner…</option>
+                        <option value="MR">M.</option>
+                        <option value="MRS">Mme</option>
+                        <option value="MS">Mlle</option>
+                      </select>
+                    </label>
+                    <label>
+                      Prénom
+                      <span class="required-asterisk">*</span>
+                      <input
+                        v-model="traveller.firstName"
+                        type="text"
+                        placeholder="John"
+                        required
+                      />
+                    </label>
+                    <label>
+                      Nom
+                      <span class="required-asterisk">*</span>
+                      <input
+                        v-model="traveller.lastName"
+                        type="text"
+                        placeholder="Doe"
+                        required
+                      />
+                    </label>
+                  </div>
+                  <div class="row">
+                    <label>
+                      Société (optionnel)
+                      <input
+                        v-model="traveller.company"
+                        type="text"
+                        placeholder="Nom de la société"
+                      />
+                    </label>
+                  </div>
+                  <div class="row">
+                    <label>
+                      Adresse
+                      <input
+                        v-model="traveller.addressLine1"
+                        type="text"
+                        placeholder="1 Rue de la Paix"
+                      />
+                    </label>
+                    <label>
+                      Code postal
+                      <input
+                        v-model="traveller.postalCode"
+                        type="text"
+                        placeholder="33000"
+                      />
+                    </label>
+                    <label>
+                      Ville
+                      <input
+                        v-model="traveller.city"
+                        type="text"
+                        placeholder="Bordeaux"
+                      />
+                    </label>
+                  </div>
+                  <div class="row">
+                    <label>
+                      Email
+                      <span class="required-asterisk">*</span>
+                      <input
+                        v-model="traveller.email"
+                        type="email"
+                        placeholder="john@example.com"
+                        required
+                      />
+                    </label>
+                    <label>
+                      Numéro de téléphone
+                      <span class="required-asterisk">*</span>
+                      <input
+                        v-model="traveller.phone"
+                        type="tel"
+                        placeholder="+33 6 00 00 00 00"
+                        required
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </aside>
           </div>
         </form>
       </section>
@@ -270,10 +396,14 @@ const rawFormText = ref('// en attente du formulaire de réservation…')
 
 const traveller = ref({
   civility: '',
-  fullName: '',
+  firstName: '',
+  lastName: '',
+  company: '',
   email: '',
   phone: '',
   addressLine1: '',
+  postalCode: '',
+  city: '',
   zipCity: '',
   notes: '',
 })
@@ -296,6 +426,32 @@ const token = computed(
 )
 
 const tokenDisplay = computed(() => token.value || '-')
+
+const primaryPriceText = computed(() => {
+  if (!stayCards.value.length) return ''
+  return stayCards.value[0]?.price || ''
+})
+
+const primaryStayCard = computed(() =>
+  stayCards.value.length ? stayCards.value[0] : null,
+)
+
+const isFloaPayment = computed(
+  () => paymentMethod.value === 'floa',
+)
+
+const primaryActionLabel = computed(() => {
+  if (payLoading.value) return 'Traitement du paiement…'
+  return isFloaPayment.value
+    ? 'Continuer avec Floa'
+    : 'Payer avec Systempay'
+})
+
+const isPrimaryDisabled = computed(
+  () =>
+    payLoading.value ||
+    (isFloaPayment.value && !floaProduct.value),
+)
 
 const formattedDebug = computed(() =>
   debugEntries.value
@@ -346,6 +502,10 @@ function loadPrebookSummaryFromSession() {
     storedPrebookPayload.value =
       storedPrebookPayload.value || null
   }
+}
+
+function selectFloa() {
+  paymentMethod.value = 'floa'
 }
 
 function formatPrice(amount, currency) {
@@ -573,85 +733,58 @@ async function fetchBookingForm() {
   }
 }
 
-async function startPayment() {
+function buildCustomerContext() {
   const partnerId = partnerOrderId.value?.trim()
   if (!partnerId) {
-    setStatus(
-      "ID de commande partenaire manquant. Chargez d'abord le formulaire.",
-      'error',
-    )
-    return
+    return {
+      ok: false,
+      error:
+        "ID de commande partenaire manquant. Chargez d'abord le formulaire.",
+    }
   }
 
   const method = paymentMethod.value
   if (!method) {
-    setStatus('Choisissez un moyen de paiement.', 'error')
-    return
+    return {
+      ok: false,
+      error: 'Choisissez un moyen de paiement.',
+    }
   }
 
-  const civility = traveller.value.civility || ''
-  if (!civility) {
-    setStatus(
-      'Veuillez sélectionner une civilité pour le voyageur.',
-      'error',
-    )
-    return
-  }
-
-  const fullName = (traveller.value.fullName || '').trim()
+  const civility = (traveller.value.civility || '').trim()
+  const firstName = (traveller.value.firstName || '').trim()
+  const lastName = (traveller.value.lastName || '').trim()
   const email = (traveller.value.email || '').trim()
   const phone = (traveller.value.phone || '').trim()
-  if (!fullName || !email || !phone) {
-    setStatus(
-      'Veuillez renseigner nom complet, email et téléphone avant le paiement.',
-      'error',
-    )
-    return
+  const company = (traveller.value.company || '').trim()
+
+  if (!civility || !firstName || !lastName || !email || !phone) {
+    return {
+      ok: false,
+      error:
+        'Veuillez renseigner civilité, prénom, nom, email et téléphone avant le paiement.',
+    }
   }
 
-  const [firstName, ...restName] = fullName.split(' ')
-  const lastName = restName.join(' ') || firstName || 'Traveller'
+  const fullName = `${firstName} ${lastName}`.trim()
 
   const addrLine1 = (traveller.value.addressLine1 || '').trim()
+  const postalCode = (traveller.value.postalCode || '').trim()
+  const cityInput = (traveller.value.city || '').trim()
   const zipCity = (traveller.value.zipCity || '').trim()
 
-  let zipCode = ''
-  let city = ''
-  if (zipCity) {
+  let zipCode = postalCode || ''
+  let city = cityInput || ''
+
+  if ((!zipCode || !city) && zipCity) {
     const parts = zipCity.split(' ')
-    zipCode = parts.shift() || ''
-    city = parts.join(' ') || ''
+    const guessedZip = parts.shift() || ''
+    const guessedCity = parts.join(' ') || ''
+    if (!zipCode) zipCode = guessedZip
+    if (!city) city = guessedCity
   }
 
   const countryCode = 'FR'
-
-  // Try to auto-extract ZIP/city for FR if user typed full address in one field
-  if (countryCode === 'FR') {
-    const fromAddr = addrLine1.match(/(\d{5})\s+(.+)/)
-    const fromZipCity = zipCity.match(/(\d{5})\s+(.+)/)
-    if (fromZipCity) {
-      zipCode = fromZipCity[1]
-      city = fromZipCity[2]
-    } else if (fromAddr) {
-      zipCode = fromAddr[1]
-      city = fromAddr[2]
-    }
-
-    if (!/^\d{5}$/.test(zipCode || '')) {
-      setStatus(
-        'Veuillez saisir un code postal français à 5 chiffres valide (ex : 76710).',
-        'error',
-      )
-      return
-    }
-    if (!city) {
-      setStatus(
-        'Veuillez saisir une ville (ex : Bordeaux).',
-        'error',
-      )
-      return
-    }
-  }
 
   const customer = {
     civility,
@@ -660,23 +793,54 @@ async function startPayment() {
     email,
     mobilePhoneNumber: phone,
     homeAddress: {
-      line1: addrLine1,
+      line1: company || addrLine1,
       zipCode: zipCode || '',
       city: city || '',
       countryCode,
     },
   }
 
+  return {
+    ok: true,
+    partnerId,
+    method,
+    civility,
+    fullName,
+    email,
+    phone,
+    customer,
+  }
+}
+
+async function startPayment(forcedMethod) {
+  const context = buildCustomerContext()
+  if (!context.ok) {
+    setStatus(context.error, 'error')
+    return
+  }
+
+  const {
+    partnerId,
+    method: currentMethod,
+    civility,
+    fullName,
+    email,
+    phone,
+    customer,
+  } = context
+
+  const method = forcedMethod || currentMethod
+
   // Systempay path: redirect to Systempay test page
   if (method === 'systempay') {
     try {
-      if (typeof window !== 'undefined') {
-        const ss = window.sessionStorage
-        if (ss) {
-          ss.setItem('booking:lastPartnerOrderId', partnerId)
-          ss.setItem(
-            'booking:lastCustomer',
-            JSON.stringify({ civility, fullName, email, phone }),
+          if (typeof window !== 'undefined') {
+            const ss = window.sessionStorage
+            if (ss) {
+              ss.setItem('booking:lastPartnerOrderId', partnerId)
+              ss.setItem(
+                'booking:lastCustomer',
+                JSON.stringify({ civility, fullName, email, phone }),
           )
         }
         pushDebug('SYSTEMPAY redirect', {
@@ -872,6 +1036,14 @@ async function startPayment() {
   }
 }
 
+function handlePrimaryAction() {
+  if (isFloaPayment.value) {
+    startPayment()
+  } else {
+    startPayment('systempay')
+  }
+}
+
 onMounted(() => {
   loadPrebookSummaryFromSession()
   if (token.value) {
@@ -890,6 +1062,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  margin-top: 2rem;
 }
 
 .booking-panel {
@@ -949,5 +1122,235 @@ onMounted(() => {
 .booking-raw__pre {
   margin: 0;
   font-size: 0.75rem;
+}
+
+.booking-payment-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.booking-payment-layout__right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.payment-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.payment-method-card {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.9);
+  padding: 0.7rem 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.payment-method-card--active {
+  border-color: rgba(59, 130, 246, 0.9);
+  box-shadow: 0 16px 40px -24px rgba(15, 23, 42, 0.9);
+}
+
+.payment-method-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.payment-method-card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.payment-method-card__right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.payment-method-card__brands {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.card-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.card-brand--visa {
+  background: #1a1f71;
+  color: #f9fafb;
+}
+
+.payment-method-card__icon {
+  font-size: 1rem;
+}
+
+.payment-method-card__radio {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid rgba(148, 163, 184, 0.6);
+  box-shadow: inset 0 0 0 2px rgba(15, 23, 42, 1);
+}
+
+.payment-method-card--active .payment-method-card__radio {
+  border-color: #60a5fa;
+  background: #3b82f6;
+}
+
+.payment-method-card__hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+}
+
+.payment-summary-card {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  background: radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.1), transparent 55%),
+    radial-gradient(circle at 100% 0, rgba(59, 130, 246, 0.12), transparent 55%),
+    rgba(15, 23, 42, 0.95);
+  padding: 0.9rem 1rem;
+}
+
+.payment-summary-card__amount {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.payment-summary-card__meta {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.payment-summary-card__hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.7rem;
+  color: #9ca3af;
+}
+
+.payment-primary-action {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.payment-and-client {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.payment-and-client__column {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.payment-and-client__title {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.required-asterisk {
+  color: #f97373;
+  margin-left: 0.15rem;
+}
+
+.floa-accordion {
+  margin-top: 0.35rem;
+  overflow: hidden;
+}
+
+.floa-accordion__header {
+  width: 100%;
+  padding: 0.55rem 0.2rem 0.25rem;
+  background: transparent;
+  border: 0;
+  color: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.floa-accordion__icon {
+  font-size: 0.85rem;
+  transition: transform 0.2s ease;
+}
+
+.floa-accordion__icon.is-open {
+  transform: rotate(180deg);
+}
+
+.floa-accordion__header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.floa-plans {
+  padding: 0 0.75rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.floa-plans__label {
+  font-size: 0.75rem;
+}
+
+.floa-plans__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.floa-plan {
+  flex: 1 1 120px;
+  min-width: 0;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.9);
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.floa-plan--active {
+  border-color: rgba(52, 211, 153, 0.9);
+  box-shadow: 0 14px 30px -18px rgba(16, 185, 129, 0.9);
+}
+
+.floa-plan__title {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.floa-plan__meta {
+  font-size: 0.75rem;
+  color: #9ca3af;
 }
 </style>
