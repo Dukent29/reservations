@@ -19,7 +19,12 @@ body {
   line-height: 1.5;
   min-height: 100vh;
   position: relative;
-  background: #010c1f;
+  background: linear-gradient(
+  135deg,
+  #010C1F 0%,
+  #0B1B3A 50%,
+  #122C55 100%
+);
 }
 
 .app-shell {
@@ -27,7 +32,14 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: clamp(1rem, 2vw, 2rem);
+  padding: clamp(1rem, 2vw, 2rem) 0 0;
+}
+
+.app-header,
+.workspace {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
 }
 
 .app-header {

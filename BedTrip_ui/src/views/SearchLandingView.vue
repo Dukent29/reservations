@@ -12,10 +12,7 @@
 <template>
   <section class="hero" aria-label="Destination highlight">
     <div class="hero__bg-stage">
-      <transition
-        name="hero-bg-fade"
-        mode="out-in"
-      >
+      <transition name="hero-bg-fade">
         <div
           v-if="currentHeroSlide"
           :key="currentHeroSlide"
@@ -55,7 +52,10 @@
         <div class="search-shell full">
           <section class="card searchbar">
             <form class="search-grid" @submit.prevent="goToResults">
-              <div class="field field--suggestions">
+              <div
+                ref="suggestionRootRef"
+                class="field field--suggestions"
+              >
                 <label for="destination">Destination</label>
                 <input
                   id="destination"
@@ -174,6 +174,126 @@
             </form>
           </section>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- About BedTrip -->
+  <section class="landing-section landing-section--about">
+    <h2 class="landing-section__title">Le principe de BedTrip</h2>
+    <p class="landing-section__subtitle muted">
+      BedTrip est une console hôtelière B2B pensée pour les agences et partenaires :
+      un seul outil pour chercher, comparer et réserver les meilleurs séjours pour vos clients.
+    </p>
+    <div class="landing-section__grid">
+      <article class="info-card">
+        <h3>Un moteur de recherche conçu pour les pros</h3>
+        <p>
+          Des filtres précis, des tarifs négociés et des disponibilités mises à jour en temps réel,
+          directement connectés à nos fournisseurs.
+        </p>
+      </article>
+      <article class="info-card">
+        <h3>Une interface claire pour aller vite</h3>
+        <p>
+          Une seule page pour visualiser les résultats, les détails d’hôtel, les conditions et les
+          options de chambre, sans perdre le fil de votre réservation.
+        </p>
+      </article>
+      <article class="info-card">
+        <h3>Un support pensé pour les équipes</h3>
+        <p>
+          Des parcours alignés sur vos besoins opérationnels, avec un historique de commande clair
+          et des informations structurées pour vos équipes back-office.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <!-- Highlighted hotels / promotions -->
+  <section class="landing-section landing-section--highlights">
+    <h2 class="landing-section__title">Sélections & offres à ne pas manquer</h2>
+    <p class="landing-section__subtitle muted">
+      Inspirez-vous de quelques idées de séjours : passez la souris sur une carte pour en savoir plus.
+    </p>
+
+    <div class="landing-section__grid landing-section__grid--cards">
+      <article class="highlight-card">
+        <div
+          class="highlight-card__image"
+          style="background-image:url('/images/pexels-apasaric-1285625.jpg');"
+          aria-hidden="true"
+        ></div>
+        <div class="highlight-card__overlay">
+          <h3>Escapades urbaines</h3>
+          <p>
+            Hôtels idéalement situés au cœur des grandes villes européennes, avec des tarifs
+            flexibles pour les voyages d’affaires de dernière minute.
+          </p>
+        </div>
+      </article>
+
+      <article class="highlight-card">
+        <div
+          class="highlight-card__image"
+          style="background-image:url('/images/pexels-minan1398-774042.jpg');"
+          aria-hidden="true"
+        ></div>
+        <div class="highlight-card__overlay">
+          <h3>Vue mer & séjours loisirs</h3>
+          <p>
+            Une sélection de resorts et d’hôtels balnéaires adaptés aux familles, avec
+            des promotions saisonnières sur les séjours longs.
+          </p>
+        </div>
+      </article>
+
+      <article class="highlight-card">
+        <div
+          class="highlight-card__image"
+          style="background-image:url('/images/pexels-thorsten-technoman-109353-338504.jpg');"
+          aria-hidden="true"
+        ></div>
+        <div class="highlight-card__overlay">
+          <h3>Adresses confidentielles</h3>
+          <p>
+            Petits boutique-hôtels et établissements de charme, parfaits pour des séjours sur mesure
+            et des expériences uniques pour vos clients.
+          </p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Payment advantages -->
+  <section class="landing-section landing-section--payments">
+    <h2 class="landing-section__title">Des paiements simples et sécurisés</h2>
+    <p class="landing-section__subtitle muted">
+      BedTrip s’appuie sur un partenaire de paiement sécurisé pour traiter chaque transaction
+      dans un cadre fiable et transparent.
+    </p>
+
+    <div class="landing-section__columns">
+      <div class="payment-point">
+        <h3>Paiements sécurisés</h3>
+        <p>
+          Toutes les transactions passent par une plateforme certifiée,
+          avec chiffrement bout‑à‑bout et suivi des statuts de paiement en temps réel.
+        </p>
+      </div>
+      <div class="payment-point">
+        <h3>Conditions claires</h3>
+        <p>
+          Dépôt, prépaiement ou paiement sur place : le type de paiement est affiché clairement
+          pour chaque offre, avec les conditions d’annulation associées.
+        </p>
+      </div>
+      <div class="payment-point">
+        <h3>Adapté aux équipes comptables</h3>
+        <p>
+          Références partenaires et fournisseurs, montants et devises sont structurés pour faciliter
+          votre rapprochement comptable et la gestion de vos dossiers.
+        </p>
       </div>
     </div>
   </section>
@@ -640,6 +760,7 @@ function applyDateSelection() {
 
 // Basic search parameters for landing.
 const destination = ref('')
+const suggestionRootRef = ref(null)
 
 // Suggestions state
 const regionSuggestions = ref([])
@@ -720,6 +841,12 @@ async function loadSuggestions(term) {
   }
 }
 
+function closeSuggestions() {
+  regionSuggestions.value = []
+  hotelSuggestions.value = []
+  suggestionStatus.value = ''
+}
+
 function scheduleSuggestions(value) {
   if (suggestionTimer) clearTimeout(suggestionTimer)
   suggestionTimer = setTimeout(() => loadSuggestions(value), 300)
@@ -740,8 +867,7 @@ function selectRegion(region) {
 function selectHotelSuggestion(hotel) {
   const label = hotel.name || hotel.hid || ''
   destination.value = String(label)
-  regionSuggestions.value = []
-  hotelSuggestions.value = []
+  closeSuggestions()
 }
 
 const hasSuggestions = computed(
@@ -749,6 +875,13 @@ const hasSuggestions = computed(
     regionSuggestions.value.length > 0 ||
     hotelSuggestions.value.length > 0,
 )
+
+function handleClickOutside(event) {
+  const root = suggestionRootRef.value
+  if (!root) return
+  if (root.contains(event.target)) return
+  closeSuggestions()
+}
 
 function goToResults() {
   if (!destination.value || !checkin.value || !checkout.value) return
@@ -781,10 +914,16 @@ watch(
 
 onMounted(() => {
   startHeroSlideshow()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('click', handleClickOutside)
+  }
 })
 
 onBeforeUnmount(() => {
   stopHeroSlideshow()
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('click', handleClickOutside)
+  }
 })
 </script>
 
@@ -1041,11 +1180,143 @@ onBeforeUnmount(() => {
 
 .hero-bg-fade-enter-active,
 .hero-bg-fade-leave-active {
-  transition: opacity 1.2s ease;
+  transition: opacity 0.7s ease;
 }
 
 .hero-bg-fade-enter-from,
 .hero-bg-fade-leave-to {
   opacity: 0;
+}
+
+.landing-section {
+  margin-top: 2.5rem;
+  padding: 1.5rem 0 0.5rem;
+}
+
+.landing-section__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.4rem;
+}
+
+.landing-section__subtitle {
+  margin: 0 0 1.25rem;
+  max-width: 52rem;
+}
+
+.landing-section__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.info-card {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  padding: 0.9rem 1rem;
+  background: rgba(15, 23, 42, 0.9);
+  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.9);
+}
+
+.info-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.98rem;
+}
+
+.info-card p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+}
+
+.landing-section__grid--cards {
+  margin-top: 1rem;
+}
+
+.highlight-card {
+  position: relative;
+  border-radius: 1.1rem;
+  overflow: hidden;
+  min-height: 180px;
+  cursor: pointer;
+  box-shadow: 0 22px 50px -24px rgba(15, 23, 42, 0.95);
+}
+
+.highlight-card__image {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: brightness(0.85) saturate(110%);
+  transition: transform 0.4s ease, filter 0.4s ease;
+}
+
+.highlight-card__overlay {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: linear-gradient(
+    to top,
+    rgba(15, 23, 42, 0.85),
+    rgba(15, 23, 42, 0.1)
+  );
+  color: #f9fafb;
+  opacity: 0.9;
+  transition: background 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
+}
+
+.highlight-card__overlay h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.highlight-card__overlay p {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.highlight-card:hover .highlight-card__image {
+  transform: scale(1.05);
+  filter: brightness(1) saturate(120%);
+}
+
+.highlight-card:hover .highlight-card__overlay {
+  opacity: 1;
+  transform: translateY(0px);
+}
+
+.landing-section--payments {
+  margin-bottom: 2.5rem;
+}
+
+.landing-section__columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.payment-point {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  background: linear-gradient(
+    145deg,
+    rgba(22, 163, 74, 0.12),
+    rgba(15, 23, 42, 0.95)
+  );
+  padding: 0.9rem 1rem;
+}
+
+.payment-point h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.98rem;
+}
+
+.payment-point p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #d1fae5;
 }
 </style>

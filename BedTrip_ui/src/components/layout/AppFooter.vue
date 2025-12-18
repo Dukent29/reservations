@@ -11,7 +11,7 @@
 
 <template>
   <footer class="app-footer">
-    <small class="muted">
+    <small>
       Environnement de test · BedTrip UI
     </small>
   </footer>
@@ -22,5 +22,10 @@
 </script>
 
 <style scoped>
-/* Minimal footer styling; most layout will be inherited from global styles. */
+.app-footer {
+  background: #000814;
+  color: #f9fafb;
+  padding: 0.75rem 1rem;
+  border-radius: 0;
+}
 </style>

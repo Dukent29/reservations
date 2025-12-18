@@ -112,11 +112,19 @@
           </div>
           <button
             type="button"
-            class="secondary mini"
+            class="secondary mini add-guest-btn"
             style="margin-top:0.75rem;"
             @click="addGuest"
           >
-            Ajouter un voyageur
+            <i
+              class="pi pi-plus"
+              aria-hidden="true"
+            ></i>
+            <i
+              class="pi pi-users"
+              aria-hidden="true"
+            ></i>
+            <span>Ajouter un voyageur</span>
           </button>
 
           <h3 style="margin-top:1.5rem;">
@@ -603,5 +611,19 @@ onMounted(() => {
 .booking-raw__pre {
   margin: 0;
   font-size: 0.75rem;
+}
+
+.payment-success-view {
+  margin-top: 2rem;
+}
+
+.add-guest-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.add-guest-btn i {
+  font-size: 0.85rem;
 }
 </style>
