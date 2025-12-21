@@ -6,8 +6,10 @@ const axios = require("axios");
 const { systempayConfig } = require("../config/systempay");
 const db = require("../utils/db");
 const { parseAmount, savePayment } = require("../utils/repo");
+const { validate } = require("../src/middlewares/validateRequest");
+const { paymentSchemas } = require("../src/middlewares/requestSchemas");
 
-router.post("/payments/systempay/create-order", async (req, res) => {
+router.post("/payments/systempay/create-order", validate(paymentSchemas.systempayCreateOrder), async (req, res) => {
   try {
     const { partner_order_id, customerEmail } = req.body || {};
 

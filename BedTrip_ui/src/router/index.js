@@ -3,6 +3,11 @@
 // defines the new flow: search landing → results page.
 
 import { createRouter, createWebHistory } from 'vue-router'
+import {
+  startPageLoading,
+  stopPageLoading,
+  failPageLoading,
+} from '../services/pageLoader'
 
 // Views
 import BookingView from '../views/BookingView.vue'
@@ -76,6 +81,19 @@ const router = createRouter({
     // Always scroll to top on route change for clarity.
     return { top: 0 }
   },
+})
+
+router.beforeEach((to, from, next) => {
+  startPageLoading()
+  next()
+})
+
+router.afterEach(() => {
+  stopPageLoading()
+})
+
+router.onError(() => {
+  failPageLoading()
 })
 
 export default router

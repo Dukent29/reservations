@@ -10,6 +10,7 @@ const path = require("path");
 
 const apiRoutes = require("../routes/api");
 const errorHandler = require("./middlewares/errorHandler");
+const { enforceObjectBody } = require("./middlewares/validateRequest");
 
 const app = express();
 
@@ -107,6 +108,7 @@ app.get("/", (_req, res) => {
   res.sendFile(path.join(__dirname, "..", "front", "reservation.html"));
 });
 
+app.use("/api", enforceObjectBody);
 app.use("/api", apiRoutes);
 app.use(errorHandler);
 

@@ -65,12 +65,13 @@
 
       <div class="filter-group">
         <p class="filter-title">Régime</p>
-        <div class="chip-toggle-group chip-toggle-group--wrap">
+        <div class="chip-toggle-group chip-toggle-group--wrap chip-toggle-group--compact">
           <label
             v-for="meal in MEAL_OPTIONS"
             :key="meal.value"
             class="chip-toggle chip-toggle--meal"
             :class="{ 'chip-toggle--active': filters.meals.includes(meal.value) }"
+            :title="meal.label"
           >
             <input
               type="checkbox"
@@ -79,7 +80,7 @@
               v-model="filters.meals"
             />
             <span class="chip-toggle__code">{{ meal.code }}</span>
-            <span class="chip-toggle__label">{{ meal.label }}</span>
+            <span class="sr-only">{{ meal.label }}</span>
           </label>
         </div>
       </div>
@@ -122,7 +123,9 @@
       </div>
     </section>
 
-    <div class="results-grid">
+    <ResultsSkeleton v-if="loading" />
+
+    <div class="results-grid" v-else>
       <div class="card results-card">
         <h3>
           Résultats de recherche
@@ -134,10 +137,7 @@
           </span>
         </h3>
 
-        <div v-if="loading" class="muted" style="font-size:.8rem;">
-          Recherche en cours…
-        </div>
-        <div v-else-if="error" style="color:#dc2626;font-size:.8rem;">
+        <div v-if="error" style="color:#dc2626;font-size:.8rem;">
           {{ error }}
         </div>
         <div v-else>
@@ -596,6 +596,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ResultsSkeleton from '../components/ResultsSkeleton.vue'
 import { API_BASE, safeJsonFetch } from '../services/httpClient.js'
 
 const route = useRoute()
@@ -2302,6 +2303,13 @@ onBeforeUnmount(() => {
 
 .chip-toggle-group--wrap {
   flex-wrap: wrap;
+}
+
+.chip-toggle-group--compact {
+  justify-content: center;
+  max-width: 360px;
+  margin: 0 auto;
+  gap: 0.35rem;
 }
 
 .budget-filter {
