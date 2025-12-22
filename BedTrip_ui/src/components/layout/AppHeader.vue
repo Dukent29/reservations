@@ -30,6 +30,19 @@
         class="header-links"
         aria-label="Navigation produits"
       >
+        <RouterLink
+          class="header-link"
+          to="/"
+          aria-label="Retour accueil"
+          title="Retour accueil"
+        >
+          <i
+            class="pi pi-home header-link__icon"
+            aria-hidden="true"
+          ></i>
+          <span class="header-link__label">Accueil</span>
+        </RouterLink>
+
         <span
           class="header-link header-link--active"
           aria-current="page"
