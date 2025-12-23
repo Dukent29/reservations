@@ -17,6 +17,8 @@ import PaymentSuccessView from '../views/PaymentSuccessView.vue'
 import PaymentErrorView from '../views/PaymentErrorView.vue'
 import SystempayTestView from '../views/SystempayTestView.vue'
 import SearchLandingView from '../views/SearchLandingView.vue'
+import NotFoundView from '../views/NotFoundView.vue'
+import ServerDownView from '../views/ServerDownView.vue'
 
 const routes = [
   {
@@ -71,6 +73,16 @@ const routes = [
     path: '/systempay-test',
     name: 'systempay-test',
     component: SystempayTestView,
+  },
+  {
+    path: '/server-down',
+    name: 'server-down',
+    component: ServerDownView,
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: NotFoundView,
   },
 ]
 

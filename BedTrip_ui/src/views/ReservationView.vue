@@ -852,6 +852,9 @@ function hotelKey(hotel) {
     hotel.hid ||
     hotel.hotel_id ||
     hotel.hotelId ||
+    hotel.rg_ext?.hid ||
+    hotel.rg_ext?.id ||
+    hotel.rg_ext?.hotel_id ||
     hotel.name
   )
 }
@@ -916,6 +919,9 @@ function buildHotelImageIdentity(hotel) {
     hotel.hotel_id,
     hotel.hotelId,
     hotel.id,
+    hotel.rg_ext?.hid,
+    hotel.rg_ext?.id,
+    hotel.rg_ext?.hotel_id,
   ]
   let hid = null
   for (const candidate of hidCandidates) {
@@ -930,6 +936,9 @@ function buildHotelImageIdentity(hotel) {
     hotel.hotel_id,
     hotel.hotelId,
     hotel.hid,
+    hotel.rg_ext?.id,
+    hotel.rg_ext?.hid,
+    hotel.rg_ext?.hotel_id,
   )
   const cacheKey =
     hid !== null
@@ -1698,7 +1707,13 @@ async function prebookRate(rate, index) {
 
 function selectHotel(hotel) {
   const rawId =
-    hotel?.id || hotel?.hotel_id || hotel?.hid || hotel?.hotelId
+    hotel?.id ||
+    hotel?.hotel_id ||
+    hotel?.hotelId ||
+    hotel?.hid ||
+    hotel?.rg_ext?.id ||
+    hotel?.rg_ext?.hid ||
+    hotel?.rg_ext?.hotel_id
   if (!rawId) return
   const hid = String(rawId)
   selectedHotelForRequest.value = hotel

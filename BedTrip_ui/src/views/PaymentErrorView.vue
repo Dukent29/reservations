@@ -121,7 +121,7 @@ function retryPayment() {
 
 .error-message {
   font-size: 1.05rem;
-  color: #0f172a;
+  color: #b91c1c;
   margin: 0;
 }
 
