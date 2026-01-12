@@ -13,6 +13,7 @@ import {
 import BookingView from '../views/BookingView.vue'
 import BookingFinishedView from '../views/BookingFinishedView.vue'
 import ReservationView from '../views/ReservationView.vue'
+import HotelDetailView from '../views/HotelDetailView.vue'
 import PaymentSuccessView from '../views/PaymentSuccessView.vue'
 import PaymentErrorView from '../views/PaymentErrorView.vue'
 import SystempayTestView from '../views/SystempayTestView.vue'
@@ -31,6 +32,12 @@ const routes = [
     path: '/results',
     name: 'search-results',
     component: ReservationView,
+  },
+  {
+    // Hotel details and room selection
+    path: '/results/:hid',
+    name: 'hotel-detail',
+    component: HotelDetailView,
   },
   {
     // Booking form (formerly booking.html)

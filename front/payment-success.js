@@ -2,7 +2,14 @@ const $ = (selector) => document.querySelector(selector);
 
 const API_BASE = (() => {
   try {
-    return window.location.port === "3000" ? "" : "http://localhost:3000";
+    const { hostname, port, origin } = window.location;
+    const isLocalhost =
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1";
+    if (port === "3000") return "";
+    if (isLocalhost) return "http://localhost:3000";
+    return origin;
   } catch (_) {
     return "";
   }

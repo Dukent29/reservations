@@ -27,5 +27,7 @@
   color: #f9fafb;
   padding: 0.75rem 1rem;
   border-radius: 0;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
 }
 </style>
