@@ -787,6 +787,7 @@ async function fetchAutocompleteData(term, language = 'fr') {
   try {
     const { statusCode, data } = await safeJsonFetch(endpoint, {
       method: 'GET',
+      skipServerDownRedirect: true,
     })
     pushDebug('RESPONSE /api/regions/search', {
       endpoint,

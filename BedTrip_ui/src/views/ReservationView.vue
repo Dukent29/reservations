@@ -125,7 +125,7 @@
 
     <ResultsSkeleton v-if="loading" />
 
-    <div class="results-grid" v-else>
+    <div class="results-list" v-else>
       <div class="card results-card">
         <h3>
           Résultats de recherche
@@ -299,297 +299,7 @@
         </div>
       </div>
 
-      <div class="card details-card">
-        <h3>
-          <span> Détails de l’hôtel &amp; tarifs </span>
-        </h3>
-        <div v-if="hotelDetailsLoading" class="muted" style="font-size:.8rem;">
-          Chargement des détails de l’hôtel…
-        </div>
-        <div v-else-if="hotelDetailsError" style="color:#dc2626;font-size:.8rem;">
-          {{ hotelDetailsError }}
-        </div>
-        <div v-else-if="!selectedHotelDetails">
-          <div style="font-size:.7rem;color:#64748b;">
-            Aucun hôtel sélectionné.
-          </div>
-        </div>
-        <div v-else class="hotel-detail">
-          <div class="hotel-detail__summary">
-            <div class="hotel-detail__header">
-              <div class="hotel-detail__title">
-                {{ hotelDisplayName(selectedHotelDetails) }}
-              </div>
-              <div class="hotel-detail__meta">
-                <span v-if="deriveHotelStars(selectedHotelDetails)">
-                  {{ deriveHotelStars(selectedHotelDetails) }}★
-                </span>
-              </div>
-            </div>
-            <div class="hotel-detail__meta">
-              <span v-if="selectedHotelDetails.address">
-                {{ selectedHotelDetails.address }}
-              </span>
-            </div>
-          </div>
-
-          <div class="hotel-detail__gallery">
-            <div
-              v-if="detailImagesLoading"
-              class="hotel-thumb__placeholder"
-            >
-              Chargement des photos de l’hôtel…
-            </div>
-            <div
-              v-else-if="detailImagesError"
-              class="hotel-thumb__placeholder"
-            >
-              {{ detailImagesError }}
-            </div>
-            <div
-              v-else-if="!detailImages.length"
-              class="hotel-thumb__placeholder"
-            >
-              Aucune photo disponible pour cet hôtel.
-            </div>
-            <div
-              v-else
-              class="hotel-gallery"
-            >
-              <div
-                v-for="(url, idx) in detailImages"
-                :key="url + '-' + idx"
-                class="hotel-gallery__item"
-              >
-                <img
-                  :src="url"
-                  :alt="`${hotelDisplayName(selectedHotelDetails) } · photo ${idx + 1}`"
-                  loading="lazy"
-                  decoding="async"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="hotel-detail__info-grid">
-            <div
-              v-if="hotelDescriptionSnippet"
-              class="hotel-detail__info-box"
-            >
-              <h4>Présentation</h4>
-              <p class="hotel-detail__description">
-                {{ hotelDescriptionSnippet }}
-              </p>
-            </div>
-
-            <div
-              v-if="hotelStayInfo.length"
-              class="hotel-detail__info-box"
-            >
-              <h4>Arrivée et départ</h4>
-              <ul class="hotel-detail__info-list">
-                <li
-                  v-for="item in hotelStayInfo"
-                  :key="item"
-                >
-                  {{ item }}
-                </li>
-              </ul>
-            </div>
-
-            <div
-              v-if="hotelContactInfo.length"
-              class="hotel-detail__info-box"
-            >
-              <h4>Contact & localisation</h4>
-              <ul class="hotel-detail__info-list">
-                <li
-                  v-for="item in hotelContactInfo"
-                  :key="item"
-                >
-                  {{ item }}
-                </li>
-              </ul>
-            </div>
-
-            <div
-              v-if="hotelAmenityList.length"
-              class="hotel-detail__info-box"
-            >
-              <h4>Équipements et services</h4>
-              <ul class="hotel-detail__chip-list">
-                <li
-                  v-for="item in hotelAmenityList"
-                  :key="item.label"
-                  class="hotel-detail__chip"
-                >
-                  <i
-                    v-if="item.icon"
-                    :class="['hotel-detail__chip-icon', item.icon]"
-                    aria-hidden="true"
-                  ></i>
-                  <span>{{ item.label }}</span>
-                </li>
-              </ul>
-            </div>
-
-            <div
-              v-if="hotelPaymentMethods.length"
-              class="hotel-detail__info-box"
-            >
-              <h4>Moyens de paiement</h4>
-              <ul class="hotel-detail__chip-list">
-                <li
-                  v-for="method in hotelPaymentMethods"
-                  :key="method.label"
-                  class="hotel-detail__chip"
-                >
-                  <i
-                    v-if="method.icon"
-                    :class="['hotel-detail__chip-icon', method.icon]"
-                    aria-hidden="true"
-                  ></i>
-                  <span>{{ method.label }}</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="hotel-detail__rooms">
-            <div
-              v-if="hotelHighlights.length"
-              class="hotel-detail__highlights"
-            >
-              <h4>Équipements prisés</h4>
-              <ul class="hotel-detail__chip-list">
-                <li
-                  v-for="item in hotelHighlights"
-                  :key="item"
-                  class="hotel-detail__chip"
-                >
-                  <i
-                    class="pi pi-check-circle hotel-detail__chip-icon"
-                    aria-hidden="true"
-                  ></i>
-                  <span>{{ item }}</span>
-                </li>
-              </ul>
-            </div>
-
-            <div
-              v-if="nearbyPoints.length"
-              class="hotel-detail__nearby"
-            >
-              <h4>Que faire à proximité</h4>
-              <ul class="hotel-detail__nearby-list">
-                <li
-                  v-for="place in nearbyPoints"
-                  :key="place.label + '-' + place.distanceText"
-                >
-                  <i
-                    class="pi pi-map-marker hotel-detail__fact-icon"
-                    aria-hidden="true"
-                  ></i>
-                  <span class="nearby-label">{{ place.label }}</span>
-                  <span class="nearby-sep">•</span>
-                  <span class="nearby-distance">{{ place.distanceText }}</span>
-                </li>
-              </ul>
-            </div>
-
-            <h4>Chambres et tarifs</h4>
-            <div
-              v-if="!limitedRates.length"
-              class="muted"
-              style="font-size:.75rem;"
-            >
-              Aucune offre pour cette recherche.
-            </div>
-            <ul v-else class="room-list">
-              <li
-                v-for="(rate, idx) in limitedRates"
-                :key="idx"
-                class="room-card"
-              >
-                <div class="room-card__header">
-                  <div class="room-card__title">
-                    {{ rate.room_name || rate.room_data_trans?.main_name || 'Chambre' }}
-                  </div>
-                  <div class="room-card__price">
-                    {{
-                      formatCurrency(
-                        rate.payment_options?.payment_types?.[0]?.show_amount ??
-                          rate.payment_options?.payment_types?.[0]?.amount,
-                        rate.payment_options?.payment_types?.[0]?.show_currency_code ??
-                          rate.payment_options?.payment_types?.[0]?.currency_code ??
-                          'EUR',
-                      )
-                    }}
-                  </div>
-                </div>
-                <div class="room-card__chips">
-                  <span
-                    v-for="chip in rateChipLabels(rate)"
-                    :key="chip"
-                    class="chip"
-                  >
-                    {{ chip }}
-                  </span>
-                </div>
-                <div class="room-card__details">
-                  <div>
-                    {{ rateCancellationText(rate) }}
-                  </div>
-                  <div v-if="rateCapacityDetail(rate)">
-                    {{ rateCapacityDetail(rate) }}
-                  </div>
-                  <div v-if="rateTaxesText(rate)">
-                    {{ rateTaxesText(rate) }}
-                  </div>
-                  <div v-if="rateBeddingText(rate)">
-                    {{ rateBeddingText(rate) }}
-                  </div>
-                  <div v-if="rateBathroomText(rate)">
-                    {{ rateBathroomText(rate) }}
-                  </div>
-                </div>
-                <div class="room-card__footer">
-                  <button
-                    class="primary mini"
-                    type="button"
-                    @click="prebookRate(rate, idx)"
-                    :disabled="prebookLoadingIndex === idx"
-                  >
-                    {{
-                      prebookLoadingIndex === idx
-                        ? 'Pré-réservation…'
-                        : 'Réserver'
-                    }}
-                  </button>
-                </div>
-              </li>
-            </ul>
-            <p v-if="prebookStatus" class="muted" style="font-size:.75rem;margin-top:.5rem;">
-              {{ prebookStatus }}
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
-
-    <section class="card" style="margin-top: 1rem;">
-      <h3 style="font-size:.9rem;margin-top:0;">Debug API search</h3>
-      <p class="muted" style="font-size:.75rem;margin-bottom:.5rem;">
-        Historique des appels à /api/search/serp et /api/search/hp (dernier en haut).
-      </p>
-      <pre
-        v-if="debugEntries.length"
-        style="max-height:220px;overflow:auto;font-size:.7rem;white-space:pre-wrap;background:rgba(15,23,42,.7);padding:.5rem;border-radius:.5rem;border:1px solid rgba(148,163,184,.4);"
-      >{{ formattedDebug }}</pre>
-      <p v-else class="muted" style="font-size:.75rem;">
-        Aucun appel effectué pour le moment.
-      </p>
-    </section>
   </section>
 </template>
 
@@ -1716,8 +1426,15 @@ function selectHotel(hotel) {
     hotel?.rg_ext?.hotel_id
   if (!rawId) return
   const hid = String(rawId)
-  selectedHotelForRequest.value = hotel
-  loadHotelDetails(hid)
+  const query = { ...route.query }
+  const regionId =
+    hotel?.region_id || hotel?.regionId || hotel?.rg_ext?.region_id || null
+  if (regionId) query.region_id = regionId
+  router.push({
+    name: 'hotel-detail',
+    params: { hid },
+    query,
+  })
 }
 
 async function hydrateHotelCardImages(hotelsList, token) {
@@ -1829,6 +1546,16 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.results-card {
+  width: 100%;
 }
 
 /* =========================
@@ -2091,6 +1818,11 @@ onBeforeUnmount(() => {
   transform: translateY(-1px);
   border-color: rgba(96,165,250,0.45);
   box-shadow: 0 10px 20px rgba(0,0,0,0.25);
+}
+
+.hotel-card__footer .secondary:focus-visible {
+  outline: 2px solid rgba(59,130,246,0.85);
+  outline-offset: 2px;
 }
 
 .hotel-detail {
@@ -2414,6 +2146,21 @@ onBeforeUnmount(() => {
 .pagination__label {
   font-size: 0.75rem;
   color: #94a3b8;
+}
+
+.pagination .secondary {
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+.pagination .secondary:hover {
+  transform: translateY(-1px);
+  border-color: rgba(96,165,250,0.45);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.25);
+}
+
+.pagination .secondary:focus-visible {
+  outline: 2px solid rgba(59,130,246,0.85);
+  outline-offset: 2px;
 }
 </style>
 .badge {

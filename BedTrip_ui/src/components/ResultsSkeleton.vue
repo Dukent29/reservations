@@ -1,5 +1,5 @@
 <template>
-  <div class="results-grid results-skeleton">
+  <div class="results-list results-skeleton">
     <div class="card results-card">
       <div class="skeleton-header">
         <span class="skeleton-line skeleton-line--title shimmer"></span>
@@ -26,27 +26,6 @@
           </div>
         </li>
       </ul>
-    </div>
-
-    <div class="card details-card">
-      <div class="skeleton-header">
-        <span class="skeleton-line skeleton-line--title shimmer"></span>
-        <span class="skeleton-line skeleton-line--meta shimmer"></span>
-      </div>
-      <div class="skeleton-gallery">
-        <div
-          v-for="n in 4"
-          :key="`gallery-${n}`"
-          class="skeleton-thumb shimmer"
-        ></div>
-      </div>
-      <div class="skeleton-list skeleton-list--dense">
-        <span
-          v-for="n in 4"
-          :key="`detail-${n}`"
-          class="skeleton-line shimmer"
-        ></span>
-      </div>
     </div>
   </div>
 </template>
@@ -124,17 +103,6 @@
   height: 34px;
   border-radius: 0.8rem;
   background: rgba(148, 163, 184, 0.2);
-}
-
-.skeleton-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.skeleton-list--dense .skeleton-line {
-  height: 14px;
 }
 
 .shimmer {
