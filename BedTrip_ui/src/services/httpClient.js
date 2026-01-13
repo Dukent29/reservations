@@ -3,14 +3,9 @@
 
 export const API_BASE = (() => {
   try {
-    const { hostname, port, origin } = window.location;
-    const isLocalhost =
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "::1";
-    if (port === "3000") return "";
-    if (isLocalhost) return "http://localhost:3000";
-    return origin;
+    // In dev, the Vue app and API can be on the same origin (Vite dev server).
+    // In that case we let relative URLs be used.
+    return window.location.port === "3000" ? "" : "http://localhost:3000";
   } catch (_) {
     return "";
   }

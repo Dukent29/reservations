@@ -88,27 +88,29 @@
       <div class="filter-group">
         <p class="filter-title">Budget (€)</p>
         <div class="budget-filter">
-          <label>
-            <span class="sr-only">Budget minimum</span>
-            <input
-              type="number"
-              min="0"
-              inputmode="numeric"
-              placeholder="Min"
-              v-model="budgetInputMin"
-            />
-          </label>
-          <span class="budget-sep">—</span>
-          <label>
+          <div class="budget-range">
             <span class="sr-only">Budget maximum</span>
+            <div
+              class="budget-range__track"
+              :style="{
+                '--min': `${budgetMinPercent}%`,
+                '--max': `${budgetMaxPercent}%`,
+              }"
+            ></div>
             <input
-              type="number"
-              min="0"
-              inputmode="numeric"
-              placeholder="Max"
-              v-model="budgetInputMax"
+              class="budget-range__input budget-range__input--max-only"
+              type="range"
+              :min="BUDGET_RANGE_MIN"
+              :max="BUDGET_RANGE_MAX"
+              :step="BUDGET_RANGE_STEP"
+              :value="budgetSliderValue"
+              @input="onBudgetInput"
             />
-          </label>
+          </div>
+          <div class="budget-values">
+            <span>{{ formatBudgetLabel(budgetMinValue) }}</span>
+            <span>{{ formatBudgetLabel(budgetMaxValue, true) }}</span>
+          </div>
           <button
             type="button"
             class="secondary mini"
@@ -400,6 +402,12 @@ const filters = ref({
 })
 const budgetInputMin = ref('')
 const budgetInputMax = ref('')
+const BUDGET_RANGE_MIN = 0
+const BUDGET_RANGE_MAX = 1000
+const BUDGET_RANGE_STEP = 10
+const BUDGET_WINDOW = 500
+const BUDGET_HALF_WINDOW = BUDGET_WINDOW / 2
+const budgetSliderValue = ref(500)
 
 const selectedHotelDetails = ref(null)
 const selectedHotelForRequest = ref(null)
@@ -450,6 +458,33 @@ const searchSummary = computed(() => {
 const resultsMeta = computed(() => {
   if (!hotels.value.length) return ''
   return `${hotels.value.length} hôtels · page ${currentPage.value} / ${totalPages.value}`
+})
+
+function getBudgetRange(value) {
+  let min = value - BUDGET_HALF_WINDOW
+  let max = value + BUDGET_HALF_WINDOW
+  if (min < BUDGET_RANGE_MIN) {
+    min = BUDGET_RANGE_MIN
+    max = min + BUDGET_WINDOW
+  }
+  if (max > BUDGET_RANGE_MAX) {
+    max = BUDGET_RANGE_MAX
+    min = max - BUDGET_WINDOW
+  }
+  return { min, max }
+}
+
+const budgetMinValue = computed(() => getBudgetRange(budgetSliderValue.value).min)
+const budgetMaxValue = computed(() => getBudgetRange(budgetSliderValue.value).max)
+
+const budgetMinPercent = computed(() => {
+  const range = BUDGET_RANGE_MAX - BUDGET_RANGE_MIN
+  return ((budgetMinValue.value - BUDGET_RANGE_MIN) / range) * 100
+})
+
+const budgetMaxPercent = computed(() => {
+  const range = BUDGET_RANGE_MAX - BUDGET_RANGE_MIN
+  return ((budgetMaxValue.value - BUDGET_RANGE_MIN) / range) * 100
 })
 
 const totalPages = computed(() => {
@@ -554,6 +589,26 @@ function buildFilterPayload() {
 function applyBudgetFilter() {
   filters.value.budgetMin = budgetInputMin.value
   filters.value.budgetMax = budgetInputMax.value
+}
+
+function formatBudgetLabel(value, isMax = false) {
+  if (isMax && value >= BUDGET_RANGE_MAX) return `${BUDGET_RANGE_MAX}€+`
+  return `${value}€`
+}
+
+function syncBudgetInputsFromSliders() {
+  budgetInputMin.value = String(budgetMinValue.value)
+  budgetInputMax.value = String(budgetMaxValue.value)
+}
+
+function onBudgetInput(event) {
+  const nextValue = Number(event.target.value)
+  if (!Number.isFinite(nextValue)) return
+  budgetSliderValue.value = Math.min(
+    BUDGET_RANGE_MAX,
+    Math.max(nextValue, BUDGET_RANGE_MIN),
+  )
+  syncBudgetInputsFromSliders()
 }
 
 function hotelKey(hotel) {
@@ -1519,6 +1574,21 @@ onMounted(() => {
   searchHotels()
   budgetInputMin.value = filters.value.budgetMin ? String(filters.value.budgetMin) : ''
   budgetInputMax.value = filters.value.budgetMax ? String(filters.value.budgetMax) : ''
+  const initialMin = Number(budgetInputMin.value)
+  const initialMax = Number(budgetInputMax.value)
+  let center = 500
+  if (Number.isFinite(initialMin) && Number.isFinite(initialMax)) {
+    center = Math.round((initialMin + initialMax) / 2)
+  } else if (Number.isFinite(initialMax)) {
+    center = initialMax
+  } else if (Number.isFinite(initialMin)) {
+    center = initialMin
+  }
+  budgetSliderValue.value = Math.min(
+    BUDGET_RANGE_MAX,
+    Math.max(center, BUDGET_RANGE_MIN),
+  )
+  syncBudgetInputsFromSliders()
 })
 
 // Re-run search when filters change.
@@ -2061,23 +2131,98 @@ onBeforeUnmount(() => {
 
 .budget-filter {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.budget-filter input {
-  width: 110px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.65rem;
 }
 
 .budget-filter button {
-  width: 110px;
+  width: 100%;
   height: auto;
   padding: 0.80rem 0.75rem;
   min-width: unset;
 }
 
-.budget-sep {
-  color: #94a3b8;
+.budget-range {
+  position: relative;
+  height: 36px;
+  display: flex;
+  align-items: center;
+}
+
+.budget-range__track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.35) 0%,
+    rgba(59, 130, 246, 0.9) var(--max),
+    rgba(148, 163, 184, 0.35) var(--max),
+    rgba(148, 163, 184, 0.35) 100%
+  );
+}
+
+.budget-range__input {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -7px;
+  bottom: 0;
+  width: 100%;
+  height: 36px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  appearance: none;
+}
+
+.budget-range__input--max-only {
+  z-index: 1;
+}
+
+.budget-range__input::-webkit-slider-thumb {
+  pointer-events: auto;
+  appearance: none;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  border: 2px solid #e2e8f0;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.4);
+  cursor: pointer;
+}
+
+.budget-range__input::-moz-range-thumb {
+  pointer-events: auto;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  border: 2px solid #e2e8f0;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.4);
+  cursor: pointer;
+}
+
+.budget-range__input::-webkit-slider-runnable-track {
+  height: 6px;
+  background: transparent;
+}
+
+.budget-range__input::-moz-range-track {
+  height: 6px;
+  background: transparent;
+}
+
+.budget-values {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #e2e8f0;
 }
 
 .sr-only {
