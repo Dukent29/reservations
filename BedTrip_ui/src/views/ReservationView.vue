@@ -1282,8 +1282,6 @@ async function searchHotels() {
     hotelImagesByKey.value = {}
     detailImages.value = []
     detailImagesError.value = ''
-    const token = ++latestCardImagesToken
-    hydrateHotelCardImages(results, token)
     currentPage.value = 1
     statusMessage.value = results.length
       ? `Recherche terminée · ${results.length} hôtel(s) trouvé(s).`
@@ -1531,6 +1529,14 @@ watch(
     }, FILTER_DEBOUNCE_MS)
   },
   { deep: true },
+)
+
+watch(
+  () => paginatedHotels.value,
+  (nextHotels) => {
+    const token = ++latestCardImagesToken
+    hydrateHotelCardImages(nextHotels, token)
+  },
 )
 
 onBeforeUnmount(() => {
