@@ -202,6 +202,13 @@ const paymentSchemas = {
       partner_order_id: { type: "string", minLen: 6, maxLen: 80, required: true },
       productCode: { type: "string", minLen: 1, maxLen: 32, required: true },
       device: { type: "string", minLen: 2, maxLen: 30, optional: true },
+      insurance: {
+        type: "object",
+        optional: true,
+        shape: {
+          selected: { type: "array", minLen: 1, maxLen: 10, items: { type: "string" }, optional: true },
+        },
+      },
       customer: {
         type: "object",
         required: true,
@@ -248,6 +255,13 @@ const paymentSchemas = {
     body: {
       partner_order_id: { type: "string", minLen: 6, maxLen: 80, required: true },
       customerEmail: { type: "string", minLen: 3, maxLen: 320, pattern: emailPattern, optional: true },
+      insurance: {
+        type: "object",
+        optional: true,
+        shape: {
+          selected: { type: "array", minLen: 1, maxLen: 10, items: { type: "string" }, optional: true },
+        },
+      },
     },
   },
 };

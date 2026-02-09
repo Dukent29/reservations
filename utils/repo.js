@@ -234,10 +234,16 @@ async function ensureBookingsSchema() {
         user_name TEXT,
         amount NUMERIC,
         currency_code TEXT,
+        insurance JSONB,
         raw JSONB,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    try {
+      await db.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS insurance JSONB`);
+    } catch (err) {
+      console.warn("[DB] bookings.insurance column add failed:", err.message);
+    }
     bookingsSchemaEnsured = true;
   } catch (err) {
     console.error("[DB] ensureBookingsSchema failed:", err.message);
@@ -301,6 +307,7 @@ async function saveBooking({
   userName,
   amount,
   currencyCode,
+  insurance,
   raw,
 }) {
   try {
@@ -317,8 +324,9 @@ async function saveBooking({
         user_name,
         amount,
         currency_code,
+        insurance,
         raw
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
     `,
       [
         partnerOrderId || null,
@@ -330,6 +338,7 @@ async function saveBooking({
         userName || null,
         parseAmount(amount),
         currencyCode || null,
+        insurance ? JSON.stringify(insurance) : null,
         raw ? JSON.stringify(raw) : null,
       ]
     );

@@ -5,6 +5,12 @@ const bookingModel = require("../models/bookingModel");
 const httpError = require("../src/utils/httpError");
 const { saveBookingForm, saveBooking } = require("../utils/repo");
 const db = require("../utils/db");
+const assurTravelClient = require("../src/lib/assurTravelClient");
+const {
+  getBookingFormByPartnerOrderId,
+  extractAmountFromBookingForm,
+  extractTripDataFromBookingForm,
+} = require("../utils/bookingForms");
 
 /**
  * Create a prebook token from an ETG hash. Tries to refresh rates when stale.
@@ -128,7 +134,7 @@ async function startBooking(req, res, next) {
 
     try {
       const paymentCheck = await db.query(
-        `SELECT provider, status, amount, currency_code, external_reference
+        `SELECT provider, status, amount, currency_code, external_reference, payload
          FROM payments
          WHERE partner_order_id = $1
          ORDER BY id DESC
@@ -159,6 +165,84 @@ async function startBooking(req, res, next) {
 
     const start = await bookingModel.startBookingProcess(payload);
 
+    let insuranceResult = null;
+    try {
+      const paymentRow = await db.query(
+        `SELECT payload
+         FROM payments
+         WHERE partner_order_id = $1
+         ORDER BY id DESC
+         LIMIT 1`,
+        [partnerOrderId]
+      );
+      const payloadRow = paymentRow.rows[0] || null;
+      let paymentPayload = payloadRow?.payload || null;
+      if (typeof paymentPayload === "string") {
+        try {
+          paymentPayload = JSON.parse(paymentPayload);
+        } catch (_) {
+          paymentPayload = null;
+        }
+      }
+
+      const insurance = paymentPayload?.insurance || null;
+      const selectedIds = insurance?.selectedIds || [];
+      if (insurance && Array.isArray(selectedIds) && selectedIds.length) {
+        const bf = await getBookingFormByPartnerOrderId(partnerOrderId);
+        const form = bf.form || {};
+        const amountData = extractAmountFromBookingForm(bf);
+        const trip = extractTripDataFromBookingForm(form);
+        const passengers = [];
+        const rooms = Array.isArray(payload.rooms) ? payload.rooms : [];
+        rooms.forEach((room) => {
+          const guests = Array.isArray(room.guests) ? room.guests : [];
+          guests.forEach((guest) => {
+            const firstName = (guest.first_name || guest.firstName || "").trim();
+            const lastName = (guest.last_name || guest.lastName || "").trim();
+            if (!firstName && !lastName) return;
+            const country =
+              guest.country ||
+              guest.nationality ||
+              payload.user?.country ||
+              payload.user?.nationality ||
+              "FR";
+            passengers.push({
+              first_name: firstName,
+              last_name: lastName,
+              country,
+            });
+          });
+        });
+
+        if (
+          Number.isFinite(amountData.amount) &&
+          trip.departureDate &&
+          trip.arrivalDate &&
+          passengers.length
+        ) {
+          const subscription = await assurTravelClient.newSubscription({
+            contractCode: insurance.contractCode,
+            extensionsCodes: insurance.extensionsCodes || [],
+            passengers,
+            departureDate: trip.departureDate,
+            arrivalDate: trip.arrivalDate,
+            amount: amountData.amount,
+            destinations: trip.destinations || [],
+          });
+          insuranceResult = {
+            status: "ok",
+            response: subscription.result,
+          };
+        }
+      }
+    } catch (err) {
+      insuranceResult = {
+        status: "error",
+        message: err?.message || String(err || ""),
+      };
+      console.error("[Insurance] subscription failed:", insuranceResult.message);
+    }
+
     try {
       const etgOrderId = start?.order_id || start?.id || null;
       const user = payload.user || {};
@@ -175,6 +259,7 @@ async function startBooking(req, res, next) {
         userName: `${user.first_name || ""} ${user.last_name || ""}`.trim() || null,
         amount: paymentType.amount,
         currencyCode: paymentType.currency_code,
+        insurance: insuranceResult,
         raw: start,
       });
     } catch (e) {

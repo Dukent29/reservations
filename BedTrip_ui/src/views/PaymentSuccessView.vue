@@ -477,7 +477,13 @@ async function submitBooking() {
   }
 
   const mainGuest = guestsPayload[0]
+  const paymentPayload =
+    (currentPaymentInfo.value &&
+      currentPaymentInfo.value.payload) ||
+    {}
   const amount =
+    paymentPayload.hotel_amount ||
+    paymentPayload.base_amount ||
     (currentPaymentInfo.value &&
       currentPaymentInfo.value.amount) ||
     (storedPrebookSummary.value &&

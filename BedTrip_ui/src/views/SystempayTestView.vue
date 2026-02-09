@@ -58,6 +58,21 @@ const route = useRoute()
 const partnerOrderId = ref('')
 const customerEmail = ref('')
 const debugText = ref('// en attente de l’appel /api/payments/systempay/create-order…')
+const insurancePayload = ref(null)
+
+function loadInsurancePayload() {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = window.sessionStorage.getItem('booking:extras')
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object') {
+      insurancePayload.value = parsed
+    }
+  } catch {
+    insurancePayload.value = null
+  }
+}
 
 function ensureKryptonCss() {
   if (typeof document === 'undefined') return
@@ -161,6 +176,9 @@ async function initPaymentForm() {
     partner_order_id: partnerOrderId.value,
     customerEmail: customerEmail.value,
   }
+  if (insurancePayload.value) {
+    payload.insurance = insurancePayload.value
+  }
 
   try {
     const res = await fetch(endpoint, {
@@ -203,6 +221,7 @@ async function initPaymentForm() {
 }
 
 onMounted(() => {
+  loadInsurancePayload()
   initPaymentForm().catch((err) => {
     debugText.value = `Erreur d’initialisation du formulaire Systempay : ${
       err?.message || String(err || '')

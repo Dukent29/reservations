@@ -5,7 +5,9 @@ const router = require("express").Router();
 const axios = require("axios");
 const { systempayConfig } = require("../config/systempay");
 const db = require("../utils/db");
-const { parseAmount, savePayment } = require("../utils/repo");
+const { savePayment } = require("../utils/repo");
+const { extractAmountFromBookingForm } = require("../utils/bookingForms");
+const { buildInsuranceSummary } = require("../utils/insurance");
 const { validate } = require("../src/middlewares/validateRequest");
 const { paymentSchemas } = require("../src/middlewares/requestSchemas");
 
@@ -32,45 +34,27 @@ router.post("/payments/systempay/create-order", validate(paymentSchemas.systempa
 
     const bf = bfResult.rows[0];
 
-    const form = bf.form || {};
-    const paymentType =
-      form &&
-      Array.isArray(form.payment_types) &&
-      form.payment_types.length > 0
-        ? form.payment_types[0]
-        : null;
-
-    const candidates = [];
-    if (paymentType && paymentType.amount !== undefined) candidates.push(paymentType.amount);
-    if (bf.amount !== undefined) candidates.push(bf.amount);
-    if (form && form.total_amount !== undefined) candidates.push(form.total_amount);
-    if (form && form.order_amount !== undefined) candidates.push(form.order_amount);
-
-    let amount = null;
-    for (const c of candidates) {
-      const parsed = parseAmount(c);
-      if (Number.isFinite(parsed) && parsed > 0) {
-        amount = parsed;
-        break;
-      }
-    }
-
+    const amountData = extractAmountFromBookingForm(bf);
+    const amount = amountData.amount;
     if (!Number.isFinite(amount) || amount <= 0) {
       console.error("[Systempay] invalid booking_form amount", {
         partner_order_id,
         booking_form_row: bf,
-        tried_candidates: candidates,
+        tried_candidates: amountData.candidates,
         parsedAmount: amount,
       });
       return res.status(400).json({
         success: false,
         message: "invalid_amount_in_booking_form_for_systempay",
-        debug: { tried_candidates: candidates, booking_form: bf },
+        debug: { tried_candidates: amountData.candidates, booking_form: bf },
       });
     }
 
-    const currency = bf.currency_code || (paymentType && paymentType.currency_code) || "EUR";
-    const amountInCents = Math.round(amount * 100);
+    const currency = amountData.currency || "EUR";
+    const insuranceSummary = buildInsuranceSummary(req.body?.insurance);
+    const hotelAmount = amount;
+    const totalAmount = Number(hotelAmount || 0) + Number(insuranceSummary.total || 0);
+    const amountInCents = Math.round(totalAmount * 100);
 
     const email = customerEmail || "sample@example.com";
 
@@ -153,10 +137,14 @@ router.post("/payments/systempay/create-order", validate(paymentSchemas.systempa
         prebookToken: bf.prebook_token || null,
         etgOrderId: bf.etg_order_id || null,
         itemId: bf.item_id || null,
-        amount,
+        amount: totalAmount,
         currencyCode: currency,
         externalReference,
-        payload: raw,
+        payload: {
+          raw,
+          hotel_amount: hotelAmount,
+          insurance: insuranceSummary,
+        },
       });
     } catch (e) {
       console.error("[Systempay] savePayment failed:", e.message);

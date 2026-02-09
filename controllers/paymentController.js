@@ -3,23 +3,12 @@
 const httpError = require("../src/utils/httpError");
 const floaService = require("../src/lib/floaClient");
 const payotaClient = require("../src/lib/payotaClient");
-const db = require("../utils/db");
-const { savePayment, parseAmount } = require("../utils/repo");
-
-async function getBookingFormByPartnerOrderId(partnerOrderId) {
-  const sql = `
-    SELECT *
-    FROM booking_forms
-    WHERE partner_order_id = $1
-    ORDER BY id DESC
-    LIMIT 1
-  `;
-  const result = await db.query(sql, [partnerOrderId]);
-  if (!result.rows.length) {
-    throw httpError(404, "booking_form_not_found");
-  }
-  return result.rows[0];
-}
+const { savePayment } = require("../utils/repo");
+const {
+  getBookingFormByPartnerOrderId,
+  extractAmountFromBookingForm,
+} = require("../utils/bookingForms");
+const { buildInsuranceSummary } = require("../utils/insurance");
 
 async function simulatePlan(req, res, next) {
   try {
@@ -53,66 +42,33 @@ async function createHotelDeal(req, res, next) {
     // 1. Load ETG booking form row
     const bf = await getBookingFormByPartnerOrderId(partner_order_id);
 
-    // Try a few places for the amount coming from the ETG booking form
-    const paymentType = bf?.form && Array.isArray(bf.form.payment_types) && bf.form.payment_types.length > 0
-      ? bf.form.payment_types[0]
-      : null;
-
-    const candidates = [];
-    if (paymentType && paymentType.amount !== undefined) candidates.push(paymentType.amount);
-    if (bf.amount !== undefined) candidates.push(bf.amount);
-    // legacy or other fields sometimes used by ETG
-    if (bf.form && bf.form.total_amount !== undefined) candidates.push(bf.form.total_amount);
-    if (bf.form && bf.form.order_amount !== undefined) candidates.push(bf.form.order_amount);
-
-    let amount = null;
-    let usedSource = null;
-    for (const c of candidates) {
-      const parsed = parseAmount(c);
-      if (Number.isFinite(parsed) && parsed > 0) {
-        amount = parsed;
-        usedSource = c;
-        break;
-      }
-    }
-
+    const amountData = extractAmountFromBookingForm(bf);
+    const amount = amountData.amount;
     if (!Number.isFinite(amount) || amount <= 0) {
-      // Try a fallback: some systems store amount as integer cents (e.g. 10000 meaning 100.00)
-      const first = candidates.length ? candidates[0] : null;
-      let fallbackAmount = null;
-      if (first !== null && first !== undefined) {
-        // numeric string like "10000"
-        if (typeof first === "string" && /^\d+$/.test(first)) {
-          const asInt = Number(first);
-          if (Number.isFinite(asInt) && asInt > 0) fallbackAmount = asInt / 100;
-        }
-        // raw number like 10000
-        if (typeof first === "number" && Number.isFinite(first) && Number.isInteger(first) && first > 100) {
-          fallbackAmount = first / 100;
-        }
-      }
-
-      if (fallbackAmount && Number.isFinite(fallbackAmount) && fallbackAmount > 0) {
-        amount = fallbackAmount;
-        console.warn("[HotelDeal] used cents-fallback for booking_form amount", { partner_order_id, fallbackAmount, original: first });
-      } else {
-        console.error("[HotelDeal] invalid booking_form amount", {
-          partner_order_id,
-          booking_form_row: bf,
-          tried_candidates: candidates,
-          parsedAmount: amount,
-        });
-        throw httpError(400, "invalid_amount_in_booking_form", { tried_candidates: candidates, booking_form: bf });
-      }
+      console.error("[HotelDeal] invalid booking_form amount", {
+        partner_order_id,
+        booking_form_row: bf,
+        tried_candidates: amountData.candidates,
+        parsedAmount: amount,
+      });
+      throw httpError(400, "invalid_amount_in_booking_form", {
+        tried_candidates: amountData.candidates,
+        booking_form: bf,
+      });
     }
-    const currency = bf.currency_code || "EUR";
 
-    const merchantFinancedAmount = Math.round(amount * 100);
+    const currency = amountData.currency || "EUR";
+
+    const insuranceSummary = buildInsuranceSummary(req.body?.insurance);
+    const hotelAmount = amount;
+    const totalAmount = Number(hotelAmount || 0) + Number(insuranceSummary.total || 0);
+
+    const merchantFinancedAmount = Math.round(totalAmount * 100);
 
     const items = [
       {
         name: "Séjour hôtel",
-        amount: amount,
+        amount: hotelAmount,
         quantity: 1,
         reference: String(bf.item_id || bf.etg_order_id || partner_order_id),
         category: "Travel",
@@ -120,6 +76,20 @@ async function createHotelDeal(req, res, next) {
         customCategory: "Hotel stay",
       },
     ];
+
+    if (insuranceSummary.items.length) {
+      insuranceSummary.items.forEach((item) => {
+        items.push({
+          name: item.title,
+          amount: item.price,
+          quantity: 1,
+          reference: `${partner_order_id}:${item.id}`,
+          category: "Insurance",
+          subCategory: "TravelInsurance",
+          customCategory: "Travel insurance",
+        });
+      });
+    }
 
     const itemCount = items.length;
 
@@ -215,10 +185,15 @@ async function createHotelDeal(req, res, next) {
       prebookToken: bf.prebook_token || null,
       etgOrderId: bf.etg_order_id || null,
       itemId: bf.item_id || null,
-      amount,
+      amount: totalAmount,
       currencyCode: currency,
       externalReference: dealReference,
-      payload: { deal, eligibility },
+      payload: {
+        deal,
+        eligibility,
+        hotel_amount: hotelAmount,
+        insurance: insuranceSummary,
+      },
     });
 
     res.json({

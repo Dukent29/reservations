@@ -111,6 +111,31 @@
                 <p class="payment-summary-card__amount">
                   {{ primaryPriceText || 'Montant à définir' }}
                 </p>
+                <div class="payment-summary-card__lines">
+                  <div class="payment-summary-card__line">
+                    <span class="muted">Montant du séjour</span>
+                    <span>{{ primaryPriceText || '-' }}</span>
+                  </div>
+                  <div
+                    v-if="selectedExtras.length"
+                    class="payment-summary-card__addons"
+                  >
+                    <div
+                      v-for="extra in selectedExtras"
+                      :key="extra.id"
+                      class="payment-summary-card__line"
+                    >
+                      <span class="muted">{{ extra.title }}</span>
+                      <span>
+                        {{ formatPrice(extra.price, displayCurrency) }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="payment-summary-card__line payment-summary-card__total">
+                    <span>Total estimé</span>
+                    <span>{{ totalPriceText }}</span>
+                  </div>
+                </div>
                 <p class="muted payment-summary-card__meta">
                   {{ hotelSummary?.name || 'Hôtel non spécifié' }}
                   <span v-if="hotelSummary?.details">
@@ -133,6 +158,42 @@
                 <p class="payment-summary-card__hint">
                   Vérifiez bien les dates, le nombre de voyageurs et le montant avant
                   de poursuivre le paiement.
+                </p>
+              </div>
+              <div class="insurance-card">
+                <div class="insurance-card__header">
+                  <h4 class="insurance-card__title">Assurance voyage</h4>
+                  <p class="muted insurance-card__subtitle">
+                    Ajoutez la couverture ANBVM d’Assur‑Travel.
+                  </p>
+                </div>
+                <div class="insurance-options">
+                  <label
+                    v-for="option in insuranceOptions"
+                    :key="option.id"
+                    class="insurance-option"
+                    :class="{ 'insurance-option--active': selectedExtrasMap[option.key] }"
+                  >
+                    <span class="insurance-option__left">
+                      <input
+                        type="checkbox"
+                        :value="true"
+                        v-model="selectedExtrasMap[option.key]"
+                      />
+                      <span>
+                        <strong>{{ option.title }}</strong>
+                        <span class="insurance-option__desc">
+                          {{ option.description }}
+                        </span>
+                      </span>
+                    </span>
+                    <span class="insurance-option__price">
+                      + {{ formatPrice(option.price, displayCurrency) }}
+                    </span>
+                  </label>
+                </div>
+                <p class="muted insurance-card__hint">
+                  Le total estimé inclut les options choisies. Le montant final est confirmé au paiement.
                 </p>
               </div>
               <div class="payment-and-client__column">
@@ -436,6 +497,68 @@ const primaryStayCard = computed(() =>
   stayCards.value.length ? stayCards.value[0] : null,
 )
 
+const insuranceOptions = [
+  {
+    id: 'ANBVM',
+    key: 'anbvm',
+    title: 'Assurance voyage ANBVM',
+    description: 'Couverture Assur‑Travel pour votre séjour.',
+    price: 18,
+  },
+]
+
+const selectedExtrasMap = ref({
+  anbvm: false,
+})
+
+const selectedExtras = computed(() =>
+  insuranceOptions.filter(
+    (option) => selectedExtrasMap.value[option.key],
+  ),
+)
+
+const selectedExtrasIds = computed(() =>
+  selectedExtras.value.map((extra) => extra.id),
+)
+
+const insurancePayload = computed(() =>
+  selectedExtrasIds.value.length
+    ? { selected: selectedExtrasIds.value }
+    : null,
+)
+
+const displayCurrency = computed(
+  () => stayCards.value[0]?.currency || 'EUR',
+)
+
+const extrasTotal = computed(() =>
+  selectedExtras.value.reduce(
+    (sum, option) => sum + Number(option.price || 0),
+    0,
+  ),
+)
+
+const baseAmount = computed(
+  () =>
+    Number.isFinite(stayCards.value[0]?.amount)
+      ? stayCards.value[0].amount
+      : null,
+)
+
+const totalAmount = computed(
+  () =>
+    Number.isFinite(baseAmount.value)
+      ? baseAmount.value + extrasTotal.value
+      : null,
+)
+
+const totalPriceText = computed(() => {
+  if (!Number.isFinite(totalAmount.value)) {
+    return primaryPriceText.value || '-'
+  }
+  return formatPrice(totalAmount.value, displayCurrency.value)
+})
+
 const isFloaPayment = computed(
   () => paymentMethod.value === 'floa',
 )
@@ -642,10 +765,13 @@ function computeStayCards(form = {}) {
       fallback?.room?.guests_label ||
       ''
     let price = ''
+    let amount = null
+    let currency = fallback.room.currency || 'EUR'
     if (fallback.room.price) {
+      amount = Number(fallback.room.price)
       price = formatPrice(
         fallback.room.price,
-        fallback.room.currency,
+        currency,
       )
     }
     cards.push({
@@ -653,6 +779,8 @@ function computeStayCards(form = {}) {
       meal: fallback.room.meal || '',
       guests: guests || '-',
       price: price || '',
+      amount: Number.isFinite(amount) ? amount : null,
+      currency,
     })
     stayCards.value = cards
     return
@@ -670,15 +798,22 @@ function computeStayCards(form = {}) {
       room.payment_options?.payment_types?.[0] ||
       form.payment_type ||
       {}
+    const amount = Number(
+      payment.show_amount ?? payment.amount ?? null,
+    )
+    const currency =
+      payment.show_currency_code || payment.currency_code || 'EUR'
     const price = formatPrice(
       payment.show_amount || payment.amount,
-      payment.show_currency_code || payment.currency_code,
+      currency,
     )
     cards.push({
       title: room.name || room.room_name || 'Room',
       meal: room.rate_name || room.board_name || '',
       guests: guests || '-',
       price: price || '',
+      amount: Number.isFinite(amount) ? amount : null,
+      currency,
     })
   })
 
@@ -837,6 +972,14 @@ async function startPayment(forcedMethod) {
           if (typeof window !== 'undefined') {
             const ss = window.sessionStorage
             if (ss) {
+              if (insurancePayload.value) {
+                ss.setItem(
+                  'booking:extras',
+                  JSON.stringify(insurancePayload.value),
+                )
+              } else {
+                ss.removeItem('booking:extras')
+              }
               ss.setItem('booking:lastPartnerOrderId', partnerId)
               ss.setItem(
                 'booking:lastCustomer',
@@ -880,6 +1023,14 @@ async function startPayment(forcedMethod) {
       if (typeof window !== 'undefined') {
         const ss = window.sessionStorage
         if (ss) {
+          if (insurancePayload.value) {
+            ss.setItem(
+              'booking:extras',
+              JSON.stringify(insurancePayload.value),
+            )
+          } else {
+            ss.removeItem('booking:extras')
+          }
           ss.setItem('booking:lastPartnerOrderId', partnerId)
           ss.setItem(
             'booking:lastCustomer',
@@ -896,6 +1047,7 @@ async function startPayment(forcedMethod) {
       productCode,
       device: 'Desktop',
       customer,
+      insurance: insurancePayload.value || undefined,
     }
 
     try {
@@ -1237,6 +1389,30 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.payment-summary-card__lines {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.6rem;
+  font-size: 0.8rem;
+}
+
+.payment-summary-card__line {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.payment-summary-card__addons {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.payment-summary-card__total {
+  font-weight: 600;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  padding-top: 0.35rem;
+}
+
 .payment-summary-card__meta {
   margin: 0;
   font-size: 0.8rem;
@@ -1252,6 +1428,75 @@ onMounted(() => {
   margin-top: 0.75rem;
   display: flex;
   justify-content: flex-end;
+}
+
+.insurance-card {
+  margin-top: 0.75rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.85);
+  padding: 0.85rem 1rem;
+}
+
+.insurance-card__header {
+  margin-bottom: 0.65rem;
+}
+
+.insurance-card__title {
+  margin: 0 0 0.15rem;
+  font-size: 0.9rem;
+}
+
+.insurance-card__subtitle {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.insurance-options {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.insurance-option {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.7rem;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(17, 24, 39, 0.7);
+  cursor: pointer;
+}
+
+.insurance-option--active {
+  border-color: rgba(59, 130, 246, 0.7);
+  box-shadow: 0 16px 32px -24px rgba(59, 130, 246, 0.8);
+}
+
+.insurance-option__left {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  flex: 1 1 auto;
+}
+
+.insurance-option__desc {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  color: #9ca3af;
+}
+
+.insurance-option__price {
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.insurance-card__hint {
+  margin: 0.6rem 0 0;
+  font-size: 0.7rem;
 }
 
 .payment-and-client {
