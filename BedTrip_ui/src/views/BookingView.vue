@@ -78,7 +78,7 @@
         <div class="summary-row">
           <div>
             <p class="muted" style="margin:0">Hôtel</p>
-            <strong>{{ hotelSummary?.name || '-' }}</strong>
+            <strong class="booking-hotel-title">{{ hotelSummary?.name || '-' }}</strong>
             <p class="muted" style="margin:4px 0 0 0">
               {{ hotelSummary?.details || '' }}
             </p>
@@ -111,31 +111,6 @@
                 <p class="payment-summary-card__amount">
                   {{ primaryPriceText || 'Montant à définir' }}
                 </p>
-                <div class="payment-summary-card__lines">
-                  <div class="payment-summary-card__line">
-                    <span class="muted">Montant du séjour</span>
-                    <span>{{ primaryPriceText || '-' }}</span>
-                  </div>
-                  <div
-                    v-if="selectedExtras.length"
-                    class="payment-summary-card__addons"
-                  >
-                    <div
-                      v-for="extra in selectedExtras"
-                      :key="extra.id"
-                      class="payment-summary-card__line"
-                    >
-                      <span class="muted">{{ extra.title }}</span>
-                      <span>
-                        {{ formatPrice(extra.price, displayCurrency) }}
-                      </span>
-                    </div>
-                  </div>
-                  <div class="payment-summary-card__line payment-summary-card__total">
-                    <span>Total estimé</span>
-                    <span>{{ totalPriceText }}</span>
-                  </div>
-                </div>
                 <p class="muted payment-summary-card__meta">
                   {{ hotelSummary?.name || 'Hôtel non spécifié' }}
                   <span v-if="hotelSummary?.details">
@@ -158,42 +133,6 @@
                 <p class="payment-summary-card__hint">
                   Vérifiez bien les dates, le nombre de voyageurs et le montant avant
                   de poursuivre le paiement.
-                </p>
-              </div>
-              <div class="insurance-card">
-                <div class="insurance-card__header">
-                  <h4 class="insurance-card__title">Assurance voyage</h4>
-                  <p class="muted insurance-card__subtitle">
-                    Ajoutez la couverture ANBVM d’Assur‑Travel.
-                  </p>
-                </div>
-                <div class="insurance-options">
-                  <label
-                    v-for="option in insuranceOptions"
-                    :key="option.id"
-                    class="insurance-option"
-                    :class="{ 'insurance-option--active': selectedExtrasMap[option.key] }"
-                  >
-                    <span class="insurance-option__left">
-                      <input
-                        type="checkbox"
-                        :value="true"
-                        v-model="selectedExtrasMap[option.key]"
-                      />
-                      <span>
-                        <strong>{{ option.title }}</strong>
-                        <span class="insurance-option__desc">
-                          {{ option.description }}
-                        </span>
-                      </span>
-                    </span>
-                    <span class="insurance-option__price">
-                      + {{ formatPrice(option.price, displayCurrency) }}
-                    </span>
-                  </label>
-                </div>
-                <p class="muted insurance-card__hint">
-                  Le total estimé inclut les options choisies. Le montant final est confirmé au paiement.
                 </p>
               </div>
               <div class="payment-and-client__column">
@@ -408,26 +347,18 @@
         </form>
       </section>
 
-      <section class="card booking-raw">
-        <h3>Formulaire ETG brut</h3>
-        <pre class="booking-raw__pre">
-{{ rawFormText }}
-        </pre>
-      </section>
-    </section>
+      <details class="debug-panel" open>
+        <summary>Debug</summary>
+        <pre>booking/form request: {{ formatDebug(debugBookingFormReq) }}</pre>
+        <pre>booking/form response: {{ formatDebug(debugBookingFormRes) }}</pre>
+        <pre>booking/form etg: {{ formatDebug(debugBookingFormEtg) }}</pre>
+        <pre>booking/form error: {{ formatDebug(debugBookingFormErr) }}</pre>
+        <pre>systempay redirect: {{ formatDebug(debugSystempay) }}</pre>
+        <pre>floa deal request: {{ formatDebug(debugFloaReq) }}</pre>
+        <pre>floa deal response: {{ formatDebug(debugFloaRes) }}</pre>
+        <pre>floa deal error: {{ formatDebug(debugFloaErr) }}</pre>
+      </details>
 
-    <section class="card" style="margin-top:1rem;">
-      <h3 style="font-size:.9rem;margin-top:0;">Debug réservation</h3>
-      <p class="muted" style="font-size:.75rem;margin-bottom:.5rem;">
-        Historique des appels /api/booking/form et futurs paiements.
-      </p>
-      <pre
-        v-if="debugEntries.length"
-        style="max-height:220px;overflow:auto;font-size:.7rem;white-space:pre-wrap;background:rgba(15,23,42,.7);padding:.5rem;border-radius:.5rem;border:1px solid rgba(148,163,184,.4);"
-      >{{ formattedDebug }}</pre>
-      <p v-else class="muted" style="font-size:.75rem;">
-        Aucun appel pour le moment.
-      </p>
     </section>
   </section>
 </template>
@@ -440,11 +371,13 @@ import {
   createFloaHotelDeal,
   finalizeFloaDeal,
 } from '../services/bookingApi.js'
+import { API_BASE } from '../services/httpClient.js'
 
 const route = useRoute()
 const router = useRouter()
 
 const PREBOOK_SUMMARY_KEY = 'booking:lastPrebook'
+const MARKUP_PERCENT = 10
 
 const statusMessage = ref('')
 const statusType = ref('info')
@@ -453,7 +386,6 @@ const loading = ref(false)
 const partnerOrderId = ref('')
 const hotelSummary = ref(null)
 const stayCards = ref([])
-const rawFormText = ref('// en attente du formulaire de réservation…')
 
 const traveller = ref({
   civility: '',
@@ -473,7 +405,14 @@ const paymentMethod = ref('floa')
 const floaProduct = ref('')
 const payLoading = ref(false)
 
-const debugEntries = ref([])
+const debugBookingFormReq = ref(null)
+const debugBookingFormRes = ref(null)
+const debugBookingFormErr = ref(null)
+const debugBookingFormEtg = ref(null)
+const debugSystempay = ref(null)
+const debugFloaReq = ref(null)
+const debugFloaRes = ref(null)
+const debugFloaErr = ref(null)
 
 const storedPrebookSummary = ref(null)
 const storedPrebookPayload = ref(null)
@@ -497,68 +436,6 @@ const primaryStayCard = computed(() =>
   stayCards.value.length ? stayCards.value[0] : null,
 )
 
-const insuranceOptions = [
-  {
-    id: 'ANBVM',
-    key: 'anbvm',
-    title: 'Assurance voyage ANBVM',
-    description: 'Couverture Assur‑Travel pour votre séjour.',
-    price: 18,
-  },
-]
-
-const selectedExtrasMap = ref({
-  anbvm: false,
-})
-
-const selectedExtras = computed(() =>
-  insuranceOptions.filter(
-    (option) => selectedExtrasMap.value[option.key],
-  ),
-)
-
-const selectedExtrasIds = computed(() =>
-  selectedExtras.value.map((extra) => extra.id),
-)
-
-const insurancePayload = computed(() =>
-  selectedExtrasIds.value.length
-    ? { selected: selectedExtrasIds.value }
-    : null,
-)
-
-const displayCurrency = computed(
-  () => stayCards.value[0]?.currency || 'EUR',
-)
-
-const extrasTotal = computed(() =>
-  selectedExtras.value.reduce(
-    (sum, option) => sum + Number(option.price || 0),
-    0,
-  ),
-)
-
-const baseAmount = computed(
-  () =>
-    Number.isFinite(stayCards.value[0]?.amount)
-      ? stayCards.value[0].amount
-      : null,
-)
-
-const totalAmount = computed(
-  () =>
-    Number.isFinite(baseAmount.value)
-      ? baseAmount.value + extrasTotal.value
-      : null,
-)
-
-const totalPriceText = computed(() => {
-  if (!Number.isFinite(totalAmount.value)) {
-    return primaryPriceText.value || '-'
-  }
-  return formatPrice(totalAmount.value, displayCurrency.value)
-})
-
 const isFloaPayment = computed(
   () => paymentMethod.value === 'floa',
 )
@@ -576,27 +453,18 @@ const isPrimaryDisabled = computed(
     (isFloaPayment.value && !floaProduct.value),
 )
 
-const formattedDebug = computed(() =>
-  debugEntries.value
-    .map((entry) => {
-      const payload =
-        typeof entry.payload === 'string'
-          ? entry.payload
-          : JSON.stringify(entry.payload, null, 2)
-      return `[${entry.time}] ${entry.label}\n${payload}`
-    })
-    .join('\n\n'),
-)
-
-function pushDebug(label, payload) {
-  const time = new Date().toISOString()
-  debugEntries.value.unshift({ time, label, payload })
-  debugEntries.value = debugEntries.value.slice(0, 30)
-}
-
 function setStatus(message, type = 'info') {
   statusMessage.value = message || ''
   statusType.value = type
+}
+
+function formatDebug(value) {
+  if (value == null) return '-'
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
 }
 
 function loadPrebookSummaryFromSession() {
@@ -645,11 +513,30 @@ function formatPrice(amount, currency) {
   }
 }
 
+function applyMarkupAmount(amount) {
+  const num = Number(amount)
+  if (!Number.isFinite(num)) return amount
+  return Math.round(num * (1 + MARKUP_PERCENT / 100) * 100) / 100
+}
+
+function resolveMarkedUpAmount(amount, baseReference) {
+  const num = Number(amount)
+  if (!Number.isFinite(num)) return amount
+  const base = Number(baseReference)
+  if (Number.isFinite(base) && base > 0) {
+    const expected = applyMarkupAmount(base)
+    return num >= expected * 0.99 ? num : expected
+  }
+  return applyMarkupAmount(num)
+}
+
 function deriveHotelFromPayload(payload) {
   if (!payload) return null
   const hotels =
     (Array.isArray(payload?.data?.hotels) && payload.data.hotels) ||
     (Array.isArray(payload?.hotels) && payload.hotels) ||
+    (Array.isArray(payload?.prebook_token?.hotels) &&
+      payload.prebook_token.hotels) ||
     []
   if (!hotels.length) return null
   const hotel = hotels[0]
@@ -691,6 +578,10 @@ function computeHotelSummary(form = {}) {
     storedPrebookSummary.value?.hotel?.hid ||
     payloadHotel?.hid ||
     null
+  const fallbackName =
+    fallbackId && typeof fallbackId === 'string'
+      ? fallbackId.replace(/_/g, ' ').trim()
+      : null
   const hotelName =
     hotelPayload.name ||
     hotelPayload.hotel_name ||
@@ -700,7 +591,7 @@ function computeHotelSummary(form = {}) {
     roomSample.name ||
     storedPrebookSummary.value?.hotel?.name ||
     payloadHotel?.name ||
-    fallbackId ||
+    fallbackName ||
     (fallbackHid ? `Hotel #${fallbackHid}` : null)
 
   const checkin =
@@ -754,36 +645,118 @@ function computeHotelSummary(form = {}) {
   }
 }
 
+function formatGuestsLabel(guests) {
+  if (!Array.isArray(guests) || !guests.length) return ''
+  let adults = 0
+  let children = 0
+  guests.forEach((group) => {
+    const adultCount = Number(group?.adults)
+    if (Number.isFinite(adultCount)) adults += adultCount
+    if (Array.isArray(group?.children)) {
+      children += group.children.length
+    } else {
+      const childCount = Number(group?.children)
+      if (Number.isFinite(childCount)) children += childCount
+    }
+  })
+  const parts = []
+  if (adults) parts.push(`${adults} adulte${adults > 1 ? 's' : ''}`)
+  if (children)
+    parts.push(`${children} enfant${children > 1 ? 's' : ''}`)
+  return parts.join(', ')
+}
+
 function computeStayCards(form = {}) {
   const cards = []
   const rooms = Array.isArray(form.rooms) ? form.rooms : []
+  const pricing = form.pricing || null
+  const pricingAmount =
+    pricing && Number.isFinite(Number(pricing.total_amount))
+      ? Number(pricing.total_amount)
+      : null
+  const pricingCurrency =
+    pricing && pricing.currency ? pricing.currency : null
 
   if (!rooms.length && storedPrebookSummary.value?.room) {
     const fallback = storedPrebookSummary.value
+    const payloadHotels =
+      storedPrebookPayload.value?.data?.hotels ||
+      storedPrebookPayload.value?.hotels ||
+      storedPrebookPayload.value?.prebook_token?.hotels ||
+      []
+    const payloadHotel = payloadHotels[0] || null
+    const payloadRate = payloadHotel?.rates?.[0] || null
+    const payloadPayment =
+      payloadRate?.payment_options?.payment_types?.[0] || null
     const guests =
       fallback?.stay?.guest_label ||
       fallback?.room?.guests_label ||
+      formatGuestsLabel(fallback?.stay?.guests) ||
       ''
     let price = ''
-    let amount = null
-    let currency = fallback.room.currency || 'EUR'
     if (fallback.room.price) {
-      amount = Number(fallback.room.price)
-      price = formatPrice(
-        fallback.room.price,
-        currency,
-      )
+      const resolved =
+        pricingAmount != null
+          ? pricingAmount
+          : resolveMarkedUpAmount(
+              fallback.room.price,
+              payloadPayment?.show_amount || payloadPayment?.amount,
+            )
+      price = formatPrice(resolved, pricingCurrency || fallback.room.currency)
     }
     cards.push({
       title: fallback.room.name || 'Room',
       meal: fallback.room.meal || '',
       guests: guests || '-',
       price: price || '',
-      amount: Number.isFinite(amount) ? amount : null,
-      currency,
     })
     stayCards.value = cards
     return
+  }
+
+  if (!rooms.length && storedPrebookPayload.value) {
+    const payloadHotels =
+      storedPrebookPayload.value?.data?.hotels ||
+      storedPrebookPayload.value?.hotels ||
+      storedPrebookPayload.value?.prebook_token?.hotels ||
+      []
+    const payloadHotel = payloadHotels[0] || null
+    const payloadRate = payloadHotel?.rates?.[0] || null
+    const payloadPayment =
+      payloadRate?.payment_options?.payment_types?.[0] || null
+    if (payloadRate) {
+      const rawAmount =
+        payloadPayment?.show_amount || payloadPayment?.amount
+      const resolved =
+        pricingAmount != null
+          ? pricingAmount
+          : applyMarkupAmount(rawAmount)
+      const price =
+        resolved != null
+          ? formatPrice(
+              resolved,
+              pricingCurrency ||
+                payloadPayment?.show_currency_code ||
+                payloadPayment?.currency_code,
+            )
+          : ''
+      const guestsLabel =
+        storedPrebookSummary.value?.stay?.guest_label ||
+        storedPrebookSummary.value?.room?.guests_label ||
+        formatGuestsLabel(storedPrebookSummary.value?.stay?.guests) ||
+        '-'
+      cards.push({
+        title:
+          payloadRate.room_name ||
+          payloadRate.room_data_trans?.main_name ||
+          'Room',
+        meal: payloadRate.meal || '',
+        guests: guestsLabel,
+        price: price || '',
+      })
+      stayCards.value = cards
+      return
+    }
   }
 
   rooms.forEach((room) => {
@@ -798,22 +771,18 @@ function computeStayCards(form = {}) {
       room.payment_options?.payment_types?.[0] ||
       form.payment_type ||
       {}
-    const amount = Number(
-      payment.show_amount ?? payment.amount ?? null,
-    )
-    const currency =
-      payment.show_currency_code || payment.currency_code || 'EUR'
+    const rawAmount = payment.show_amount || payment.amount
+    const resolved =
+      pricingAmount != null ? pricingAmount : applyMarkupAmount(rawAmount)
     const price = formatPrice(
-      payment.show_amount || payment.amount,
-      currency,
+      resolved,
+      pricingCurrency || payment.show_currency_code || payment.currency_code,
     )
     cards.push({
       title: room.name || room.room_name || 'Room',
       meal: room.rate_name || room.board_name || '',
       guests: guests || '-',
       price: price || '',
-      amount: Number.isFinite(amount) ? amount : null,
-      currency,
     })
   })
 
@@ -830,19 +799,20 @@ async function fetchBookingForm() {
   }
   setStatus('Chargement du formulaire de réservation…', 'info')
   loading.value = true
-  rawFormText.value = '// contacting /api/booking/form'
-
-  const endpoint = '/api/booking/form'
-  const payload = { prebook_token: token.value }
-  pushDebug('REQUEST /api/booking/form', { endpoint, payload })
-
   try {
+    debugBookingFormReq.value = { prebook_token: String(token.value) }
+    debugBookingFormErr.value = null
+    console.log('[Debug][BookingView] booking/form request', {
+      prebook_token: String(token.value),
+    })
     const data = await requestBookingForm(String(token.value))
-    pushDebug('RESPONSE /api/booking/form', data)
+    console.log('[Debug][BookingView] booking/form response', data)
+    debugBookingFormRes.value = data
+    debugBookingFormEtg.value =
+      data && data._debug && data._debug.etg ? data._debug.etg : null
 
     partnerOrderId.value = data.partner_order_id || ''
     const form = data.form || {}
-    rawFormText.value = JSON.stringify(form, null, 2)
 
     computeHotelSummary(form)
     computeStayCards(form)
@@ -852,11 +822,10 @@ async function fetchBookingForm() {
       'info',
     )
   } catch (err) {
-    pushDebug('/api/booking/form error', {
+    debugBookingFormErr.value = {
       message: err?.message || String(err || ''),
       detail: err?._detail || null,
-    })
-    rawFormText.value = ''
+    }
     setStatus(
       `Impossible de récupérer le formulaire de réservation : ${
         err?.message || String(err || '')
@@ -940,6 +909,8 @@ function buildCustomerContext() {
     partnerId,
     method,
     civility,
+    firstName,
+    lastName,
     fullName,
     email,
     phone,
@@ -958,6 +929,8 @@ async function startPayment(forcedMethod) {
     partnerId,
     method: currentMethod,
     civility,
+    firstName,
+    lastName,
     fullName,
     email,
     phone,
@@ -972,29 +945,39 @@ async function startPayment(forcedMethod) {
           if (typeof window !== 'undefined') {
             const ss = window.sessionStorage
             if (ss) {
-              if (insurancePayload.value) {
-                ss.setItem(
-                  'booking:extras',
-                  JSON.stringify(insurancePayload.value),
-                )
-              } else {
-                ss.removeItem('booking:extras')
-              }
               ss.setItem('booking:lastPartnerOrderId', partnerId)
               ss.setItem(
                 'booking:lastCustomer',
                 JSON.stringify({ civility, fullName, email, phone }),
           )
         }
-        pushDebug('SYSTEMPAY redirect', {
-          route: 'systempay-test',
+      router.push({
+        name: 'systempay-test',
+        query: {
           partner_order_id: partnerId,
           email,
-        })
-        router.push({
-          name: 'systempay-test',
-          query: { partner_order_id: partnerId, email },
-        })
+          first_name: firstName,
+          last_name: lastName,
+          phone,
+          civility,
+        },
+      })
+      debugSystempay.value = {
+        partner_order_id: partnerId,
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+        civility,
+      }
+      console.log('[Debug][BookingView] systempay redirect params', {
+        partner_order_id: partnerId,
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+        civility,
+      })
       }
     } catch (err) {
       setStatus(
@@ -1023,14 +1006,6 @@ async function startPayment(forcedMethod) {
       if (typeof window !== 'undefined') {
         const ss = window.sessionStorage
         if (ss) {
-          if (insurancePayload.value) {
-            ss.setItem(
-              'booking:extras',
-              JSON.stringify(insurancePayload.value),
-            )
-          } else {
-            ss.removeItem('booking:extras')
-          }
           ss.setItem('booking:lastPartnerOrderId', partnerId)
           ss.setItem(
             'booking:lastCustomer',
@@ -1047,18 +1022,20 @@ async function startPayment(forcedMethod) {
       productCode,
       device: 'Desktop',
       customer,
-      insurance: insurancePayload.value || undefined,
     }
 
     try {
+      debugFloaReq.value = body
+      debugFloaErr.value = null
+      console.log('[Debug][BookingView] floa deal request', body)
       setStatus(
         'Contact de FloaBank pour éligibilité et création du deal…',
         'info',
       )
       payLoading.value = true
-      pushDebug('REQUEST /api/payments/floa/hotel/deal', body)
       const payload = await createFloaHotelDeal(body)
-      pushDebug('RESPONSE /api/payments/floa/hotel/deal', payload)
+      debugFloaRes.value = payload
+      console.log('[Debug][BookingView] floa deal response', payload)
 
       const deal = payload.deal || payload
       const dealReference =
@@ -1077,7 +1054,6 @@ async function startPayment(forcedMethod) {
           'Deal Floa créé mais aucun dealReference retourné. Consultez le panneau debug.',
           'error',
         )
-        rawFormText.value = JSON.stringify(deal, null, 2)
         return
       }
 
@@ -1089,18 +1065,17 @@ async function startPayment(forcedMethod) {
           culture: 'fr-FR',
         },
       }
+      if (finalizeBody.configuration && !finalizeBody.configuration.returnUrl) {
+        const base =
+          API_BASE && API_BASE.length
+            ? API_BASE.replace(/\/$/, '')
+            : window.location.origin.replace(/\/$/, '')
+        finalizeBody.configuration.returnUrl = `${base}/floa-return`
+      }
 
-      pushDebug(
-        'REQUEST /api/payments/floa/deal/finalize',
-        { dealReference, finalizeBody },
-      )
       const finalizePayload = await finalizeFloaDeal(
         dealReference,
         finalizeBody,
-      )
-      pushDebug(
-        'RESPONSE /api/payments/floa/deal/finalize',
-        finalizePayload,
       )
 
       if (
@@ -1115,11 +1090,6 @@ async function startPayment(forcedMethod) {
         setStatus(
           `Impossible de finaliser le deal Floa : ${reason}`,
           'error',
-        )
-        rawFormText.value = JSON.stringify(
-          { deal, finalize: finalizePayload },
-          null,
-          2,
         )
         return
       }
@@ -1151,12 +1121,6 @@ async function startPayment(forcedMethod) {
         }
       }
 
-      rawFormText.value = JSON.stringify(
-        { deal, finalize: finalizePayload },
-        null,
-        2,
-      )
-
       if (redirectUrl) {
         setStatus(
           'Redirection vers la page de paiement Floa…',
@@ -1172,16 +1136,16 @@ async function startPayment(forcedMethod) {
         )
       }
     } catch (err) {
+      debugFloaErr.value = {
+        message: err?.message || String(err || ''),
+        detail: err?._detail || null,
+      }
       setStatus(
         `Erreur de paiement Floa : ${
           err?.message || String(err || '')
         }`,
         'error',
       )
-      pushDebug('ERROR Floa payment', {
-        message: err?.message || String(err || ''),
-        detail: err?._detail || null,
-      })
     } finally {
       payLoading.value = false
     }
@@ -1210,6 +1174,28 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.debug-panel {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  font-size: 0.85rem;
+  overflow: auto;
+  margin-top: 1.5rem;
+}
+
+.debug-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.debug-panel pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0.5rem 0 0 0;
+}
+
 .booking-view {
   display: flex;
   flex-direction: column;
@@ -1251,6 +1237,11 @@ onMounted(() => {
   align-items: center;
 }
 
+.booking-hotel-title {
+  font-size: 1.05rem;
+  text-transform: capitalize;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1261,7 +1252,16 @@ onMounted(() => {
   border-radius: 0.75rem;
   border: 1px solid rgba(148, 163, 184, 0.3);
   padding: 0.75rem;
-  background: rgba(15, 23, 42, 0.7);
+  background: #4b78be;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.summary-card strong {
+  color: #ffffff;
+}
+
+.summary-card .muted {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .booking-form .row {
@@ -1299,15 +1299,21 @@ onMounted(() => {
   width: 100%;
   border-radius: 0.75rem;
   border: 1px solid rgba(148, 163, 184, 0.4);
-  background: rgba(15, 23, 42, 0.9);
+  background: transparent;
   padding: 0.7rem 0.85rem;
   text-align: left;
   cursor: pointer;
+  color: #0f172a;
+}
+
+.payment-method-card .muted {
+  color: #475569;
 }
 
 .payment-method-card--active {
-  border-color: rgba(59, 130, 246, 0.9);
-  box-shadow: 0 16px 40px -24px rgba(15, 23, 42, 0.9);
+  border-color: rgba(55, 107, 176, 0.6);
+  background: rgba(55, 107, 176, 0.08);
+  box-shadow: 0 16px 40px -24px rgba(15, 23, 42, 0.12);
 }
 
 .payment-method-card__header {
@@ -1322,6 +1328,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.9rem;
+  color: #0f172a;
 }
 
 .payment-method-card__right {
@@ -1361,12 +1368,12 @@ onMounted(() => {
   height: 14px;
   border-radius: 999px;
   border: 2px solid rgba(148, 163, 184, 0.6);
-  box-shadow: inset 0 0 0 2px rgba(15, 23, 42, 1);
+  box-shadow: inset 0 0 0 2px rgba(15, 23, 42, 0.15);
 }
 
 .payment-method-card--active .payment-method-card__radio {
-  border-color: #60a5fa;
-  background: #3b82f6;
+  border-color: #376bb0;
+  background: #376bb0;
 }
 
 .payment-method-card__hint {
@@ -1376,10 +1383,10 @@ onMounted(() => {
 
 .payment-summary-card {
   border-radius: 0.9rem;
-  border: 1px solid rgba(59, 130, 246, 0.5);
-  background: radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.1), transparent 55%),
-    radial-gradient(circle at 100% 0, rgba(59, 130, 246, 0.12), transparent 55%),
-    rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(55, 107, 176, 0.3);
+  background: radial-gradient(circle at 0 0, rgba(55, 107, 176, 0.12), transparent 55%),
+    radial-gradient(circle at 100% 0, rgba(59, 130, 246, 0.14), transparent 55%),
+    #f8fafc;
   padding: 0.9rem 1rem;
 }
 
@@ -1387,30 +1394,7 @@ onMounted(() => {
   margin: 0.35rem 0 0.25rem;
   font-size: 1.35rem;
   font-weight: 600;
-}
-
-.payment-summary-card__lines {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0.4rem 0 0.6rem;
-  font-size: 0.8rem;
-}
-
-.payment-summary-card__line {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.payment-summary-card__addons {
-  display: grid;
-  gap: 0.2rem;
-}
-
-.payment-summary-card__total {
-  font-weight: 600;
-  border-top: 1px solid rgba(148, 163, 184, 0.25);
-  padding-top: 0.35rem;
+  color: #376bb0;
 }
 
 .payment-summary-card__meta {
@@ -1428,75 +1412,6 @@ onMounted(() => {
   margin-top: 0.75rem;
   display: flex;
   justify-content: flex-end;
-}
-
-.insurance-card {
-  margin-top: 0.75rem;
-  border-radius: 0.9rem;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(15, 23, 42, 0.85);
-  padding: 0.85rem 1rem;
-}
-
-.insurance-card__header {
-  margin-bottom: 0.65rem;
-}
-
-.insurance-card__title {
-  margin: 0 0 0.15rem;
-  font-size: 0.9rem;
-}
-
-.insurance-card__subtitle {
-  margin: 0;
-  font-size: 0.75rem;
-}
-
-.insurance-options {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.insurance-option {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.7rem;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(17, 24, 39, 0.7);
-  cursor: pointer;
-}
-
-.insurance-option--active {
-  border-color: rgba(59, 130, 246, 0.7);
-  box-shadow: 0 16px 32px -24px rgba(59, 130, 246, 0.8);
-}
-
-.insurance-option__left {
-  display: inline-flex;
-  gap: 0.5rem;
-  align-items: flex-start;
-  flex: 1 1 auto;
-}
-
-.insurance-option__desc {
-  display: block;
-  margin-top: 0.15rem;
-  font-size: 0.72rem;
-  color: #9ca3af;
-}
-
-.insurance-option__price {
-  font-weight: 600;
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-
-.insurance-card__hint {
-  margin: 0.6rem 0 0;
-  font-size: 0.7rem;
 }
 
 .payment-and-client {
@@ -1575,18 +1490,20 @@ onMounted(() => {
   min-width: 0;
   border-radius: 0.75rem;
   border: 1px solid rgba(148, 163, 184, 0.45);
-  background: rgba(15, 23, 42, 0.9);
+  background: transparent;
   padding: 0.5rem 0.7rem;
   text-align: left;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  color: #0f172a;
 }
 
 .floa-plan--active {
-  border-color: rgba(52, 211, 153, 0.9);
-  box-shadow: 0 14px 30px -18px rgba(16, 185, 129, 0.9);
+  border-color: #376bb0;
+  background: #376bb0;
+  box-shadow: 0 14px 30px -18px rgba(55, 107, 176, 0.35);
 }
 
 .floa-plan__title {
@@ -1596,6 +1513,11 @@ onMounted(() => {
 
 .floa-plan__meta {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: #475569;
+}
+
+.floa-plan--active .floa-plan__title,
+.floa-plan--active .floa-plan__meta {
+  color: #ffffff;
 }
 </style>

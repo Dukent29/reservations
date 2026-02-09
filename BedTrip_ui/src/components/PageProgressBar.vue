@@ -34,7 +34,7 @@ const widthStyle = computed(() => `${progress.value}%`)
 .page-progress__bar {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #38bdf8, #6366f1);
+  background: linear-gradient(90deg, #f83838, #fd6565);
   transition: width 0.2s ease;
 }
 

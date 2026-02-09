@@ -3,16 +3,71 @@
     <div class="card details-card">
       <div class="details-card__header">
         <button
-          class="secondary mini"
+          class="secondary mini details-card__back"
           type="button"
           @click="goBack"
         >
-          Retour aux résultats
+          &lsaquo; Retours aux resultats
         </button>
       </div>
 
-      <div v-if="hotelDetailsLoading" class="muted" style="font-size:.8rem;">
-        Chargement des détails de l’hôtel…
+      <div v-if="hotelDetailsLoading" class="hotel-detail hotel-detail--skeleton" aria-busy="true">
+        <div class="hotel-detail__summary">
+          <div class="skeleton-line skeleton-line--title"></div>
+          <div class="skeleton-line skeleton-line--meta"></div>
+        </div>
+
+        <div class="hotel-detail__gallery">
+          <div class="hotel-gallery hotel-gallery--skeleton">
+            <div
+              v-for="n in 6"
+              :key="`gallery-skeleton-${n}`"
+              class="skeleton-thumb"
+            ></div>
+          </div>
+        </div>
+
+        <div class="hotel-detail__info-grid">
+          <div
+            v-for="n in 3"
+            :key="`info-skeleton-${n}`"
+            class="hotel-detail__info-box"
+          >
+            <div class="skeleton-line skeleton-line--subtitle"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line skeleton-line--short"></div>
+          </div>
+        </div>
+
+        <div class="hotel-detail__rooms">
+          <div class="skeleton-line skeleton-line--subtitle"></div>
+          <ul class="room-list">
+            <li
+              v-for="n in 2"
+              :key="`room-skeleton-${n}`"
+              class="room-card room-card--skeleton"
+            >
+              <div class="room-card__header">
+                <div class="skeleton-line skeleton-line--room"></div>
+                <div class="skeleton-line skeleton-line--price"></div>
+              </div>
+              <div class="room-card__chips">
+                <span
+                  v-for="c in 3"
+                  :key="`room-skeleton-${n}-chip-${c}`"
+                  class="skeleton-chip"
+                ></span>
+              </div>
+              <div class="room-card__details">
+                <div class="skeleton-line"></div>
+                <div class="skeleton-line skeleton-line--short"></div>
+              </div>
+              <div class="room-card__footer">
+                <div class="skeleton-button"></div>
+              </div>
+            </li>
+          </ul>
+        </div>
       </div>
       <div v-else-if="hotelDetailsError" style="color:#dc2626;font-size:.8rem;">
         {{ hotelDetailsError }}
@@ -29,8 +84,15 @@
               {{ hotelDisplayName(selectedHotelDetails) }}
             </div>
             <div class="hotel-detail__meta">
-              <span v-if="deriveHotelStars(selectedHotelDetails)">
-                {{ deriveHotelStars(selectedHotelDetails) }}★
+              <span
+                v-if="deriveHotelStars(selectedHotelDetails)"
+                class="hotel-detail__stars"
+              >
+                <span
+                  v-for="star in deriveHotelStars(selectedHotelDetails)"
+                  :key="star"
+                  class="hotel-detail__star"
+                >★</span>
               </span>
             </div>
           </div>
@@ -64,10 +126,13 @@
             v-else
             class="hotel-gallery"
           >
-            <div
+            <button
               v-for="(url, idx) in detailImages"
               :key="url + '-' + idx"
               class="hotel-gallery__item"
+              type="button"
+              :aria-label="`Afficher la photo ${idx + 1}`"
+              @click="openLightbox(idx)"
             >
               <img
                 :src="url"
@@ -75,7 +140,7 @@
                 loading="lazy"
                 decoding="async"
               />
-            </div>
+            </button>
           </div>
         </div>
 
@@ -128,7 +193,7 @@
             <ul class="hotel-detail__chip-list">
               <li
                 v-for="item in hotelAmenityList"
-                :key="item.label"
+                :key="item.label || item"
                 class="hotel-detail__chip"
               >
                 <i
@@ -136,7 +201,7 @@
                   :class="['hotel-detail__chip-icon', item.icon]"
                   aria-hidden="true"
                 ></i>
-                <span>{{ item.label }}</span>
+                <span>{{ item.label || item }}</span>
               </li>
             </ul>
           </div>
@@ -149,7 +214,7 @@
             <ul class="hotel-detail__chip-list">
               <li
                 v-for="method in hotelPaymentMethods"
-                :key="method.label"
+                :key="method.label || method"
                 class="hotel-detail__chip"
               >
                 <i
@@ -157,7 +222,7 @@
                   :class="['hotel-detail__chip-icon', method.icon]"
                   aria-hidden="true"
                 ></i>
-                <span>{{ method.label }}</span>
+                <span>{{ method.label || method }}</span>
               </li>
             </ul>
           </div>
@@ -205,7 +270,16 @@
             </ul>
           </div>
 
-          <h4>Chambres et tarifs</h4>
+          <div class="rooms-toolbar">
+            <h4>Chambres et tarifs</h4>
+            <button
+              class="secondary mini"
+              type="button"
+              @click="compareView = !compareView"
+            >
+              {{ compareView ? 'Vue liste' : 'Comparer les chambres' }}
+            </button>
+          </div>
           <div
             v-if="!limitedRates.length"
             class="muted"
@@ -213,7 +287,7 @@
           >
             Aucune offre pour cette recherche.
           </div>
-          <ul v-else class="room-list">
+          <ul v-else-if="!compareView" class="room-list">
             <li
               v-for="(rate, idx) in limitedRates"
               :key="idx"
@@ -226,8 +300,10 @@
                 <div class="room-card__price">
                   {{
                     formatCurrency(
-                      rate.payment_options?.payment_types?.[0]?.show_amount ??
-                        rate.payment_options?.payment_types?.[0]?.amount,
+                      applyMarkupAmount(
+                        rate.payment_options?.payment_types?.[0]?.show_amount ??
+                          rate.payment_options?.payment_types?.[0]?.amount,
+                      ),
                       rate.payment_options?.payment_types?.[0]?.show_currency_code ??
                         rate.payment_options?.payment_types?.[0]?.currency_code ??
                         'EUR',
@@ -277,9 +353,132 @@
               </div>
             </li>
           </ul>
+          <div v-else class="compare-table-wrap">
+            <table class="compare-table">
+              <thead>
+                <tr>
+                  <th>Type de logement</th>
+                  <th>Nombre de voyageurs</th>
+                  <th>Tarif pour le séjour</th>
+                  <th>Vos options</th>
+                  <th>Réserver</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(rate, idx) in limitedRates"
+                  :key="`compare-${idx}`"
+                >
+                  <td class="compare-type">
+                    <div class="compare-title">
+                      {{ rate.room_name || rate.room_data_trans?.main_name || 'Chambre' }}
+                    </div>
+                    <div class="compare-chips">
+                      <span
+                        v-for="chip in rateChipLabels(rate)"
+                        :key="chip"
+                        class="chip"
+                      >
+                        {{ chip }}
+                      </span>
+                    </div>
+                  </td>
+                  <td class="compare-capacity">
+                    {{ rateCapacityDetail(rate) || '—' }}
+                  </td>
+                  <td class="compare-price">
+                    <div class="compare-price__main">
+                      {{
+                        formatCurrency(
+                          applyMarkupAmount(
+                            rate.payment_options?.payment_types?.[0]?.show_amount ??
+                              rate.payment_options?.payment_types?.[0]?.amount,
+                          ),
+                          rate.payment_options?.payment_types?.[0]?.show_currency_code ??
+                            rate.payment_options?.payment_types?.[0]?.currency_code ??
+                            'EUR',
+                        )
+                      }}
+                    </div>
+                    <div v-if="rateTaxesText(rate)" class="compare-price__sub">
+                      {{ rateTaxesText(rate) }}
+                    </div>
+                  </td>
+                  <td class="compare-options">
+                    <div>{{ rateCancellationText(rate) }}</div>
+                    <div v-if="rateBeddingText(rate)">{{ rateBeddingText(rate) }}</div>
+                    <div v-if="rateBathroomText(rate)">{{ rateBathroomText(rate) }}</div>
+                  </td>
+                  <td class="compare-action">
+                    <button
+                      class="primary mini"
+                      type="button"
+                      @click="prebookRate(rate, idx)"
+                      :disabled="prebookLoadingIndex === idx"
+                    >
+                      {{
+                        prebookLoadingIndex === idx
+                          ? 'Pré-réservation…'
+                          : 'Réserver'
+                      }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <p v-if="prebookStatus" class="muted" style="font-size:.75rem;margin-top:.5rem;">
             {{ prebookStatus }}
           </p>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="isLightboxOpen"
+      class="gallery-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Galerie photos"
+      @click="closeLightbox"
+    >
+      <div class="gallery-lightbox__frame" @click.stop>
+        <button
+          type="button"
+          class="gallery-lightbox__close"
+          aria-label="Fermer la galerie"
+          @click="closeLightbox"
+        >
+          ✕
+        </button>
+        <button
+          v-if="detailImages.length > 1"
+          type="button"
+          class="gallery-lightbox__nav gallery-lightbox__nav--prev"
+          aria-label="Photo précédente"
+          @click="lightboxPrev"
+        >
+          ‹
+        </button>
+        <img
+          class="gallery-lightbox__image"
+          :src="lightboxImageUrl"
+          :alt="`Photo ${lightboxIndex + 1}`"
+        />
+        <button
+          v-if="detailImages.length > 1"
+          type="button"
+          class="gallery-lightbox__nav gallery-lightbox__nav--next"
+          aria-label="Photo suivante"
+          @click="lightboxNext"
+        >
+          ›
+        </button>
+        <div
+          v-if="detailImages.length > 1"
+          class="gallery-lightbox__count"
+        >
+          {{ lightboxIndex + 1 }} / {{ detailImages.length }}
         </div>
       </div>
     </div>
@@ -287,16 +486,19 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { API_BASE, safeJsonFetch } from '../services/httpClient.js'
 
 const route = useRoute()
 const router = useRouter()
 
+const compareView = ref(false)
+
 const PREBOOK_SUMMARY_KEY = 'booking:lastPrebook'
+const MARKUP_PERCENT = 10
 const DETAIL_IMAGE_SIZE = '1024x768'
-const DETAIL_IMAGE_LIMIT = 13
+const DETAIL_IMAGE_LIMIT = 15
 
 const MAX_GUESTS_PER_ROOM = 6
 const DEFAULT_CHILD_AGE = 8
@@ -347,7 +549,11 @@ const selectedHotelDetails = ref(null)
 const detailImages = ref([])
 const detailImagesLoading = ref(false)
 const detailImagesError = ref('')
+const isLightboxOpen = ref(false)
+const lightboxIndex = ref(0)
 let latestDetailImagesToken = 0
+const detailImageCache = new Map()
+const detailImageCooldown = new Map()
 
 const prebookLoadingIndex = ref(null)
 const prebookStatus = ref('')
@@ -365,10 +571,20 @@ function buildGuestsPayload() {
   ]
 }
 
+function toTitleCase(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 function hotelDisplayName(hotel) {
   const fallbackId =
     hotel?.id || hotel?.hid || hotel?.hotel_id || hotel?.hotelId
-  return (
+  const rawName = (
     hotel?.name ||
     hotel?.hotel_name ||
     hotel?.hotel_name_trans ||
@@ -379,6 +595,7 @@ function hotelDisplayName(hotel) {
       : fallbackId) ||
     'Hotel'
   )
+  return toTitleCase(rawName)
 }
 
 function extractHotels(payload) {
@@ -418,6 +635,64 @@ function formatCurrency(amount, currency) {
   }
 }
 
+function applyMarkupAmount(amount) {
+  const num = Number(amount)
+  if (!Number.isFinite(num)) return amount
+  return Math.round(num * (1 + MARKUP_PERCENT / 100) * 100) / 100
+}
+
+const lightboxImageUrl = computed(() => {
+  if (!detailImages.value.length) return ''
+  const idx = Math.min(
+    Math.max(lightboxIndex.value, 0),
+    detailImages.value.length - 1,
+  )
+  return detailImages.value[idx] || ''
+})
+
+function setBodyLock(locked) {
+  if (typeof document === 'undefined') return
+  document.body.style.overflow = locked ? 'hidden' : ''
+}
+
+function openLightbox(index) {
+  if (!detailImages.value.length) return
+  lightboxIndex.value = Math.min(
+    Math.max(index, 0),
+    detailImages.value.length - 1,
+  )
+  isLightboxOpen.value = true
+  setBodyLock(true)
+}
+
+function closeLightbox() {
+  isLightboxOpen.value = false
+  setBodyLock(false)
+}
+
+function lightboxPrev() {
+  const total = detailImages.value.length || 1
+  lightboxIndex.value = (lightboxIndex.value - 1 + total) % total
+}
+
+function lightboxNext() {
+  const total = detailImages.value.length || 1
+  lightboxIndex.value = (lightboxIndex.value + 1) % total
+}
+
+function handleLightboxKey(event) {
+  if (!isLightboxOpen.value) return
+  if (event.key === 'Escape') {
+    closeLightbox()
+    return
+  }
+  if (event.key === 'ArrowLeft') {
+    lightboxPrev()
+  }
+  if (event.key === 'ArrowRight') {
+    lightboxNext()
+  }
+}
 function friendlyMeal(value) {
   switch ((value || '').toLowerCase()) {
     case 'nomeal':
@@ -859,6 +1134,16 @@ async function fetchHotelImages(hotel, lang, size, limit = 1) {
     ? Math.max(1, Math.min(parsedLimit, 50))
     : null
   if (identity.hid === null && !identity.fallbackId) return []
+  const cacheKey = `${identity.cacheKey}|${safeLang}|${safeSize}|${
+    cappedLimit === null ? 'all' : cappedLimit
+  }`
+  const cooldownUntil = detailImageCooldown.get(cacheKey)
+  if (cooldownUntil && cooldownUntil > Date.now()) {
+    return []
+  }
+  if (detailImageCache.has(cacheKey)) {
+    return await detailImageCache.get(cacheKey)
+  }
   const payload = {
     language: safeLang,
     size: safeSize,
@@ -866,7 +1151,18 @@ async function fetchHotelImages(hotel, lang, size, limit = 1) {
   if (cappedLimit !== null) payload.limit = cappedLimit
   if (identity.hid !== null) payload.hid = identity.hid
   else if (identity.fallbackId) payload.id = identity.fallbackId
-  return await requestHotelImagesFromApi(payload)
+  const requestPromise = requestHotelImagesFromApi(payload)
+  detailImageCache.set(cacheKey, requestPromise)
+  try {
+    return await requestPromise
+  } catch (err) {
+    const message = err?.message || ''
+    if (message.includes('endpoint_exceeded_limit')) {
+      detailImageCooldown.set(cacheKey, Date.now() + 30000)
+    }
+    detailImageCache.delete(cacheKey)
+    throw err
+  }
 }
 
 async function hydrateHotelDetailGallery(hotel, token) {
@@ -991,14 +1287,15 @@ function persistPrebookSummary(apiResponse, hotel, rate) {
           rate?.name ||
           null,
         meal: rate?.meal || null,
-        price:
-          payment?.show_amount || payment?.amount || null,
+        price: applyMarkupAmount(payment?.show_amount || payment?.amount || null),
         currency:
           payment?.show_currency_code ||
           payment?.currency_code ||
           null,
         amenities: rate?.amenities_data || null,
-        daily_prices: rate?.daily_prices || null,
+        daily_prices: Array.isArray(rate?.daily_prices)
+          ? rate.daily_prices.map((value) => applyMarkupAmount(value))
+          : rate?.daily_prices || null,
         guests_label: '',
       },
       payload: apiResponse || null,
@@ -1023,7 +1320,7 @@ async function prebookRate(rate, index) {
 
   const payload = {
     book_hash: hash,
-    price_increase_percent: 0,
+    price_increase_percent: MARKUP_PERCENT,
     hp_context: {
       id: hotel.id || hotel.hid,
       hid: hotel.hid,
@@ -1032,6 +1329,15 @@ async function prebookRate(rate, index) {
       guests: buildGuestsPayload(),
       currency: 'EUR',
       language: 'fr',
+    },
+    request_meta: {
+      hotel_name: hotel.name || hotel.hotel_name || null,
+      hotel_city: hotel.city || hotel.city_name || null,
+      hotel_address: hotel.address || hotel.address_full || null,
+      hotel_country: hotel.country || hotel.country_name || null,
+      room_name:
+        rate?.room_name || rate?.room_data_trans?.main_name || rate?.name || null,
+      meal: rate?.meal || null,
     },
   }
 
@@ -1069,6 +1375,19 @@ async function prebookRate(rate, index) {
 }
 
 watch(
+  () => detailImages.value,
+  (next) => {
+    if (!Array.isArray(next) || !next.length) {
+      if (isLightboxOpen.value) closeLightbox()
+      return
+    }
+    if (lightboxIndex.value >= next.length) {
+      lightboxIndex.value = 0
+    }
+  },
+)
+
+watch(
   () => [route.params.hid, route.query.checkin, route.query.checkout, route.query.adults, route.query.children, route.query.childrenAges],
   () => {
     loadHotelDetails()
@@ -1077,6 +1396,12 @@ watch(
 
 onMounted(() => {
   loadHotelDetails()
+  window.addEventListener('keydown', handleLightboxKey)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleLightboxKey)
+  setBodyLock(false)
 })
 </script>
 
@@ -1094,6 +1419,16 @@ onMounted(() => {
   margin-bottom: 0.75rem;
 }
 
+.details-card__back {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
 .hotel-detail__gallery {
   display: grid;
   margin: 1rem 0;
@@ -1101,23 +1436,149 @@ onMounted(() => {
 }
 
 .hotel-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.5rem;
+  column-count: 3;
+  column-gap: 0.5rem;
 }
 
 .hotel-gallery__item {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 0;
+  width: 100%;
+  text-align: left;
   border-radius: 0.65rem;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(15, 23, 42, 0.7);
+  break-inside: avoid;
+  margin-bottom: 0.5rem;
+  cursor: zoom-in;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.25),
+    rgba(15, 23, 42, 0.6)
+  );
 }
 
 .hotel-gallery__item img {
   display: block;
   width: 100%;
-  height: 120px;
+  height: auto;
   object-fit: cover;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.hotel-gallery__item:hover img {
+  transform: scale(1.02);
+  filter: saturate(1.05);
+}
+
+.hotel-gallery__item:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.85);
+  outline-offset: 2px;
+}
+
+.gallery-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.82);
+  display: grid;
+  place-items: center;
+  z-index: 2000;
+  padding: 2rem min(4vw, 2.5rem);
+}
+
+.gallery-lightbox__frame {
+  position: relative;
+  width: min(1100px, 92vw);
+  max-height: 88vh;
+  background: transparent;
+  border-radius: 1rem;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.35);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem 3.5rem;
+}
+
+.gallery-lightbox__image {
+  max-width: 100%;
+  max-height: 78vh;
+  object-fit: contain;
+}
+
+.gallery-lightbox__close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 999px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.gallery-lightbox__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.8);
+  color: #fff;
+  font-size: 1.4rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.gallery-lightbox__nav--prev {
+  left: 0.85rem;
+}
+
+.gallery-lightbox__nav--next {
+  right: 0.85rem;
+}
+
+.gallery-lightbox__count {
+  position: absolute;
+  bottom: 0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+@media (min-width: 1200px) {
+  .hotel-gallery {
+    column-count: 4;
+  }
+}
+
+@media (max-width: 900px) {
+  .hotel-gallery {
+    column-count: 2;
+  }
+}
+
+@media (max-width: 700px) {
+  .hotel-gallery {
+    column-count: 1;
+  }
+
+  .gallery-lightbox__frame {
+    padding: 1rem 2.5rem;
+  }
+
+  .gallery-lightbox__nav {
+    width: 34px;
+    height: 34px;
+  }
 }
 
 .hotel-detail__summary {
@@ -1141,6 +1602,16 @@ onMounted(() => {
 .hotel-detail__meta {
   font-size: 0.85rem;
   color: #94a3b8;
+}
+
+.hotel-detail__stars {
+  display: inline-flex;
+  gap: 0.1rem;
+}
+
+.hotel-detail__star {
+  color: #fbbf24;
+  font-size: 0.85rem;
 }
 
 .hotel-detail__info-grid {
@@ -1188,9 +1659,10 @@ onMounted(() => {
   gap: 0.3rem;
   padding: 0.2rem 0.5rem;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  border: 1px solid rgba(55, 107, 176, 0.35);
   font-size: 0.7rem;
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(55, 107, 176, 0.12);
+  color: #1e3a8a;
 }
 
 .hotel-detail__chip-icon {
@@ -1199,6 +1671,109 @@ onMounted(() => {
 
 .hotel-detail__rooms {
   margin-top: 1rem;
+}
+
+.rooms-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.rooms-toolbar h4 {
+  margin: 0;
+}
+
+.compare-table-wrap {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #fff;
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 820px;
+  font-size: 0.78rem;
+}
+
+.compare-table thead th {
+  text-align: left;
+  padding: 0.75rem 0.7rem;
+  background: #376bb0;
+  color: #fff;
+  font-weight: 600;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.compare-table thead th:last-child {
+  border-right: none;
+}
+
+.compare-table tbody td {
+  vertical-align: top;
+  padding: 0.75rem 0.7rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  border-right: 1px solid rgba(148, 163, 184, 0.2);
+  color: #0f172a;
+}
+
+.compare-table tbody td:last-child {
+  border-right: none;
+}
+
+.compare-title {
+  font-weight: 700;
+  color: #376bb0;
+  margin-bottom: 0.35rem;
+}
+
+.compare-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.compare-table .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(165, 20, 30, 0.45);
+  background: rgba(165, 20, 30, 0.12);
+  color: #a5141e;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.compare-capacity {
+  white-space: nowrap;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.compare-price__main {
+  font-weight: 700;
+  color: #a5141e;
+}
+
+.compare-price__sub {
+  margin-top: 0.2rem;
+  color: #475569;
+  font-size: 0.7rem;
+}
+
+.compare-options {
+  display: grid;
+  gap: 0.35rem;
+  color: #0f172a;
+}
+
+.compare-action {
+  text-align: center;
 }
 
 .hotel-detail__highlights,
@@ -1232,7 +1807,7 @@ onMounted(() => {
   border-radius: 0.75rem;
   border: 1px solid rgba(148, 163, 184, 0.3);
   padding: 0.75rem;
-  background: rgba(15, 23, 42, 0.65);
+  background: #f8fafc;
 }
 
 .room-card__header {
@@ -1258,9 +1833,22 @@ onMounted(() => {
   margin: 0.5rem 0;
 }
 
+.room-card__chips .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(165, 20, 30, 0.45);
+  background: rgba(165, 20, 30, 0.12);
+  color: #a5141e;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 .room-card__details {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: #334155;
   display: grid;
   gap: 0.35rem;
 }
@@ -1278,5 +1866,112 @@ onMounted(() => {
   text-align: center;
   font-size: 0.75rem;
   color: #9ca3af;
+}
+
+.hotel-detail--skeleton {
+  display: grid;
+  gap: 1rem;
+}
+
+.hotel-gallery--skeleton {
+  display: grid;
+  column-count: initial;
+  column-gap: 0;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.skeleton-line,
+.skeleton-thumb,
+.skeleton-chip,
+.skeleton-button {
+  position: relative;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 0.6rem;
+}
+
+.skeleton-line::after,
+.skeleton-thumb::after,
+.skeleton-chip::after,
+.skeleton-button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(226, 232, 240, 0.35) 45%,
+    rgba(226, 232, 240, 0.6) 55%,
+    transparent 100%
+  );
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-line {
+  height: 0.7rem;
+  border-radius: 999px;
+}
+
+.skeleton-line--title {
+  height: 1.2rem;
+  width: 60%;
+}
+
+.skeleton-line--meta {
+  width: 40%;
+}
+
+.skeleton-line--subtitle {
+  height: 0.85rem;
+  width: 45%;
+}
+
+.skeleton-line--short {
+  width: 65%;
+}
+
+.skeleton-line--room {
+  width: 55%;
+  height: 0.85rem;
+}
+
+.skeleton-line--price {
+  width: 25%;
+  height: 0.85rem;
+}
+
+.skeleton-thumb {
+  height: 120px;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.skeleton-chip {
+  display: inline-flex;
+  width: 70px;
+  height: 0.55rem;
+  border-radius: 999px;
+}
+
+.skeleton-button {
+  width: 90px;
+  height: 1.8rem;
+  border-radius: 999px;
+}
+
+.room-card--skeleton {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
 }
 </style>

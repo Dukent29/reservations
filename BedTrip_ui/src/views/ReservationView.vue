@@ -14,7 +14,7 @@
 -->
 
 <template>
-  <section class="workspace__content">
+  <section class="workspace__content reservation-view">
     <header class="panel" style="margin-bottom: 1rem;">
       <h2>
         Résultats pour
@@ -26,281 +26,295 @@
         {{ statusMessage }}
       </p>
     </header>
-
-    <section class="filters">
-      <div class="filter-group">
-        <p class="filter-title">Étoiles</p>
-        <div class="chip-toggle-group">
-          <label
-            v-for="n in 5"
-            :key="n"
-            class="chip-toggle"
-            :class="{ 'chip-toggle--active': filters.stars.includes(n) }"
-          >
-            <input
-              type="checkbox"
-              :value="n"
-              v-model="filters.stars"
-            />
-            <span class="chip-toggle__label">{{ n }}★</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="filter-group">
-        <p class="filter-title">Politiques</p>
-        <div class="chip-toggle-group">
-          <label
-            class="chip-toggle"
-            :class="{ 'chip-toggle--active': filters.freeCancel }"
-          >
-            <input
-              type="checkbox"
-              v-model="filters.freeCancel"
-            />
-            <span class="chip-toggle__label">Annulation gratuite</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="filter-group">
-        <p class="filter-title">Régime</p>
-        <div class="chip-toggle-group chip-toggle-group--wrap chip-toggle-group--compact">
-          <label
-            v-for="meal in MEAL_OPTIONS"
-            :key="meal.value"
-            class="chip-toggle chip-toggle--meal"
-            :class="{ 'chip-toggle--active': filters.meals.includes(meal.value) }"
-            :title="meal.label"
-          >
-            <input
-              type="checkbox"
-              class="flt-meal"
-              :value="meal.value"
-              v-model="filters.meals"
-            />
-            <span class="chip-toggle__code">{{ meal.code }}</span>
-            <span class="sr-only">{{ meal.label }}</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="filter-group">
-        <p class="filter-title">Budget (€)</p>
-        <div class="budget-filter">
-          <div class="budget-range">
-            <span class="sr-only">Budget maximum</span>
-            <div
-              class="budget-range__track"
-              :style="{
-                '--min': `${budgetMinPercent}%`,
-                '--max': `${budgetMaxPercent}%`,
-              }"
-            ></div>
-            <input
-              class="budget-range__input budget-range__input--max-only"
-              type="range"
-              :min="BUDGET_RANGE_MIN"
-              :max="BUDGET_RANGE_MAX"
-              :step="BUDGET_RANGE_STEP"
-              :value="budgetSliderValue"
-              @input="onBudgetInput"
-            />
+    <div class="results-layout">
+      <aside class="filters-panel card">
+        <section class="filters">
+          <div class="filter-group">
+            <p class="filter-title">Étoiles</p>
+            <div class="filter-checklist">
+              <label
+                v-for="n in 5"
+                :key="n"
+                class="filter-check"
+              >
+                <input
+                  type="checkbox"
+                  :value="n"
+                  v-model="filters.stars"
+                />
+                <span class="filter-check__title">
+                  {{ n }} étoile{{ n > 1 ? 's' : '' }}
+                </span>
+              </label>
+            </div>
+            <p class="muted" style="margin:.4rem 0 0;font-size:.75rem;">
+              Sélectionnez la catégorie d’hôtel souhaitée.
+            </p>
           </div>
-          <div class="budget-values">
-            <span>{{ formatBudgetLabel(budgetMinValue) }}</span>
-            <span>{{ formatBudgetLabel(budgetMaxValue, true) }}</span>
+
+          <div class="filter-group">
+            <p class="filter-title">Politiques</p>
+            <div class="filter-checklist">
+              <label class="filter-check">
+                <input
+                  type="checkbox"
+                  v-model="filters.freeCancel"
+                />
+                <span class="filter-check__title">Annulation gratuite</span>
+              </label>
+              <span class="filter-check__hint">
+                Sans frais avant la date limite
+              </span>
+            </div>
+            <p class="muted" style="margin:.4rem 0 0;font-size:.75rem;">
+              Afficher uniquement les offres avec annulation sans frais.
+            </p>
           </div>
-          <button
-            type="button"
-            class="secondary mini"
-            @click="applyBudgetFilter"
-          >
-            Appliquer
-          </button>
-        </div>
-        <small class="muted budget-hint">
-          Les montants correspondent au prix par nuit et se mettent à jour automatiquement après validation.
-        </small>
-      </div>
-    </section>
 
-    <ResultsSkeleton v-if="loading" />
-
-    <div class="results-list" v-else>
-      <div class="card results-card">
-        <h3>
-          Résultats de recherche
-          <span
-            v-if="resultsMeta"
-            style="color:#64748b;font-size:.7rem;font-weight:400;"
-          >
-            {{ resultsMeta }}
-          </span>
-        </h3>
-
-        <div v-if="error" style="color:#dc2626;font-size:.8rem;">
-          {{ error }}
-        </div>
-        <div v-else>
-          <div v-if="!hotels.length" style="font-size:.7rem;color:#64748b;">
-            Aucun résultat pour cette recherche.
+          <div class="filter-group">
+            <p class="filter-title">Régime</p>
+            <div class="chip-toggle-group chip-toggle-group--wrap chip-toggle-group--compact">
+              <label
+                v-for="meal in MEAL_OPTIONS"
+                :key="meal.value"
+                class="chip-toggle chip-toggle--meal"
+                :class="{ 'chip-toggle--active': filters.meals.includes(meal.value) }"
+                :title="meal.label"
+              >
+                <input
+                  type="checkbox"
+                  class="flt-meal"
+                  :value="meal.value"
+                  v-model="filters.meals"
+                />
+                <span class="chip-toggle__code">{{ meal.code }}</span>
+                <span class="chip-toggle__desc">{{ meal.label }}</span>
+              </label>
+            </div>
+            <p class="muted" style="margin:.4rem 0 0;font-size:.75rem;">
+              RO = chambre seule · BB = petit-déjeuner · HB = demi‑pension · FB = pension complète · AI/AL = tout compris
+            </p>
           </div>
-          <ul v-else class="hotel-list">
-            <li
-              v-for="hotel in paginatedHotels"
-              :key="hotelKey(hotel)"
-              class="hotel-card"
-            >
-              <div class="hotel-card__media" aria-hidden="true">
-                <div class="hotel-thumb__viewport">
-                  <template v-if="cardHasImages(hotel)">
-                    <img
-                      :src="cardCurrentImageUrl(hotel)"
-                      :alt="`${hotelDisplayName(hotel)} · photo ${cardCurrentImageIndex(hotel) + 1}`"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </template>
-                  <div
-                    v-else
-                    class="hotel-thumb__placeholder"
-                  >
-                    Photo en cours de chargement…
-                  </div>
-                </div>
-                <button
-                  v-if="cardImageCount(hotel) > 1"
-                  type="button"
-                  class="hotel-thumb__nav hotel-thumb__nav--prev"
-                  @click.stop="prevCardImage(hotel)"
-                >
-                  ‹
-                </button>
-                <button
-                  v-if="cardImageCount(hotel) > 1"
-                  type="button"
-                  class="hotel-thumb__nav hotel-thumb__nav--next"
-                  @click.stop="nextCardImage(hotel)"
-                >
-                  ›
-                </button>
+
+          <div class="filter-group">
+            <p class="filter-title">Budget (€)</p>
+            <div class="budget-filter">
+              <div class="budget-range">
+                <span class="sr-only">Budget maximum</span>
                 <div
-                  v-if="cardImageCount(hotel) > 1"
-                  class="hotel-thumb__counter"
+                  class="budget-range__track"
+                  :style="{
+                    '--min': `${budgetMinPercent}%`,
+                    '--max': `${budgetMaxPercent}%`,
+                  }"
+                ></div>
+                <input
+                  class="budget-range__input budget-range__input--max-only"
+                  type="range"
+                  :min="BUDGET_RANGE_MIN"
+                  :max="BUDGET_RANGE_MAX"
+                  :step="BUDGET_RANGE_STEP"
+                  :value="budgetSliderValue"
+                  @input="onBudgetInput"
+                />
+              </div>
+              <div class="budget-values">
+                <span>{{ formatBudgetLabel(budgetMinValue) }}</span>
+                <span>{{ formatBudgetLabel(budgetMaxValue, true) }}</span>
+              </div>
+              <button
+                type="button"
+                class="secondary mini"
+                @click="applyBudgetFilter"
+              >
+                Appliquer
+              </button>
+            </div>
+            <small class="muted budget-hint">
+              Les montants correspondent au prix par nuit et se mettent à jour automatiquement après validation.
+            </small>
+          </div>
+        </section>
+      </aside>
+
+      <div class="results-panel">
+        <ResultsSkeleton v-if="loading" />
+
+        <div class="results-list" v-else>
+          <div class="card results-card">
+            <h3>
+              Résultats de recherche
+              <span
+                v-if="resultsMeta"
+                style="color:#64748b;font-size:.7rem;font-weight:400;"
+              >
+                {{ resultsMeta }}
+              </span>
+            </h3>
+
+            <div v-if="error" style="color:#dc2626;font-size:.8rem;">
+              {{ error }}
+            </div>
+            <div v-else>
+              <div v-if="!hotels.length" style="font-size:.7rem;color:#64748b;">
+                Aucun résultat pour cette recherche.
+              </div>
+              <ul v-else class="hotel-list">
+                <li
+                  v-for="hotel in paginatedHotels"
+                  :key="hotelKey(hotel)"
+                  class="hotel-card"
                 >
-                  {{ cardCurrentImageIndex(hotel) + 1 }} /
-                  {{ cardImageCount(hotel) }}
-                </div>
-              </div>
-              <div class="hotel-card__content">
-                <header class="hotel-card__header">
-                  <div class="hotel-card__title-block">
-                    <h4 class="hotel-name">
-                      {{ hotelDisplayName(hotel) }}
-                    </h4>
-                    <p class="hotel-meta">
-                      <span v-if="hotel.city_name || hotel.city">
-                        {{ hotel.city_name || hotel.city }}
-                      </span>
-                      <span v-if="hotel.country">
-                        · {{ hotel.country }}
-                      </span>
-                    </p>
-                    <div class="hotel-card__stars">
-                      <span
-                        v-for="star in deriveHotelStars(hotel) || 0"
-                        :key="star"
-                      >
-                        ★
-                      </span>
-                    </div>
-                  </div>
-                  <div
-                    v-if="hotelPriceLabel(hotel)"
-                    class="hotel-card__price"
-                  >
-                    <span class="hotel-card__price-main">
-                      À partir de {{ hotelPriceLabel(hotel) }}
-                    </span>
-                    <small>
-                      pour le séjour
-                      <span v-if="hotelNightlyPriceLabel(hotel)">
-                        · {{ hotelNightlyPriceLabel(hotel) }}
-                      </span>
-                    </small>
-                  </div>
-                </header>
-                <div class="hotel-card__detail-panel">
-                  <div class="hotel-card__detail-info">
-                    <div class="hotel-card__room-title">
-                      {{ hotelPrimaryRoomName(hotel) }}
-                    </div>
-                    <div class="hotel-card__badges">
-                      <span
-                        v-if="hotelHasFreeCancellation(hotel)"
-                        class="badge badge--success"
-                      >
-                        Annulation gratuite
-                      </span>
-                      <span
+                  <div class="hotel-card__media" aria-hidden="true">
+                    <div class="hotel-thumb__viewport">
+                      <template v-if="cardHasImages(hotel)">
+                        <img
+                          :src="cardCurrentImageUrl(hotel)"
+                          :alt="`${hotelDisplayName(hotel)} · photo ${cardCurrentImageIndex(hotel) + 1}`"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </template>
+                      <div
                         v-else
-                        class="badge badge--danger"
+                        class="hotel-thumb__placeholder"
                       >
-                        Non remboursable
-                      </span>
-                      <span
-                        v-for="meal in hotelMealBadges(hotel)"
-                        :key="meal"
-                        class="badge badge--meal"
-                      >
-                        {{ meal }}
-                      </span>
+                        Photo en cours de chargement…
+                      </div>
                     </div>
-                    <p class="hotel-request" v-if="guestRequestLabel">
-                      Demande : {{ guestRequestLabel }}
-                    </p>
+                    <button
+                      v-if="cardImageCount(hotel) > 1"
+                      type="button"
+                      class="hotel-thumb__nav hotel-thumb__nav--prev"
+                      @click.stop="prevCardImage(hotel)"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      v-if="cardImageCount(hotel) > 1"
+                      type="button"
+                      class="hotel-thumb__nav hotel-thumb__nav--next"
+                      @click.stop="nextCardImage(hotel)"
+                    >
+                      ›
+                    </button>
+                    <div
+                      v-if="cardImageCount(hotel) > 1"
+                      class="hotel-thumb__counter"
+                    >
+                      {{ cardCurrentImageIndex(hotel) + 1 }} /
+                      {{ cardImageCount(hotel) }}
+                    </div>
                   </div>
-                </div>
-                <footer class="hotel-card__footer">
-                  <button
-                    class="secondary"
-                    type="button"
-                    @click="selectHotel(hotel)"
-                  >
-                    Voir les disponibilités
-                  </button>
-                </footer>
+                  <div class="hotel-card__content">
+                    <header class="hotel-card__header">
+                      <div class="hotel-card__title-block">
+                        <h4 class="hotel-name">
+                          {{ hotelDisplayName(hotel) }}
+                        </h4>
+                        <p class="hotel-meta">
+                          <span v-if="hotel.city_name || hotel.city">
+                            {{ hotel.city_name || hotel.city }}
+                          </span>
+                          <span v-if="hotel.country">
+                            · {{ hotel.country }}
+                          </span>
+                        </p>
+                        <div class="hotel-card__stars">
+                          <span
+                            v-for="star in deriveHotelStars(hotel) || 0"
+                            :key="star"
+                          >
+                            ★
+                          </span>
+                        </div>
+                      </div>
+                      <div
+                        v-if="hotelPriceLabel(hotel)"
+                        class="hotel-card__price"
+                      >
+                        <span class="hotel-card__price-main">
+                          À partir de {{ hotelPriceLabel(hotel) }}
+                        </span>
+                        <small>
+                          pour le séjour
+                          <span v-if="hotelNightlyPriceLabel(hotel)">
+                            · {{ hotelNightlyPriceLabel(hotel) }}
+                          </span>
+                        </small>
+                      </div>
+                    </header>
+                    <div class="hotel-card__detail-panel">
+                      <div class="hotel-card__detail-info">
+                        <div class="hotel-card__room-title">
+                          {{ hotelPrimaryRoomName(hotel) }}
+                        </div>
+                        <div class="hotel-card__badges">
+                          <span
+                            v-if="hotelHasFreeCancellation(hotel)"
+                            class="badge badge--success"
+                          >
+                            Annulation gratuite
+                          </span>
+                          <span
+                            v-else
+                            class="badge badge--danger"
+                          >
+                            Non remboursable
+                          </span>
+                          <span
+                            v-for="meal in hotelMealBadges(hotel)"
+                            :key="meal"
+                            class="badge badge--meal"
+                          >
+                            {{ meal }}
+                          </span>
+                        </div>
+                        <p class="hotel-request" v-if="guestRequestLabel">
+                          Demande : {{ guestRequestLabel }}
+                        </p>
+                      </div>
+                    </div>
+                    <footer class="hotel-card__footer">
+                      <button
+                        class="secondary"
+                        type="button"
+                        @click="selectHotel(hotel)"
+                      >
+                        Voir les disponibilités
+                      </button>
+                    </footer>
+                  </div>
+                </li>
+              </ul>
+              <div
+                v-if="totalPages > 1"
+                class="pagination"
+              >
+                <button
+                  class="secondary mini"
+                  type="button"
+                  @click="goPrevPage"
+                  :disabled="currentPage === 1"
+                >
+                  Précédent
+                </button>
+                <span class="pagination__label">
+                  Page {{ currentPage }} / {{ totalPages }}
+                </span>
+                <button
+                  class="secondary mini"
+                  type="button"
+                  @click="goNextPage"
+                  :disabled="currentPage === totalPages"
+                >
+                  Suivant
+                </button>
               </div>
-            </li>
-          </ul>
-          <div
-            v-if="totalPages > 1"
-            class="pagination"
-          >
-            <button
-              class="secondary mini"
-              type="button"
-              @click="goPrevPage"
-              :disabled="currentPage === 1"
-            >
-              Précédent
-            </button>
-            <span class="pagination__label">
-              Page {{ currentPage }} / {{ totalPages }}
-            </span>
-            <button
-              class="secondary mini"
-              type="button"
-              @click="goNextPage"
-              :disabled="currentPage === totalPages"
-            >
-              Suivant
-            </button>
+            </div>
           </div>
         </div>
       </div>
-
     </div>
   </section>
 </template>
@@ -315,6 +329,7 @@ const route = useRoute()
 const router = useRouter()
 
 const PREBOOK_SUMMARY_KEY = 'booking:lastPrebook'
+const MARKUP_PERCENT = 10
 const DEFAULT_IMAGE_SIZE = 'x300'
 const DETAIL_IMAGE_SIZE = '1024x768'
 const CARD_IMAGE_LIMIT = 10
@@ -810,6 +825,12 @@ function formatCurrency(amount, currency) {
   }
 }
 
+function applyMarkupAmount(amount) {
+  const num = Number(amount)
+  if (!Number.isFinite(num)) return amount
+  return Math.round(num * (1 + MARKUP_PERCENT / 100) * 100) / 100
+}
+
 function hotelCheapestRate(hotel) {
   if (!hotel || !Array.isArray(hotel?.rates)) return null
   const normalized = hotel.rates
@@ -822,7 +843,7 @@ function hotelCheapestRate(hotel) {
         payment?.currency_code ||
         'EUR'
       const nights = rate?.daily_prices?.length || 1
-      return { amount, currency, nights }
+      return { amount: applyMarkupAmount(amount), currency, nights }
     })
     .filter(Boolean)
   if (!normalized.length) return null
@@ -1271,14 +1292,15 @@ function persistPrebookSummary(apiResponse, hotel, rate) {
           rate?.name ||
           null,
         meal: rate?.meal || null,
-        price:
-          payment?.show_amount || payment?.amount || null,
+        price: applyMarkupAmount(payment?.show_amount || payment?.amount || null),
         currency:
           payment?.show_currency_code ||
           payment?.currency_code ||
           null,
         amenities: rate?.amenities_data || null,
-        daily_prices: rate?.daily_prices || null,
+        daily_prices: Array.isArray(rate?.daily_prices)
+          ? rate.daily_prices.map((value) => applyMarkupAmount(value))
+          : rate?.daily_prices || null,
         guests_label: '',
       },
       payload: apiResponse || null,
@@ -1420,7 +1442,7 @@ async function prebookRate(rate, index) {
 
   const payload = {
     book_hash: hash,
-    price_increase_percent: 0,
+    price_increase_percent: MARKUP_PERCENT,
     hp_context: {
       id: hotel.id || hotel.hid,
       hid: hotel.hid,
@@ -1609,6 +1631,105 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.reservation-view {
+  gap: 1.5rem;
+}
+
+.reservation-view h2,
+.reservation-view h3 {
+  color: #376bb0;
+}
+
+.results-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.filters-panel {
+  position: sticky;
+  top: 1.25rem;
+  align-self: start;
+  padding: 0.9rem 1rem;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.filter-group {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 0.9rem;
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filter-title {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.filter-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filter-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #0f172a;
+}
+
+.filter-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: #a5141e;
+}
+
+.filter-check__title {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.filter-check__hint {
+  font-size: 0.75rem;
+  color: #475569;
+  margin-left: 1.6rem;
+}
+
+.results-panel {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .results-layout {
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .results-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .filters-panel {
+    position: static;
+  }
+}
+
 .hotel-list {
   list-style: none;
   margin: 0;
@@ -1639,16 +1760,16 @@ onBeforeUnmount(() => {
   align-items: stretch;
   padding: 0.9rem;
   border-radius: 1.1rem;
-  background: rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
   transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
 
 .hotel-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(148, 163, 184, 0.28);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.30);
+  border-color: rgba(55, 107, 176, 0.35);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12);
 }
 
 /* media left */
@@ -1752,8 +1873,9 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 800;
-  color: #f8fafc;
+  color: #376bb0;
   line-height: 1.2;
+  text-transform: capitalize;
 }
 
 .hotel-meta {
@@ -1776,40 +1898,52 @@ onBeforeUnmount(() => {
   padding: 0.55rem 0.8rem;
   border-radius: 1rem;
 
-  background: linear-gradient(
-    180deg,
-    rgba(59,130,246,0.16),
-    rgba(59,130,246,0.08)
-  );
-  border: 1px solid rgba(96,165,250,0.32);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: none;
 }
 
 .hotel-card__price-main {
   font-size: 1.05rem;
   font-weight: 500;
-  color: #f8fafc;
+  color: #a5141e;
 }
 
 .hotel-card__price small {
   display: block;
   margin-top: 0.15rem;
   font-size: 0.7rem;
-  color: rgba(148,163,184,0.95);
+  color: #475569;
+}
+
+.chip-toggle--meal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chip-toggle--meal .chip-toggle__desc {
+  font-size: 0.65rem;
+  color: #475569;
+}
+
+.chip-toggle__desc {
+  font-size: 0.65rem;
+  color: #475569;
 }
 
 /* detail panel */
 .hotel-card__detail-panel {
   border-radius: 1rem;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(2, 6, 23, 0.25);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: #fff;
   padding: 0.75rem 0.85rem;
 }
 
 .hotel-card__room-title {
   font-size: 0.9rem;
   font-weight: 500;
-  color: #fff;
+  color: #0f172a;
   margin-bottom: 0.45rem;
 }
 
@@ -1838,30 +1972,30 @@ onBeforeUnmount(() => {
   font-weight: 500;
 
   background: rgba(255,255,255,0.06);
-  color: #e2e8f0;
+  color: #111827;
   border: 1px solid rgba(148,163,184,0.18);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
 /* You were missing badge--danger in your CSS */
 .badge--success { 
-  background: rgba(34,197,94,0.14);
+  background: rgba(34,197,94,0.18);
   border-color: rgba(34,197,94,0.28);
-  color: #bbf7d0;
+  color: #166534;
 }
 .badge--success::before { content: "✅"; }
 
 .badge--danger {
-  background: rgba(239,68,68,0.14);
+  background: rgba(239,68,68,0.18);
   border-color: rgba(239,68,68,0.28);
-  color: #fecaca;
+  color: #7f1d1d;
 }
 .badge--danger::before { content: "⛔"; }
 
 .badge--meal {
-  background: rgba(251,146,60,0.12);
+  background: rgba(251,146,60,0.18);
   border-color: rgba(249,115,22,0.24);
-  color: #fed7aa;
+  color: #9a3412;
 }
 .badge--meal::before { content: "🍽️"; }
 
@@ -1877,8 +2011,9 @@ onBeforeUnmount(() => {
   border-radius: 0.95rem;
   font-weight: 800;
 
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(148,163,184,0.20);
+  background: #a5141e;
+  color: #fff;
+  border: 1px solid #a5141e;
 
   transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
   width: 100%;
@@ -1886,8 +2021,8 @@ onBeforeUnmount(() => {
 
 .hotel-card__footer .secondary:hover {
   transform: translateY(-1px);
-  border-color: rgba(96,165,250,0.45);
-  box-shadow: 0 10px 20px rgba(0,0,0,0.25);
+  border-color: #7f1017;
+  box-shadow: 0 10px 20px rgba(165, 20, 30, 0.25);
 }
 
 .hotel-card__footer .secondary:focus-visible {
@@ -2093,15 +2228,22 @@ onBeforeUnmount(() => {
   padding: 0.45rem 0.75rem;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(15, 23, 42, 0.6);
+  background: transparent;
   font-size: 0.75rem;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
 
 .chip-toggle--active {
-  border-color: rgba(59, 130, 246, 0.8);
-  background: rgba(37, 99, 235, 0.18);
+  border-color: #a5141e;
+  background: rgba(165, 20, 30, 0.12);
+  color: #a5141e;
+}
+
+.chip-toggle--active .chip-toggle__label,
+.chip-toggle--active .chip-toggle__desc,
+.chip-toggle--active .chip-toggle__code {
+  color: #a5141e;
 }
 
 .chip-toggle input {
@@ -2115,7 +2257,7 @@ onBeforeUnmount(() => {
 
 .chip-toggle__label {
   font-size: 0.75rem;
-  color: #cbd5e1;
+  color: #1f2937;
 }
 
 .chip-toggle-group--wrap {
@@ -2141,6 +2283,9 @@ onBeforeUnmount(() => {
   height: auto;
   padding: 0.80rem 0.75rem;
   min-width: unset;
+  background: #a5141e;
+  color: #fff;
+  border: 1px solid #a5141e;
 }
 
 .budget-range {
@@ -2222,7 +2367,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   font-size: 0.8rem;
-  color: #e2e8f0;
+  color: #0f172a;
 }
 
 .sr-only {

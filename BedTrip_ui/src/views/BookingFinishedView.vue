@@ -60,6 +60,15 @@
           Retourner maintenant
         </button>
       </div>
+
+      <details class="debug-panel" open>
+        <summary>Debug</summary>
+        <pre>route.query: {{ formatDebug(debugQuery) }}</pre>
+        <pre>partner_order_id: {{ partnerOrderId || '-' }}</pre>
+        <pre>supplier_reference: {{ supplierReference || '-' }}</pre>
+        <pre>next: {{ nextPath || '-' }}</pre>
+        <pre>etg: {{ formatDebug(debugEtg) }}</pre>
+      </details>
     </section>
   </section>
 </template>
@@ -76,6 +85,7 @@ const supplierReference = ref('')
 const countdown = ref(6)
 const targetLabel = ref('la page de réservation')
 const nextPath = ref('/booking')
+const debugEtg = ref(null)
 
 let timerId = null
 
@@ -84,6 +94,17 @@ const confirmationMessage = computed(() =>
     ? `Référence fournisseur : ${supplierReference.value}.`
     : 'La référence fournisseur sera disponible prochainement.',
 )
+
+const debugQuery = computed(() => route.query || {})
+
+function formatDebug(value) {
+  if (value == null) return '-'
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
 
 function hydrateFromQuery() {
   const query = route.query || {}
@@ -106,6 +127,18 @@ function hydrateFromQuery() {
     typeof hintedNext === 'string' && hintedNext
       ? hintedNext
       : '/booking'
+}
+
+function hydrateEtgDebug() {
+  try {
+    if (typeof window === 'undefined') return
+    const ss = window.sessionStorage
+    if (!ss) return
+    const raw = ss.getItem('booking:lastEtgDebug')
+    debugEtg.value = raw ? JSON.parse(raw) : null
+  } catch {
+    debugEtg.value = debugEtg.value || null
+  }
 }
 
 function goToNext() {
@@ -133,6 +166,7 @@ function tickCountdown() {
 
 onMounted(() => {
   hydrateFromQuery()
+  hydrateEtgDebug()
   tickCountdown()
 })
 
@@ -144,6 +178,29 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.debug-panel {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  font-size: 0.85rem;
+  overflow: auto;
+  margin-top: 1.5rem;
+  width: 100%;
+}
+
+.debug-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.debug-panel pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0.5rem 0 0 0;
+}
+
 .confirmation-card {
   text-align: center;
   padding: 2rem;

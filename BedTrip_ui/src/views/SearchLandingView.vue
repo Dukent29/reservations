@@ -26,10 +26,15 @@
 
     <div class="hero__content">
       <p class="hero__eyebrow">BedTrip</p>
-      <h2 class="hero__title">Découvrez la magie de chaque destination.</h2>
+      <h2 class="hero__title">Plateforme B2B de réservation d’hôtels pour agences de voyage et entreprises.</h2>
       <p class="hero__subtitle">
-        Recherchez rapidement l’hébergement idéal pour vos clients.
+        Comparez des hébergements au meilleur tarif pro, consultez les disponibilités en temps réel,
+    et réservez en quelques clics pour vos clients (villes, régions, hôtels).
+    BedTrip centralise la <strong>recherche d’hôtels B2B</strong>, l’<strong>inventaire</strong> et les
+    <strong>réservations professionnelles</strong> : Paris, Rome, Dubaï et des milliers de destinations.
+    Idéal pour <strong>travel managers</strong>, <strong>TMC</strong> et <strong>agences</strong>.
       </p>
+
       <div
         v-if="heroSlideImages.length > 1"
         class="hero__bg-bullets"
@@ -95,12 +100,6 @@
                       <span class="suggestion-option__name">
                         {{ region.name || region.full_name || region.fullName || 'Région' }}
                       </span>
-                      <span class="suggestion-option__meta">
-                        {{ region.country_code || '' }}
-                        <span v-if="region.id">
-                          · #{{ region.id }}
-                        </span>
-                      </span>
                     </button>
                   </div>
 
@@ -118,12 +117,6 @@
                     >
                       <span class="suggestion-option__name">
                         {{ hotel.name || 'Hôtel' }}
-                      </span>
-                      <span class="suggestion-option__meta">
-                        HID {{ hotel.hid || '?' }}
-                        <span v-if="hotel.region_id">
-                          · Région {{ hotel.region_id }}
-                        </span>
                       </span>
                     </button>
                   </div>
@@ -180,7 +173,7 @@
 
   <!-- About BedTrip -->
   <section class="landing-section landing-section--about">
-    <h2 class="landing-section__title">Le principe de BedTrip</h2>
+    <h2 class="landing-section__title">Le principe de BedTrip.</h2>
     <p class="landing-section__subtitle muted">
       BedTrip est une console hôtelière B2B pensée pour les agences et partenaires :
       un seul outil pour chercher, comparer et réserver les meilleurs séjours pour vos clients.
@@ -929,6 +922,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+
 .hero {
   position: relative;
   overflow: visible;
@@ -953,20 +947,35 @@ onBeforeUnmount(() => {
   background-size: cover;
   background-position: center;
   transform: scale(1.08);
-  filter: saturate(115%) brightness(0.9);
+  filter: saturate(105%) brightness(1);
   border-radius: inherit;
 }
 
 .hero__bg--overlay {
-  background: radial-gradient(circle at 20% 25%, rgba(15, 23, 42, 0.3), transparent 50%),
-    linear-gradient(135deg, rgba(2, 6, 23, 0.85), rgba(2, 6, 23, 0.35));
-  mix-blend-mode: multiply;
+  background: rgba(0, 0, 0, 0.6);
+  mix-blend-mode: normal;
   border-radius: inherit;
 }
 
 .hero__content {
   position: relative;
   z-index: 1;
+  color: #111827;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.hero__title {
+  color: #ffffff;
+}
+.hero__eyebrow{
+  font-weight: bold;
+  color: #e6bb1b;
+}
+
+.hero__subtitle {
+  color: #ffffff;
 }
 
 .hero__search-shell {
@@ -980,7 +989,8 @@ onBeforeUnmount(() => {
   gap: 0.35rem;
   padding: 0.2rem 0.7rem;
   border-radius: 999px;
-  background: rgba(2, 6, 23, 0.55);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.35);
   backdrop-filter: blur(6px);
   width: fit-content;
   margin-bottom: 0.5rem;
@@ -990,16 +1000,36 @@ onBeforeUnmount(() => {
   width: 9px;
   height: 9px;
   border-radius: 999px;
-  border: 1px solid rgba(248, 250, 252, 0.6);
-  background: transparent;
+  border: 1px solid rgba(165, 20, 30, 0.75);
+  background: rgba(165, 20, 30, 0.35);
   cursor: pointer;
   padding: 0;
   transition: background-color 0.2s, transform 0.2s;
 }
 
 .hero__bg-bullet.is-active {
-  background: #f8fafc;
+  background: #a5141e;
+  border-color: #a5141e;
   transform: scale(1.15);
+}
+
+@media (max-width: 800px) {
+  .hero__search-shell {
+    order: -1;
+  }
+
+  .hero__bg-bullets {
+    order: 0;
+  }
+
+  .hero__title {
+    font-size: 1.1rem;
+    line-height: 1.35;
+  }
+
+  .hero__subtitle {
+    font-size: 0.85rem;
+  }
 }
 
 .date-range-wrapper {
@@ -1039,8 +1069,8 @@ onBeforeUnmount(() => {
   height: 2.25rem;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.5);
-  background: rgba(15, 23, 42, 0.8);
-  color: #f8fafc;
+  background: rgba(248, 250, 252, 0.9);
+  color: #111827;
   font-size: 1rem;
   cursor: pointer;
 }
@@ -1080,19 +1110,20 @@ onBeforeUnmount(() => {
 .modal__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(2, 6, 23, 0.75);
+  background: rgba(15, 23, 42, 0.2);
   backdrop-filter: blur(4px);
 }
 
 .modal__dialog {
   position: relative;
   width: min(360px, 92vw);
-  background: rgba(15, 23, 42, 0.95);
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.3);
   border-radius: 1.25rem;
   padding: 1rem;
-  box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 30px 80px -40px rgba(15, 23, 42, 0.35);
   z-index: 1;
+  backdrop-filter: blur(12px);
 }
 
 .modal__header,
@@ -1134,8 +1165,8 @@ onBeforeUnmount(() => {
   height: 2rem;
   border-radius: 0.65rem;
   border: 1px solid rgba(148, 163, 184, 0.4);
-  background: rgba(15, 23, 42, 0.8);
-  color: #f8fafc;
+  background: #f8fafc;
+  color: #111827;
   cursor: pointer;
 }
 
@@ -1148,35 +1179,36 @@ onBeforeUnmount(() => {
 .date-calendar__dow {
   text-transform: uppercase;
   font-size: 0.65rem;
-  color: #94a3b8;
+  color: #64748b;
   text-align: center;
 }
 
 .date-calendar__day {
   border-radius: 0.75rem;
   border: 1px solid transparent;
-  background: rgba(15, 23, 42, 0.7);
-  color: #f8fafc;
+  background: #ffffff;
+  color: #111827;
   height: 2.4rem;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
 
 .date-calendar__day--disabled {
-  color: #475569;
+  color: #94a3b8;
   cursor: not-allowed;
-  border-color: rgba(71, 85, 105, 0.4);
+  border-color: rgba(148, 163, 184, 0.4);
 }
 
 .date-calendar__day--start,
 .date-calendar__day--end {
   background: #1d4ed8;
   border-color: #93c5fd;
+  color: #fff;
 }
 
 .date-calendar__day--inrange {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.35);
 }
 
 .hero-bg-fade-enter-active,
@@ -1197,6 +1229,7 @@ onBeforeUnmount(() => {
 .landing-section__title {
   margin: 0 0 0.5rem;
   font-size: 1.4rem;
+  color: #a5141e;
 }
 
 .landing-section__subtitle {
@@ -1212,10 +1245,13 @@ onBeforeUnmount(() => {
 
 .info-card {
   border-radius: 0.9rem;
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.4);
   padding: 0.9rem 1rem;
-  background: rgba(15, 23, 42, 0.9);
-  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 40px -24px rgba(15, 23, 42, 0.25);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .info-card h3 {
@@ -1226,7 +1262,32 @@ onBeforeUnmount(() => {
 .info-card p {
   margin: 0;
   font-size: 0.8rem;
-  color: #cbd5e1;
+  color: #475569;
+}
+
+.info-card::after {
+  content: "";
+  position: absolute;
+  left: 1rem;
+  bottom: 0.65rem;
+  width: 36px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(165, 20, 30, 0.85), rgba(165, 20, 30, 0));
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.info-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(165, 20, 30, 0.35);
+  box-shadow: 0 26px 55px -28px rgba(15, 23, 42, 0.35);
+}
+
+.info-card:hover::after {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .landing-section__grid--cards {
@@ -1239,7 +1300,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   min-height: 180px;
   cursor: pointer;
-  box-shadow: 0 22px 50px -24px rgba(15, 23, 42, 0.95);
+  box-shadow: 0 22px 50px -24px rgba(15, 23, 42, 0.35);
 }
 
 .highlight-card__image {
@@ -1247,7 +1308,7 @@ onBeforeUnmount(() => {
   inset: 0;
   background-size: cover;
   background-position: center;
-  filter: brightness(0.85) saturate(110%);
+  filter: brightness(1) saturate(105%);
   transition: transform 0.4s ease, filter 0.4s ease;
 }
 
@@ -1261,11 +1322,11 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   background: linear-gradient(
     to top,
-    rgba(15, 23, 42, 0.85),
-    rgba(15, 23, 42, 0.1)
+    rgba(15, 23, 42, 0.92),
+    rgba(15, 23, 42, 0.35)
   );
-  color: #f9fafb;
-  opacity: 0.9;
+  color: #ffffff;
+  opacity: 0.98;
   transition: background 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
 }
 
@@ -1301,13 +1362,21 @@ onBeforeUnmount(() => {
 
 .payment-point {
   border-radius: 0.9rem;
-  border: 1px solid rgba(34, 197, 94, 0.4);
-  background: linear-gradient(
-    145deg,
-    rgba(22, 163, 74, 0.12),
-    rgba(15, 23, 42, 0.95)
-  );
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(255, 255, 255, 0.9);
   padding: 0.9rem 1rem;
+  box-shadow: 0 18px 40px -24px rgba(15, 23, 42, 0.25);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.payment-point h3 {
+  color: #a5141e;
+}
+
+.payment-point p {
+  color: #475569;
 }
 
 .payment-point h3 {
@@ -1318,6 +1387,29 @@ onBeforeUnmount(() => {
 .payment-point p {
   margin: 0;
   font-size: 0.8rem;
-  color: #d1fae5;
+  color: #475569;
+}
+
+.payment-point::before {
+  content: "";
+  position: absolute;
+  inset: -40% 50% auto -40%;
+  height: 140%;
+  background: radial-gradient(circle, rgba(165, 20, 30, 0.12), rgba(165, 20, 30, 0));
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+}
+
+.payment-point:hover {
+  transform: translateY(-4px);
+  border-color: rgba(165, 20, 30, 0.35);
+  box-shadow: 0 26px 55px -28px rgba(15, 23, 42, 0.35);
+}
+
+.payment-point:hover::before {
+  opacity: 1;
+  transform: translateY(0);
 }
 </style>

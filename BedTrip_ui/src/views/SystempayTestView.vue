@@ -57,22 +57,11 @@ const route = useRoute()
 
 const partnerOrderId = ref('')
 const customerEmail = ref('')
+const customerFirstName = ref('')
+const customerLastName = ref('')
+const customerPhone = ref('')
+const customerCivility = ref('')
 const debugText = ref('// en attente de l’appel /api/payments/systempay/create-order…')
-const insurancePayload = ref(null)
-
-function loadInsurancePayload() {
-  if (typeof window === 'undefined') return
-  try {
-    const raw = window.sessionStorage.getItem('booking:extras')
-    if (!raw) return
-    const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object') {
-      insurancePayload.value = parsed
-    }
-  } catch {
-    insurancePayload.value = null
-  }
-}
 
 function ensureKryptonCss() {
   if (typeof document === 'undefined') return
@@ -139,11 +128,15 @@ function loadKryptonScript() {
         : window.location.origin.replace(/\/$/, '')
     script.setAttribute(
       'kr-post-url-success',
-      `${backendBase}/payment/success?ui=bedtrip`,
+      `${backendBase}/payment/success?ui=bedtrip&partner_order_id=${encodeURIComponent(
+        partnerOrderId.value || '',
+      )}`,
     )
     script.setAttribute(
       'kr-post-url-refused',
-      `${backendBase}/payment/error?ui=bedtrip`,
+      `${backendBase}/payment/error?ui=bedtrip&partner_order_id=${encodeURIComponent(
+        partnerOrderId.value || '',
+      )}`,
     )
 
     script.onload = () => {
@@ -162,6 +155,10 @@ async function initPaymentForm() {
     String(route.query.partner_order_id || '').trim()
   customerEmail.value =
     String(route.query.email || 'sample@example.com').trim()
+  customerFirstName.value = String(route.query.first_name || '').trim()
+  customerLastName.value = String(route.query.last_name || '').trim()
+  customerPhone.value = String(route.query.phone || '').trim()
+  customerCivility.value = String(route.query.civility || '').trim()
 
   if (!partnerOrderId.value) {
     debugText.value =
@@ -175,9 +172,10 @@ async function initPaymentForm() {
   const payload = {
     partner_order_id: partnerOrderId.value,
     customerEmail: customerEmail.value,
-  }
-  if (insurancePayload.value) {
-    payload.insurance = insurancePayload.value
+    customerFirstName: customerFirstName.value,
+    customerLastName: customerLastName.value,
+    customerPhone: customerPhone.value,
+    customerCivility: customerCivility.value,
   }
 
   try {
@@ -221,7 +219,6 @@ async function initPaymentForm() {
 }
 
 onMounted(() => {
-  loadInsurancePayload()
   initPaymentForm().catch((err) => {
     debugText.value = `Erreur d’initialisation du formulaire Systempay : ${
       err?.message || String(err || '')

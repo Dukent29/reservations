@@ -24,27 +24,15 @@ export const API_BASE = (() => {
  * - If parsing fails, `data` contains `_raw` and `_parseError` fields.
  */
 export async function safeJsonFetch(url, options = {}) {
+  const response = await fetch(url, options);
+  const statusCode = response.status;
+  const rawText = await response.text();
+  let data;
   try {
-    const response = await fetch(url, options);
-    const statusCode = response.status;
-    const rawText = await response.text();
-    let data;
-    try {
-      data = rawText ? JSON.parse(rawText) : null;
-    } catch (parseErr) {
-      data = { _parseError: parseErr.message, _raw: rawText, _httpStatus: statusCode };
-    }
-    return { statusCode, data };
-  } catch (err) {
-    if (!options?.skipServerDownRedirect && typeof window !== "undefined") {
-      const currentPath = window.location.pathname || "";
-      if (!currentPath.startsWith("/server-down")) {
-        window.location.assign("/server-down");
-      }
-    }
-    return {
-      statusCode: 0,
-      data: { error: "network_error", message: err?.message || "Network error" },
-    };
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch (parseErr) {
+    data = { _parseError: parseErr.message, _raw: rawText, _httpStatus: statusCode };
   }
+  return { statusCode, data };
 }
+

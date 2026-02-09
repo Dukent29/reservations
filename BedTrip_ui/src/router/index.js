@@ -12,14 +12,14 @@ import {
 // Views
 import BookingView from '../views/BookingView.vue'
 import BookingFinishedView from '../views/BookingFinishedView.vue'
-import ReservationView from '../views/ReservationView.vue'
 import HotelDetailView from '../views/HotelDetailView.vue'
+import ReservationView from '../views/ReservationView.vue'
 import PaymentSuccessView from '../views/PaymentSuccessView.vue'
 import PaymentErrorView from '../views/PaymentErrorView.vue'
 import SystempayTestView from '../views/SystempayTestView.vue'
 import SearchLandingView from '../views/SearchLandingView.vue'
-import NotFoundView from '../views/NotFoundView.vue'
-import ServerDownView from '../views/ServerDownView.vue'
+import MentionsLegalesView from '../views/MentionsLegalesView.vue'
+import PolitiqueDeConfidentialiteView from '../views/PolitiqueDeConfidentialiteView.vue'
 
 const routes = [
   {
@@ -28,14 +28,14 @@ const routes = [
     component: SearchLandingView,
   },
   {
-    // Results + filters + hotel details (formerly reservation.html full page)
+    // Results + filters (formerly reservation.html search list)
     path: '/results',
     name: 'search-results',
     component: ReservationView,
   },
   {
-    // Hotel details and room selection
-    path: '/results/:hid',
+    // Hotel detail page
+    path: '/hotel/:hid',
     name: 'hotel-detail',
     component: HotelDetailView,
   },
@@ -82,14 +82,16 @@ const routes = [
     component: SystempayTestView,
   },
   {
-    path: '/server-down',
-    name: 'server-down',
-    component: ServerDownView,
+    // Legal notice page
+    path: '/mentions-legales',
+    name: 'mentions-legales',
+    component: MentionsLegalesView,
   },
   {
-    path: '/:pathMatch(.*)*',
-    name: 'not-found',
-    component: NotFoundView,
+    // Privacy policy page
+    path: '/politique-de-confidentialite',
+    name: 'politique-de-confidentialite',
+    component: PolitiqueDeConfidentialiteView,
   },
 ]
 

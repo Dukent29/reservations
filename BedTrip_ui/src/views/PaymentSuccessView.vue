@@ -19,7 +19,6 @@
     - Collect guests and contact info.
     - Build request body for /api/booking/start (supplier_data, rooms, payment_type).
     - Submit the finalize request and show success or error status.
-  - Support a debug area to show last API request/response JSON (appendDebug).
 
   The layout will reuse:
   - Summary cards (.summary-card, .muted, .card).
@@ -180,12 +179,17 @@
         </form>
       </section>
 
-      <section class="card booking-raw">
-        <h3>Debug réservation</h3>
-        <pre class="booking-raw__pre">
-{{ debugText }}
-        </pre>
-      </section>
+      <details class="debug-panel" open>
+        <summary>Debug</summary>
+        <pre>booking/status request: {{ formatDebug(debugBookingStatusReq) }}</pre>
+        <pre>booking/status response: {{ formatDebug(debugBookingStatusRes) }}</pre>
+        <pre>booking/status error: {{ formatDebug(debugBookingStatusErr) }}</pre>
+        <pre>booking/start request: {{ formatDebug(debugBookingStartReq) }}</pre>
+        <pre>booking/start response: {{ formatDebug(debugBookingStartRes) }}</pre>
+        <pre>booking/start etg: {{ formatDebug(debugBookingStartEtg) }}</pre>
+        <pre>booking/start error: {{ formatDebug(debugBookingStartErr) }}</pre>
+      </details>
+
     </section>
   </section>
 </template>
@@ -218,12 +222,19 @@ const finalizeStatus = ref('')
 const finalizeStatusType = ref('info')
 const submitLoading = ref(false)
 
-const debugText = ref('// les données de réservation apparaîtront ici')
+const debugBookingStartReq = ref(null)
+const debugBookingStartRes = ref(null)
+const debugBookingStartErr = ref(null)
+const debugBookingStartEtg = ref(null)
+const debugBookingStatusReq = ref(null)
+const debugBookingStatusRes = ref(null)
+const debugBookingStatusErr = ref(null)
 
 const storedPrebookSummary = ref(null)
 const storedPrebookPayload = ref(null)
 const storedCustomer = ref(null)
 const currentPaymentInfo = ref(null)
+const bookingForm = ref(null)
 
 const rawPartnerParam = computed(() =>
   String(route.query.partner_order_id || '').trim(),
@@ -240,8 +251,8 @@ function redirectToFinishedPage({
       partner_order_id: partnerId || undefined,
       supplier_reference: supplierReference || undefined,
       delay: String(delaySeconds),
-      next: '/booking',
-      next_label: 'la page de réservation',
+      next: '/',
+      next_label: "la page d'accueil",
     },
   })
 }
@@ -256,16 +267,13 @@ function setFinalizeStatus(message, type = 'info') {
   finalizeStatusType.value = type
 }
 
-function appendDebug(label, data) {
-  const time = new Date().toISOString()
-  let body
+function formatDebug(value) {
+  if (value == null) return '-'
   try {
-    body = JSON.stringify(data, null, 2)
+    return JSON.stringify(value, null, 2)
   } catch {
-    body = String(data)
+    return String(value)
   }
-  const header = `// [${time}] ${label}\n`
-  debugText.value = `${header}${body}\n\n${debugText.value || ''}`
 }
 
 function formatPrice(amount, currency) {
@@ -336,16 +344,62 @@ function deriveHotelSummary() {
   const stay = summary.stay || {}
   const room = summary.room || {}
 
-  const name = hotel.name || null
-  const city = hotel.city || null
-  const address = hotel.address || null
-  const country = hotel.country || null
+  const payload =
+    storedPrebookPayload.value && typeof storedPrebookPayload.value === 'object'
+      ? storedPrebookPayload.value
+      : null
+  const payloadHotels =
+    payload?.data?.hotels ||
+    payload?.hotels ||
+    payload?.prebook_token?.hotels ||
+    []
+  const payloadHotel = Array.isArray(payloadHotels)
+    ? payloadHotels[0] || null
+    : null
+  const payloadRate = payloadHotel?.rates?.[0] || null
+  const payloadLegalHotel =
+    payloadRate?.legal_info?.hotel || payloadHotel?.legal_info?.hotel || null
+
+  const normalizeText = (value) =>
+    typeof value === 'string' && value.trim().length ? value.trim() : null
+
+  const payloadName = normalizeText(
+    payloadHotel?.name ||
+      payloadHotel?.hotel_name ||
+      payloadHotel?.hotel_name_trans ||
+      payloadLegalHotel?.name,
+  )
+  const payloadCity = normalizeText(
+    payloadHotel?.city ||
+      payloadHotel?.city_name ||
+      payloadLegalHotel?.city,
+  )
+  const payloadAddress = normalizeText(
+    payloadHotel?.address ||
+      payloadHotel?.address_full ||
+      payloadLegalHotel?.address,
+  )
+  const payloadCountry = normalizeText(
+    payloadHotel?.country ||
+      payloadHotel?.country_name ||
+      payloadLegalHotel?.country,
+  )
+
+  const name = hotel.name || payloadName || null
+  const fallbackId =
+    hotel.id || payloadHotel?.id || payloadHotel?.hid || null
+  const fallbackName = fallbackId
+    ? String(fallbackId).replace(/_/g, ' ').trim()
+    : null
+  const city = hotel.city || payloadCity || null
+  const address = hotel.address || payloadAddress || null
+  const country = hotel.country || payloadCountry || null
 
   const checkin = stay.checkin || null
   const checkout = stay.checkout || null
 
   const hotelName =
-    name || city || country || 'Hôtel non spécifié'
+    name || fallbackName || city || country || 'Hôtel non spécifié'
 
   const parts = []
   if (address || city) {
@@ -369,6 +423,17 @@ function deriveHotelSummary() {
   if (room && room.price) {
     amount = room.price
     currency = room.currency || stay.currency || null
+  }
+  if (amount == null && payloadRate) {
+    const payloadPayment =
+      payloadRate?.payment_options?.payment_types?.[0] || null
+    if (payloadPayment) {
+      amount = payloadPayment.show_amount || payloadPayment.amount || amount
+      currency =
+        payloadPayment.show_currency_code ||
+        payloadPayment.currency_code ||
+        currency
+    }
   }
   if (
     currentPaymentInfo.value &&
@@ -403,6 +468,121 @@ function ensureAtLeastOneGuest() {
   })
 }
 
+function applyCustomerDefaults(customer) {
+  if (!customer) return
+  const firstName =
+    (customer.firstName || customer.first_name || '').trim()
+  const lastName =
+    (customer.lastName || customer.last_name || '').trim()
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
+
+  if (fullName) {
+    storedCustomer.value = {
+      ...(storedCustomer.value || {}),
+      fullName,
+      email: customer.email || storedCustomer.value?.email || '',
+      phone:
+        customer.mobilePhoneNumber ||
+        customer.phone ||
+        storedCustomer.value?.phone || '',
+    }
+  }
+
+  if (!contactEmail.value && customer.email) {
+    contactEmail.value = customer.email
+  }
+  if (!contactPhone.value && customer.mobilePhoneNumber) {
+    contactPhone.value = customer.mobilePhoneNumber
+  }
+  if (!contactPhone.value && customer.phone) {
+    contactPhone.value = customer.phone
+  }
+
+  if (!guests.value.length) {
+    guests.value.push({ firstName, lastName })
+    return
+  }
+  const firstGuest = guests.value[0]
+  if (
+    firstGuest &&
+    !firstGuest.firstName &&
+    !firstGuest.lastName &&
+    (firstName || lastName)
+  ) {
+    firstGuest.firstName = firstName
+    firstGuest.lastName = lastName
+  }
+}
+
+function deriveSummaryFromBookingForm(form) {
+  if (!form || storedPrebookSummary.value) return
+  const hotel =
+    form.hotel ||
+    form.hotel_info ||
+    form.hotel_data ||
+    form.item?.hotel ||
+    null
+
+  const name =
+    hotel?.name ||
+    form.hotel_name ||
+    form.hotelName ||
+    form.name ||
+    null
+  const city =
+    hotel?.city ||
+    hotel?.city_name ||
+    form.city ||
+    null
+  const address =
+    hotel?.address ||
+    hotel?.address_full ||
+    form.address ||
+    null
+  const country =
+    hotel?.country ||
+    hotel?.country_name ||
+    form.country ||
+    null
+
+  const checkin =
+    form.checkin ||
+    form.check_in ||
+    form.arrival_date ||
+    form.stay?.checkin ||
+    null
+  const checkout =
+    form.checkout ||
+    form.check_out ||
+    form.departure_date ||
+    form.stay?.checkout ||
+    null
+
+  const paymentType =
+    (Array.isArray(form.payment_types) && form.payment_types[0]) ||
+    form.payment_type ||
+    null
+
+  const amount =
+    paymentType?.amount ||
+    form.total_amount ||
+    form.order_amount ||
+    null
+  const currency =
+    paymentType?.currency_code ||
+    form.currency_code ||
+    form.currency ||
+    null
+
+  if (name || city || address || country || checkin || checkout) {
+    storedPrebookSummary.value = {
+      hotel: { name, city, address, country },
+      stay: { checkin, checkout, currency },
+      room: { price: amount, currency },
+    }
+  }
+}
+
 function addGuest() {
   guests.value.push({ firstName: '', lastName: '' })
 }
@@ -422,21 +602,47 @@ async function fetchBookingStatus(partnerId) {
     const endpoint = `${API_BASE}/api/booking/status?partner_order_id=${encodeURIComponent(
       partnerId,
     )}`
+    debugBookingStatusReq.value = { partner_order_id: partnerId }
+    debugBookingStatusErr.value = null
     const res = await fetch(endpoint)
     const payload = await res.json()
-    appendDebug('RESPONSE /api/booking/status', payload)
+    debugBookingStatusRes.value = {
+      status: res.status,
+      ok: res.ok,
+      payload,
+    }
     if (!res.ok || payload?.status !== 'ok') {
       throw new Error(
         payload?.error || payload?.message || res.status,
       )
     }
     currentPaymentInfo.value = payload.payment || null
+    bookingForm.value =
+      payload.booking_form && payload.booking_form.form
+        ? payload.booking_form.form
+        : null
+    if (!storedPrebookSummary.value && payload.prebook_summary) {
+      const prebook = payload.prebook_summary
+      if (prebook.summary || prebook.payload) {
+        storedPrebookSummary.value = prebook.summary || null
+        storedPrebookPayload.value = prebook.payload || null
+      } else {
+        storedPrebookSummary.value = prebook
+      }
+    }
+    deriveSummaryFromBookingForm(bookingForm.value)
+    if (payload.customer) {
+      applyCustomerDefaults(payload.customer)
+    }
     deriveHotelSummary()
     setStatus(
       'Paiement confirmé. Merci de confirmer les voyageurs pour finaliser la réservation.',
       'info',
     )
   } catch (err) {
+    debugBookingStatusErr.value = {
+      message: err?.message || String(err || ''),
+    }
     setStatus(
       `Impossible de récupérer le statut de réservation : ${
         err?.message || String(err || '')
@@ -477,15 +683,16 @@ async function submitBooking() {
   }
 
   const mainGuest = guestsPayload[0]
-  const paymentPayload =
-    (currentPaymentInfo.value &&
-      currentPaymentInfo.value.payload) ||
-    {}
+  const bookingFormPayment =
+    bookingForm.value &&
+    Array.isArray(bookingForm.value.payment_types) &&
+    bookingForm.value.payment_types.length > 0
+      ? bookingForm.value.payment_types[0]
+      : null
   const amount =
-    paymentPayload.hotel_amount ||
-    paymentPayload.base_amount ||
     (currentPaymentInfo.value &&
       currentPaymentInfo.value.amount) ||
+    (bookingFormPayment && bookingFormPayment.amount) ||
     (storedPrebookSummary.value &&
       storedPrebookSummary.value.room &&
       storedPrebookSummary.value.room.price) ||
@@ -494,15 +701,22 @@ async function submitBooking() {
     (currentPaymentInfo.value &&
       (currentPaymentInfo.value.currency_code ||
         currentPaymentInfo.value.currencyCode)) ||
+    (bookingFormPayment && bookingFormPayment.currency_code) ||
     (storedPrebookSummary.value &&
       storedPrebookSummary.value.stay &&
       storedPrebookSummary.value.stay.currency) ||
     'EUR'
 
   const paymentType = {
-    type: 'deposit',
-    amount: amount != null ? String(amount) : '0',
-    currency_code: currency || 'EUR',
+    type: bookingFormPayment?.type || 'deposit',
+    amount:
+      bookingFormPayment && bookingFormPayment.amount != null
+        ? String(bookingFormPayment.amount)
+        : amount != null
+          ? String(amount)
+          : '0',
+    currency_code:
+      bookingFormPayment?.currency_code || currency || 'EUR',
   }
 
   const body = {
@@ -528,19 +742,39 @@ async function submitBooking() {
   }
 
   try {
+    debugBookingStartReq.value = body
+    debugBookingStartErr.value = null
     setFinalizeStatus(
       'Finalisation de la réservation auprès du fournisseur…',
       'info',
     )
     submitLoading.value = true
-    appendDebug('REQUEST /api/booking/start', body)
     const res = await fetch(`${API_BASE}/api/booking/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
     const payload = await res.json()
-    appendDebug('RESPONSE /api/booking/start', payload)
+    debugBookingStartRes.value = {
+      status: res.status,
+      ok: res.ok,
+      payload,
+    }
+    debugBookingStartEtg.value =
+      payload && payload._debug && payload._debug.etg ? payload._debug.etg : null
+    try {
+      if (typeof window !== 'undefined') {
+        const ss = window.sessionStorage
+        if (ss) {
+          ss.setItem(
+            'booking:lastEtgDebug',
+            JSON.stringify(debugBookingStartEtg.value || null),
+          )
+        }
+      }
+    } catch {
+      // best-effort only
+    }
     if (!res.ok || payload?.status !== 'ok') {
       const baseMessage =
         payload?.error ||
@@ -568,6 +802,10 @@ async function submitBooking() {
       partnerId: partnerOrderId.value,
     })
   } catch (err) {
+    debugBookingStartErr.value = {
+      message: err?.message || String(err || ''),
+      detail: err?._detail || null,
+    }
     const detail =
       err && err._detail
         ? err._detail
@@ -614,9 +852,26 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.booking-raw__pre {
-  margin: 0;
-  font-size: 0.75rem;
+.debug-panel {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  font-size: 0.85rem;
+  overflow: auto;
+  margin-top: 1.5rem;
+}
+
+.debug-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.debug-panel pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0.5rem 0 0 0;
 }
 
 .payment-success-view {

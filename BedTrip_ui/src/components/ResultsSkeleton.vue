@@ -1,5 +1,5 @@
 <template>
-  <div class="results-list results-skeleton">
+  <div class="results-grid results-skeleton">
     <div class="card results-card">
       <div class="skeleton-header">
         <span class="skeleton-line skeleton-line--title shimmer"></span>
@@ -33,6 +33,7 @@
 <style scoped>
 .results-skeleton {
   opacity: 0.85;
+  grid-template-columns: 1fr;
 }
 
 .skeleton-header {
@@ -103,6 +104,17 @@
   height: 34px;
   border-radius: 0.8rem;
   background: rgba(148, 163, 184, 0.2);
+}
+
+.skeleton-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.skeleton-list--dense .skeleton-line {
+  height: 14px;
 }
 
 .shimmer {
