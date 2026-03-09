@@ -52,6 +52,21 @@ const searchSchemas = {
       }
     },
   },
+  searchNearby: {
+    body: {
+      checkin: { type: "string", minLen: 10, maxLen: 10, pattern: datePattern, required: true },
+      checkout: { type: "string", minLen: 10, maxLen: 10, pattern: datePattern, required: true },
+      guests: { type: "array", minLen: 1, maxLen: 4, items: { type: "object", shape: guestSchema }, required: true },
+      latitude: { type: "number", min: -90, max: 90, required: true },
+      longitude: { type: "number", min: -180, max: 180, required: true },
+      radius: { type: "number", min: 1, max: 70000, optional: true },
+      radius_km: { type: "number", min: 1, max: 70, optional: true },
+      language: { type: "string", minLen: 2, maxLen: 10, optional: true },
+      currency: { type: "string", minLen: 3, maxLen: 5, optional: true },
+      residency: { type: "string", minLen: 2, maxLen: 5, optional: true },
+      filters: { type: "object", optional: true },
+    },
+  },
 };
 
 const bookingSchemas = {
@@ -65,6 +80,7 @@ const bookingSchemas = {
       hp_context: { type: "object", optional: true },
       meal: { type: "string", minLen: 1, maxLen: 200, optional: true },
       room_name: { type: "string", minLen: 1, maxLen: 200, optional: true },
+      request_meta: { type: "object", optional: true },
     },
     custom: (req, errors) => {
       const body = req.body || {};
@@ -202,13 +218,6 @@ const paymentSchemas = {
       partner_order_id: { type: "string", minLen: 6, maxLen: 80, required: true },
       productCode: { type: "string", minLen: 1, maxLen: 32, required: true },
       device: { type: "string", minLen: 2, maxLen: 30, optional: true },
-      insurance: {
-        type: "object",
-        optional: true,
-        shape: {
-          selected: { type: "array", minLen: 1, maxLen: 10, items: { type: "string" }, optional: true },
-        },
-      },
       customer: {
         type: "object",
         required: true,
@@ -255,13 +264,49 @@ const paymentSchemas = {
     body: {
       partner_order_id: { type: "string", minLen: 6, maxLen: 80, required: true },
       customerEmail: { type: "string", minLen: 3, maxLen: 320, pattern: emailPattern, optional: true },
-      insurance: {
+      customerFirstName: { type: "string", minLen: 1, maxLen: 80, optional: true },
+      customerLastName: { type: "string", minLen: 1, maxLen: 80, optional: true },
+      customerPhone: { type: "string", minLen: 3, maxLen: 40, optional: true },
+      customerCivility: { type: "string", minLen: 1, maxLen: 16, optional: true },
+    },
+  },
+  kotanExternCreate: {
+    body: {
+      partner_order_id: { type: "string", minLen: 6, maxLen: 120, required: true },
+      conditions_acceptance: {
         type: "object",
         optional: true,
         shape: {
-          selected: { type: "array", minLen: 1, maxLen: 10, items: { type: "string" }, optional: true },
+          accepted: { type: ["boolean", "string"], required: true },
+          conditions_version: { type: "string", minLen: 1, maxLen: 80, optional: true },
+          accepted_at_client: { type: "string", minLen: 10, maxLen: 80, optional: true },
         },
       },
+      customer: {
+        type: "object",
+        required: true,
+        shape: {
+          civility: { type: "string", minLen: 1, maxLen: 16, required: true },
+          firstName: { type: "string", minLen: 1, maxLen: 80, required: true },
+          lastName: { type: "string", minLen: 1, maxLen: 80, required: true },
+          email: { type: "string", minLen: 3, maxLen: 320, pattern: emailPattern, required: true },
+          phone: { type: "string", minLen: 3, maxLen: 40, required: true },
+          addressLine1: { type: "string", minLen: 1, maxLen: 200, optional: true },
+          postalCode: { type: "string", minLen: 1, maxLen: 20, optional: true },
+          city: { type: "string", minLen: 1, maxLen: 120, optional: true },
+          company: { type: "string", minLen: 1, maxLen: 120, optional: true },
+          birthdate: { type: "string", minLen: 4, maxLen: 40, optional: true },
+        },
+      },
+      passengers: { type: "array", minLen: 1, maxLen: 12, items: { type: "object" }, optional: true },
+      services: { type: "array", maxLen: 50, items: { type: "object" }, optional: true },
+      checkoutData: { type: "object", optional: true },
+      productType: { type: "string", minLen: 2, maxLen: 40, optional: true },
+    },
+  },
+  kotanExternInfo: {
+    query: {
+      ref: { type: "string", minLen: 3, maxLen: 120, required: true },
     },
   },
 };

@@ -5,15 +5,20 @@ const router = require("express").Router();
 const axios = require("axios");
 const { systempayConfig } = require("../config/systempay");
 const db = require("../utils/db");
-const { savePayment } = require("../utils/repo");
-const { extractAmountFromBookingForm } = require("../utils/bookingForms");
-const { buildInsuranceSummary } = require("../utils/insurance");
+const { parseAmount, savePayment, getPrebookSummary } = require("../utils/repo");
 const { validate } = require("../src/middlewares/validateRequest");
 const { paymentSchemas } = require("../src/middlewares/requestSchemas");
 
 router.post("/payments/systempay/create-order", validate(paymentSchemas.systempayCreateOrder), async (req, res) => {
   try {
-    const { partner_order_id, customerEmail } = req.body || {};
+    const {
+      partner_order_id,
+      customerEmail,
+      customerFirstName,
+      customerLastName,
+      customerPhone,
+      customerCivility,
+    } = req.body || {};
 
     if (!partner_order_id) {
       return res.status(400).json({ success: false, message: "partner_order_id is required" });
@@ -34,29 +39,58 @@ router.post("/payments/systempay/create-order", validate(paymentSchemas.systempa
 
     const bf = bfResult.rows[0];
 
-    const amountData = extractAmountFromBookingForm(bf);
-    const amount = amountData.amount;
+    const form = bf.form || {};
+    const paymentType =
+      form &&
+      Array.isArray(form.payment_types) &&
+      form.payment_types.length > 0
+        ? form.payment_types[0]
+        : null;
+
+    const candidates = [];
+    if (paymentType && paymentType.amount !== undefined) candidates.push(paymentType.amount);
+    if (bf.amount !== undefined) candidates.push(bf.amount);
+    if (form && form.total_amount !== undefined) candidates.push(form.total_amount);
+    if (form && form.order_amount !== undefined) candidates.push(form.order_amount);
+
+    let amount = null;
+    for (const c of candidates) {
+      const parsed = parseAmount(c);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        amount = parsed;
+        break;
+      }
+    }
+
     if (!Number.isFinite(amount) || amount <= 0) {
       console.error("[Systempay] invalid booking_form amount", {
         partner_order_id,
         booking_form_row: bf,
-        tried_candidates: amountData.candidates,
+        tried_candidates: candidates,
         parsedAmount: amount,
       });
       return res.status(400).json({
         success: false,
         message: "invalid_amount_in_booking_form_for_systempay",
-        debug: { tried_candidates: amountData.candidates, booking_form: bf },
+        debug: { tried_candidates: candidates, booking_form: bf },
       });
     }
 
-    const currency = amountData.currency || "EUR";
-    const insuranceSummary = buildInsuranceSummary(req.body?.insurance);
-    const hotelAmount = amount;
-    const totalAmount = Number(hotelAmount || 0) + Number(insuranceSummary.total || 0);
-    const amountInCents = Math.round(totalAmount * 100);
+    const prebookSummary = bf.prebook_token ? await getPrebookSummary(bf.prebook_token) : null;
+    const summaryAmount = Number(prebookSummary?.summary?.room?.price ?? prebookSummary?.room?.price);
+    const formPricingAmount = Number(bf?.form?.pricing?.total_amount);
+    const resolvedAmount =
+      Number.isFinite(formPricingAmount) && formPricingAmount > 0
+        ? formPricingAmount
+        : Number.isFinite(summaryAmount) && summaryAmount > 0
+          ? summaryAmount
+          : applyMarkupAmount(amount);
+    const currency = bf.currency_code || (paymentType && paymentType.currency_code) || "EUR";
+    const amountInCents = Math.round(resolvedAmount * 100);
 
     const email = customerEmail || "sample@example.com";
+
+    const systempayOrderId = `BT-${partner_order_id}`;
 
     const payload = {
       amount: amountInCents,
@@ -65,8 +99,9 @@ router.post("/payments/systempay/create-order", validate(paymentSchemas.systempa
       customer: {
         email,
       },
-      orderId: partner_order_id,
+      orderId: systempayOrderId,
       metadata: {
+        app: "bedtrip",
         partner_order_id,
         prebook_token: bf.prebook_token || null,
         etg_order_id: bf.etg_order_id || null,
@@ -74,7 +109,8 @@ router.post("/payments/systempay/create-order", validate(paymentSchemas.systempa
       },
     };
 
-    if (systempayConfig.ipnUrl) {
+    const gatewayUrl = process.env.IPN_GATEWAY_URL;
+    if (systempayConfig.ipnUrl && gatewayUrl && systempayConfig.ipnUrl.startsWith(gatewayUrl)) {
       payload.ipnUrl = systempayConfig.ipnUrl;
     }
 
@@ -130,21 +166,33 @@ router.post("/payments/systempay/create-order", validate(paymentSchemas.systempa
         raw.orderId ||
         partner_order_id;
 
+      const customer =
+        customerEmail ||
+        customerFirstName ||
+        customerLastName ||
+        customerPhone ||
+        customerCivility
+          ? {
+              civility: customerCivility || null,
+              firstName: customerFirstName || null,
+              lastName: customerLastName || null,
+              email,
+              mobilePhoneNumber: customerPhone || null,
+            }
+          : null;
+
       await savePayment({
         provider: "systempay",
         status: "pending",
         partnerOrderId: partner_order_id,
+        systempayOrderId,
         prebookToken: bf.prebook_token || null,
         etgOrderId: bf.etg_order_id || null,
         itemId: bf.item_id || null,
-        amount: totalAmount,
+        amount: resolvedAmount,
         currencyCode: currency,
         externalReference,
-        payload: {
-          raw,
-          hotel_amount: hotelAmount,
-          insurance: insuranceSummary,
-        },
+        payload: customer ? { ...raw, customer } : raw,
       });
     } catch (e) {
       console.error("[Systempay] savePayment failed:", e.message);
@@ -171,3 +219,10 @@ router.post("/payments/systempay/create-order", validate(paymentSchemas.systempa
 });
 
 module.exports = router;
+const MARKUP_PERCENT = 10;
+
+function applyMarkupAmount(amount) {
+  const num = Number(amount);
+  if (!Number.isFinite(num)) return amount;
+  return Math.round(num * (1 + MARKUP_PERCENT / 100) * 100) / 100;
+}

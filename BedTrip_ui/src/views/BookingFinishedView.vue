@@ -53,6 +53,15 @@
 
       <div class="confirmation-actions">
         <button
+          class="primary with-icon"
+          type="button"
+          title="Imprimer la confirmation"
+          @click="openPrintConfirmation"
+        >
+          <i class="pi pi-print" aria-hidden="true"></i>
+          <span>Imprimer la confirmation</span>
+        </button>
+        <button
           class="primary"
           type="button"
           @click="goToNext"
@@ -76,6 +85,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { API_BASE } from '../services/httpClient.js'
+import 'primeicons/primeicons.css'
 
 const route = useRoute()
 const router = useRouter()
@@ -86,6 +97,8 @@ const countdown = ref(6)
 const targetLabel = ref('la page de réservation')
 const nextPath = ref('/booking')
 const debugEtg = ref(null)
+
+const bookingDetails = ref(null)
 
 let timerId = null
 
@@ -141,6 +154,141 @@ function hydrateEtgDebug() {
   }
 }
 
+async function fetchBookingDetails() {
+  const pid = partnerOrderId.value
+  if (!pid) return
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/booking/status?partner_order_id=${encodeURIComponent(pid)}`
+    )
+    const data = await res.json()
+    if (data && data.status === 'ok') {
+      bookingDetails.value = data
+    }
+  } catch {
+    bookingDetails.value = null
+  }
+}
+
+function escapeHtml(str) {
+  if (str == null) return ''
+  const s = String(str)
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function openPrintConfirmation() {
+  const d = bookingDetails.value
+  const form = d?.booking_form?.form || {}
+  const hotel = form.hotel || form.hotel_info || form.hotel_data || form.item?.hotel || {}
+  const stay = form.stay || {}
+  const paymentType = Array.isArray(form.payment_types) && form.payment_types[0] ? form.payment_types[0] : null
+  const booking = d?.booking || {}
+  const payment = d?.payment || {}
+
+  const hotelName = hotel.name || form.hotel_name || form.hotelName || form.name || 'Hébergement'
+  const address = hotel.address || hotel.address_full || form.address || ''
+  const city = hotel.city || hotel.city_name || form.city || ''
+  const country = hotel.country || hotel.country_name || form.country || ''
+  const fullAddress = [address, city, country].filter(Boolean).join(', ').trim() || '-'
+
+  const checkIn = form.checkin || form.check_in || form.arrival_date || stay.checkin || '-'
+  const checkOut = form.checkout || form.check_out || form.departure_date || stay.checkout || '-'
+
+  const amount = payment.amount ?? paymentType?.amount ?? booking.amount ?? form.total_amount ?? '-'
+  const currency = payment.currency_code || paymentType?.currency_code || booking.currency_code || form.currency_code || 'EUR'
+  const amountFormatted = amount !== '-' && Number(amount) != null
+    ? `${Number(amount).toFixed(2).replace('.', ',')} ${currency}`
+    : '-'
+
+  const guestName = booking.user_name || '-'
+  const refPartenaire = partnerOrderId.value || '-'
+  const refFournisseur = supplierReference.value || '-'
+
+  const printHtml = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Confirmation de réservation - bedtrip.fr</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #222; max-width: 800px; margin: 0 auto; padding: 24px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
+    .logo { font-size: 24px; font-weight: 700; color: #003580; }
+    .confirmation-title { text-align: right; }
+    .confirmation-title h1 { margin: 0; font-size: 18px; font-weight: 700; }
+    .confirmation-title p { margin: 4px 0 0 0; font-size: 13px; color: #555; }
+    .section { margin-bottom: 24px; }
+    .section h2 { font-size: 14px; font-weight: 700; margin: 0 0 12px 0; color: #003580; text-transform: uppercase; letter-spacing: 0.02em; }
+    .property-name { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .detail-row { margin: 6px 0; }
+    .detail-label { color: #555; }
+    .dates-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+    .date-box { padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .date-box strong { display: block; margin-bottom: 4px; }
+    .price-total { font-size: 20px; font-weight: 700; margin-top: 12px; color: #003580; }
+    .guest-block { padding: 12px; background: #f8fafc; border-radius: 8px; margin-top: 8px; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #666; }
+    .footer a { color: #003580; }
+    @media print { body { padding: 16px; } .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">bedtrip.fr</div>
+    <div class="confirmation-title">
+      <h1>CONFIRMATION DE RÉSERVATION</h1>
+      <p>Référence partenaire : ${refPartenaire}</p>
+      <p>Référence fournisseur : ${refFournisseur}</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Hébergement et séjour</h2>
+    <div class="property-name">${escapeHtml(hotelName)}</div>
+    <div class="detail-row"><span class="detail-label">Adresse :</span> ${escapeHtml(fullAddress)}</div>
+    <div class="dates-grid">
+      <div class="date-box">
+        <strong>Arrivée</strong>
+        ${escapeHtml(checkIn)}
+      </div>
+      <div class="date-box">
+        <strong>Départ</strong>
+        ${escapeHtml(checkOut)}
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Prix</h2>
+    <p>Montant total à payer à l'établissement : <span class="price-total">${escapeHtml(amountFormatted)}</span></p>
+  </div>
+
+  <div class="section">
+    <h2>Voyageur(s)</h2>
+    <div class="guest-block">
+      <strong>Nom du voyageur</strong><br>
+      ${escapeHtml(guestName)}
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>Vous pouvez consulter ou modifier votre réservation en ligne : <a href="https://bedtrip.fr">bedtrip.fr</a></p>
+    <p>Ce document constitue votre confirmation de réservation bedtrip.fr.</p>
+  </div>
+
+  <scr` + `ipt>
+    window.onload = function() { window.print(); };
+  </scr` + `ipt>
+</body>
+</html>`
+
+  const win = window.open('', '_blank')
+  if (win) {
+    win.document.write(printHtml)
+    win.document.close()
+  }
+}
+
 function goToNext() {
   if (typeof window !== 'undefined' && timerId) {
     window.clearTimeout(timerId)
@@ -167,6 +315,7 @@ function tickCountdown() {
 onMounted(() => {
   hydrateFromQuery()
   hydrateEtgDebug()
+  fetchBookingDetails()
   tickCountdown()
 })
 
@@ -187,6 +336,7 @@ onBeforeUnmount(() => {
   overflow: auto;
   margin-top: 1.5rem;
   width: 100%;
+  display: none;
 }
 
 .debug-panel summary {
@@ -240,6 +390,16 @@ onBeforeUnmount(() => {
   gap: 0.75rem;
   flex-wrap: wrap;
   justify-content: center;
+}
+
+.confirmation-actions .with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.confirmation-actions .with-icon .pi {
+  font-size: 1.1rem;
 }
 
 .redirect-hint {

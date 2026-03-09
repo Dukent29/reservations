@@ -4,6 +4,28 @@ const crypto = require("crypto");
 const db = require("../utils/db");
 const { systempayConfig } = require("../config/systempay");
 
+let ipnEventsSchemaEnsured = false;
+
+async function ensureIpnEventsSchema() {
+  if (ipnEventsSchemaEnsured) return;
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS ipn_events (
+        id BIGSERIAL PRIMARY KEY,
+        provider TEXT,
+        order_id TEXT,
+        transaction_id TEXT,
+        payload JSONB,
+        received_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (provider, order_id, transaction_id)
+      )
+    `);
+  } catch (err) {
+    console.error("[DB] ensureIpnEventsSchema failed:", err.message);
+  }
+  ipnEventsSchemaEnsured = true;
+}
+
 /**
  * Validates the HMAC signature for Systempay IPN webhooks.
  * Systempay sends the signature in the 'kr-hash' header.
@@ -172,6 +194,16 @@ async function systempayWebhook(req, res) {
   console.log("🔥 [Systempay IPN] Headers:", req.headers);
   console.log("🔥 [Systempay IPN] Body:", req.body);
   try {
+    const isProd = process.env.NODE_ENV === "production";
+    if (isProd) {
+      const expectedSecret = process.env.IPN_GATEWAY_SECRET || null;
+      const receivedSecret = req.headers["x-ipn-gateway"] || null;
+      if (!expectedSecret || receivedSecret !== expectedSecret) {
+        console.error("[Systempay IPN] Invalid or missing x-ipn-gateway header");
+        return res.status(403).json({ error: "Forbidden" });
+      }
+    }
+
     const payload = req.body || {};
     console.log("[Systempay IPN] Raw payload:", payload);
 
@@ -212,11 +244,14 @@ async function systempayWebhook(req, res) {
       null;
 
     // Extract partner order ID from metadata
-    const partnerOrderId =
+    let partnerOrderId =
+      (krAnswerData && krAnswerData.metadata && krAnswerData.metadata.partner_order_id) ||
       (krAnswerData && krAnswerData.orderDetails && krAnswerData.orderDetails.metadata && krAnswerData.orderDetails.metadata.partner_order_id) ||
-      payload.partner_order_id ||
-      payload.metadata_partner_order_id ||
-      orderId;
+      null;
+
+    if (!partnerOrderId && typeof orderId === "string" && orderId.startsWith("BT-")) {
+      partnerOrderId = orderId.slice(3);
+    }
 
     if (!orderId && !partnerOrderId) {
       console.error("[Systempay IPN] Missing order reference");
@@ -243,22 +278,42 @@ async function systempayWebhook(req, res) {
         newStatus = "pending";
     }
 
-    const ref = orderId || partnerOrderId;
-    console.log(
-  "[Systempay IPN] DB update with:",
-  { newStatus, ref, partnerOrderId: partnerOrderId || null }
-);
+    const transactionId =
+      (krAnswerData && krAnswerData.transactions && krAnswerData.transactions[0] && (krAnswerData.transactions[0].uuid || krAnswerData.transactions[0].transactionId || krAnswerData.transactions[0].id)) ||
+      null;
+    const dedupeTransactionId = transactionId || "unknown";
 
+    await ensureIpnEventsSchema();
+    try {
+      await db.query(
+        `
+        INSERT INTO ipn_events (provider, order_id, transaction_id, payload)
+        VALUES ($1, $2, $3, $4)
+      `,
+        ["systempay", orderId || null, dedupeTransactionId, payload ? JSON.stringify(payload) : null]
+      );
+    } catch (err) {
+      if (err && err.code === "23505") {
+        console.warn("[Systempay IPN] Duplicate IPN event, skipping");
+        return res.status(200).send("OK");
+      }
+      console.error("[Systempay IPN] Failed to persist IPN event:", err.message);
+    }
+
+    console.log("[Systempay IPN] DB update with:", {
+      newStatus,
+      orderId: orderId || null,
+      partnerOrderId: partnerOrderId || null,
+    });
 
     const result = await db.query(
-      
       `
       UPDATE payments
       SET status = $1, updated_at = NOW()
       WHERE provider = 'systempay'
-        AND (external_reference = $2 OR partner_order_id = $3)
+        AND (partner_order_id = $2 OR systempay_order_id = $3)
     `,
-      [newStatus, ref, partnerOrderId || ref]
+      [newStatus, partnerOrderId || null, orderId || null]
     );
 
     console.log(

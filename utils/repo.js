@@ -202,6 +202,7 @@ async function ensurePaymentsSchema() {
         provider TEXT,
         status TEXT,
         partner_order_id TEXT,
+        systempay_order_id TEXT,
         prebook_token TEXT,
         etg_order_id BIGINT,
         item_id BIGINT,
@@ -215,6 +216,11 @@ async function ensurePaymentsSchema() {
     `);
   } catch (err) {
     console.error("[DB] ensurePaymentsSchema failed:", err.message);
+  }
+  try {
+    await db.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS systempay_order_id TEXT`);
+  } catch (err) {
+    console.warn("[DB] ensurePaymentsSchema column ensure failed:", err.message);
   }
   paymentsSchemaEnsured = true;
 }
@@ -234,16 +240,10 @@ async function ensureBookingsSchema() {
         user_name TEXT,
         amount NUMERIC,
         currency_code TEXT,
-        insurance JSONB,
         raw JSONB,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
-    try {
-      await db.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS insurance JSONB`);
-    } catch (err) {
-      console.warn("[DB] bookings.insurance column add failed:", err.message);
-    }
     bookingsSchemaEnsured = true;
   } catch (err) {
     console.error("[DB] ensureBookingsSchema failed:", err.message);
@@ -254,6 +254,7 @@ async function savePayment({
   provider,
   status,
   partnerOrderId,
+  systempayOrderId,
   prebookToken,
   etgOrderId,
   itemId,
@@ -270,6 +271,7 @@ async function savePayment({
         provider,
         status,
         partner_order_id,
+        systempay_order_id,
         prebook_token,
         etg_order_id,
         item_id,
@@ -277,12 +279,13 @@ async function savePayment({
         currency_code,
         external_reference,
         payload
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
     `,
       [
         provider || null,
         status || null,
         partnerOrderId || null,
+        systempayOrderId || null,
         prebookToken || null,
         etgOrderId || null,
         itemId || null,
@@ -307,7 +310,6 @@ async function saveBooking({
   userName,
   amount,
   currencyCode,
-  insurance,
   raw,
 }) {
   try {
@@ -324,9 +326,8 @@ async function saveBooking({
         user_name,
         amount,
         currency_code,
-        insurance,
         raw
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
     `,
       [
         partnerOrderId || null,
@@ -338,7 +339,6 @@ async function saveBooking({
         userName || null,
         parseAmount(amount),
         currencyCode || null,
-        insurance ? JSON.stringify(insurance) : null,
         raw ? JSON.stringify(raw) : null,
       ]
     );
@@ -392,6 +392,45 @@ async function saveBookingForm({ partnerOrderId, prebookToken, form }) {
   }
 }
 
+let apiLogsSchemaEnsured = false;
+
+async function ensureApiLogsSchema() {
+  if (apiLogsSchemaEnsured) return;
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS api_logs (
+        id SERIAL PRIMARY KEY,
+        endpoint VARCHAR(255) NOT NULL,
+        request JSONB NOT NULL,
+        response JSONB NOT NULL,
+        status_code INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    apiLogsSchemaEnsured = true;
+  } catch (err) {
+    console.error("[DB] ensureApiLogsSchema failed:", err.message);
+  }
+}
+
+async function insertApiLog({ endpoint, request, response, statusCode }) {
+  try {
+    await ensureApiLogsSchema();
+    await db.query(
+      `INSERT INTO api_logs (endpoint, request, response, status_code)
+       VALUES ($1, $2, $3, $4)`,
+      [
+        String(endpoint).slice(0, 255),
+        request != null ? JSON.stringify(request) : "{}",
+        response != null ? JSON.stringify(response) : "{}",
+        Number(statusCode) || 0,
+      ]
+    );
+  } catch (err) {
+    console.error("[DB] insertApiLog failed:", err.message);
+  }
+}
+
 module.exports = {
   saveSerpSearch,
   savePrebook,
@@ -401,4 +440,6 @@ module.exports = {
   saveBooking,
   saveBookingForm,
   parseAmount,
+  ensureApiLogsSchema,
+  insertApiLog,
 };

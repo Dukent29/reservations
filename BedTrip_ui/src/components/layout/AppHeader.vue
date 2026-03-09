@@ -21,10 +21,11 @@
     ></div>
     <div class="header-actions">
       <div class="header-title">
-        <h1>
-          Console hôtelière B2B
-          <span class="badge">interne</span>
-        </h1>
+        <RouterLink to="/" class="header-title-link" aria-label="Retour accueil" title="Retour accueil">
+          <h1>
+            BedTrip reservations
+          </h1>
+        </RouterLink>
       </div>
       <div class="header-right">
         <button
@@ -76,6 +77,20 @@
             <span class="header-link__label">BedTrip</span>
           </span>
 
+          <RouterLink
+            class="header-link"
+            to="/blog"
+            aria-label="Voir le blog"
+            title="Voir le blog"
+            @click="closeMenu"
+          >
+            <i
+              class="pi pi-book header-link__icon"
+              aria-hidden="true"
+            ></i>
+            <span class="header-link__label">Blog</span>
+          </RouterLink>
+
           <a
             class="header-link"
             href="https://kotan-voyages.com"
@@ -88,7 +103,7 @@
               aria-hidden="true"
             ></i>
             <span class="header-link__label">
-              Acheter un billet (Gatefly)
+              Acheter un billet d'avion
             </span>
           </a>
         </nav>
@@ -190,6 +205,17 @@ onBeforeUnmount(() => {
 
 .header-title {
   flex: 0 0 auto;
+}
+
+.header-title-link {
+  text-decoration: none;
+  color: inherit;
+  display: inline-block;
+}
+
+.header-title-link:hover h1 {
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
 }
 
 .header-right {

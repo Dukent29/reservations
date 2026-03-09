@@ -14,7 +14,7 @@
     <div class="app-footer__inner">
       <div class="app-footer__brand">
         <strong>BedTrip</strong>
-        <span class="app-footer__tagline">Console hôtelière B2B</span>
+        <span class="app-footer__tagline">Particuliers et professionnels</span>
       </div>
       <nav class="app-footer__links" aria-label="Navigation du pied de page">
         <RouterLink class="footer-link" to="/">Accueil</RouterLink>
@@ -29,6 +29,18 @@
         </a>
         <RouterLink class="footer-link" to="/mentions-legales">Mentions légales</RouterLink>
         <RouterLink class="footer-link" to="/politique-de-confidentialite">Confidentialité</RouterLink>
+        <RouterLink class="footer-link" to="/conditions">Conditions</RouterLink>
+        <RouterLink class="footer-link" to="/blog">Blog</RouterLink>
+      </nav>
+      <nav class="app-footer__links app-footer__links--destinations" aria-label="Destinations">
+        <RouterLink
+          v-for="item in destinationSeoItems"
+          :key="item.slug"
+          class="footer-link footer-link--destination"
+          :to="`/destinations/${item.slug}`"
+        >
+          {{ item.country }}
+        </RouterLink>
       </nav>
     </div>
     <div class="app-footer__meta">
@@ -38,7 +50,9 @@
 </template>
 
 <script setup>
-// Footer props and logic can be added later if needed.
+import { DESTINATION_SEO_ITEMS } from '../../data/seoDestinations'
+
+const destinationSeoItems = DESTINATION_SEO_ITEMS
 </script>
 
 <style scoped>
@@ -78,6 +92,11 @@
   justify-content: flex-end;
 }
 
+.app-footer__links--destinations {
+  width: 100%;
+  justify-content: flex-start;
+}
+
 .footer-link {
   display: inline-flex;
   align-items: center;
@@ -101,6 +120,11 @@
 .footer-link--active {
   border-color: rgba(248, 250, 252, 0.85);
   background: rgba(248, 250, 252, 0.15);
+}
+
+.footer-link--destination {
+  border-color: rgba(226, 232, 240, 0.26);
+  font-size: 0.68rem;
 }
 
 .app-footer__meta {

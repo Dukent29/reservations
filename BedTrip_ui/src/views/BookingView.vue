@@ -153,7 +153,7 @@
                             class="pi pi-credit-card payment-method-card__icon"
                             aria-hidden="true"
                           ></i>
-                          Paiement par carte (Systempay)
+                          Paiement par carte (Kotan Payments)
                         </span>
                         <span class="payment-method-card__right">
                           <span class="payment-method-card__brands">
@@ -168,8 +168,73 @@
                         </span>
                       </div>
                       <p class="muted payment-method-card__hint">
-                        Redirection immédiate vers Systempay pour effectuer un paiement
-                        par carte bancaire classique.
+                        Redirection immédiate vers Kotan Payments (externPayment)
+                        pour effectuer un paiement par carte bancaire classique.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="payment-method-card"
+                      :class="{
+                        'payment-method-card--active':
+                          paymentMethod === 'applepay',
+                      }"
+                      @click="paymentMethod = 'applepay'"
+                    >
+                      <div class="payment-method-card__header">
+                        <span class="payment-method-card__title">
+                          <i
+                            class="pi pi-apple payment-method-card__icon"
+                            aria-hidden="true"
+                          ></i>
+                          Apple Pay (Kotan Payments)
+                        </span>
+                        <span class="payment-method-card__right">
+                          <span class="payment-method-card__brands">
+                            <span
+                              class="card-brand card-brand--applepay"
+                              aria-hidden="true"
+                            >
+                              Apple Pay
+                            </span>
+                          </span>
+                          <span class="payment-method-card__radio"></span>
+                        </span>
+                      </div>
+                      <p class="muted payment-method-card__hint">
+                        Redirection immédiate vers Kotan Payments (externPayment)
+                        pour effectuer un paiement via Apple Pay.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="payment-method-card"
+                      :class="{
+                        'payment-method-card--active':
+                          paymentMethod === 'cofidis',
+                      }"
+                      @click="paymentMethod = 'cofidis'"
+                    >
+                      <div class="payment-method-card__header">
+                        <span class="payment-method-card__title payment-method-card__title--with-logo">
+                          <img
+                            src="https://kotan-voyages.com/img/cofidis.webp"
+                            alt="Cofidis"
+                            class="payment-method-card__logo"
+                            width="100"
+                            height="32"
+                          />
+                          Cofidis - Je paie 4 fois Cofidis (chèque caution)
+                        </span>
+                        <span class="payment-method-card__right">
+                          <span class="payment-method-card__radio"></span>
+                        </span>
+                      </div>
+                      <p class="muted payment-method-card__hint">
+                        Paiement en 4 fois avec Cofidis (chèque de caution).
+                        Redirection vers la page de paiement sécurisée.
                       </p>
                     </button>
 
@@ -197,39 +262,80 @@
                         </span>
                       </button>
 
-                      <div
+                      <p
                         v-if="paymentMethod === 'floa'"
-                        class="floa-plans"
+                        class="muted payment-method-card__hint"
+                        style="margin-top: 0.5rem;"
                       >
-                        <p class="muted floa-plans__label">
-                          Choisissez un plan de paiement Floa
-                          <span class="required-asterisk">*</span> :
-                        </p>
-                        <div class="floa-plans__options">
-                          <button
-                            type="button"
-                            class="floa-plan"
-                            :class="{ 'floa-plan--active': floaProduct === 'BC3XF' }"
-                            @click="floaProduct = 'BC3XF'"
-                          >
-                            <span class="floa-plan__title">3x</span>
-                            <span class="floa-plan__meta">Paiement en 3 mensualités</span>
-                          </button>
-                          <button
-                            type="button"
-                            class="floa-plan"
-                            :class="{ 'floa-plan--active': floaProduct === 'BC4XF' }"
-                            @click="floaProduct = 'BC4XF'"
-                          >
-                            <span class="floa-plan__title">4x</span>
-                            <span class="floa-plan__meta">Paiement en 4 mensualités</span>
-                          </button>
-                        </div>
-                      </div>
+                        Redirection vers Kotan Payments (externPayment) pour le paiement Floa.
+                      </p>
                     </div>
+
+                    <button
+                      type="button"
+                      class="payment-method-card"
+                      :class="{ 'payment-method-card--active': paymentMethod === 'paypal' }"
+                      @click="paymentMethod = 'paypal'"
+                    >
+                      <div class="payment-method-card__header">
+                        <span class="payment-method-card__title">
+                          <i class="pi pi-paypal payment-method-card__icon"></i>
+                          PayPal
+                        </span>
+                        <span class="payment-method-card__right">
+                          <span class="payment-method-card__radio"></span>
+                        </span>
+                      </div>
+                      <p class="muted payment-method-card__hint">
+                        Paiement via PayPal (popup PayPal), capture côté serveur.
+                      </p>
+                    </button>
                   </div>
 
                   <div class="payment-primary-action">
+                    <div class="conditions-summary" aria-live="polite">
+                      <p class="conditions-summary__title">
+                        En cliquant sur « {{ primaryActionLabel }} », vous confirmez :
+                      </p>
+                      <ul class="conditions-summary__list">
+                        <li>avoir vérifié l'exactitude des informations voyageurs.</li>
+                        <li>que les voyageurs sont en règle pour les formalités de voyage.</li>
+                        <li>
+                          avoir pris connaissance des
+                          <RouterLink
+                            class="conditions-link"
+                            to="/conditions"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            conditions de réservation
+                          </RouterLink>.
+                        </li>
+                      </ul>
+                    </div>
+                    <label
+                      class="conditions-acceptance"
+                      :class="{ 'conditions-acceptance--invalid': showConditionsError }"
+                    >
+                      <input
+                        v-model="conditionsAccepted"
+                        type="checkbox"
+                      />
+                      <span>
+                        J'ai lu et j'accepte les
+                        <RouterLink
+                          class="conditions-link"
+                          to="/conditions"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          conditions de réservation
+                        </RouterLink>.
+                      </span>
+                    </label>
+                    <p v-if="showValidationHelp" class="validation-help">
+                      Veuillez remplir les champs obligatoires (*) et accepter les conditions.
+                    </p>
                     <button
                       type="button"
                       class="primary"
@@ -238,6 +344,11 @@
                     >
                       {{ primaryActionLabel }}
                     </button>
+                  </div>
+
+                  <div v-if="paymentMethod === 'paypal'" class="card" style="margin-top: .75rem;">
+                    <div v-if="!paypalReady" class="muted">Chargement PayPal…</div>
+                    <div v-else id="paypal-buttons"></div>
                   </div>
                 </div>
             </div>
@@ -253,6 +364,7 @@
                       <span class="required-asterisk">*</span>
                       <select
                         v-model="traveller.civility"
+                        :class="{ 'field-invalid': showFieldError('civility') }"
                         required
                       >
                         <option value="">Sélectionner…</option>
@@ -266,6 +378,7 @@
                       <span class="required-asterisk">*</span>
                       <input
                         v-model="traveller.firstName"
+                        :class="{ 'field-invalid': showFieldError('firstName') }"
                         type="text"
                         placeholder="John"
                         required
@@ -276,8 +389,21 @@
                       <span class="required-asterisk">*</span>
                       <input
                         v-model="traveller.lastName"
+                        :class="{ 'field-invalid': showFieldError('lastName') }"
                         type="text"
                         placeholder="Doe"
+                        required
+                      />
+                    </label>
+                  </div>
+                  <div class="row">
+                    <label>
+                      Date de naissance
+                      <span class="required-asterisk">*</span>
+                      <input
+                        v-model="traveller.birthdate"
+                        :class="{ 'field-invalid': showFieldError('birthdate') }"
+                        type="date"
                         required
                       />
                     </label>
@@ -324,6 +450,7 @@
                       <span class="required-asterisk">*</span>
                       <input
                         v-model="traveller.email"
+                        :class="{ 'field-invalid': showFieldError('email') }"
                         type="email"
                         placeholder="john@example.com"
                         required
@@ -334,11 +461,24 @@
                       <span class="required-asterisk">*</span>
                       <input
                         v-model="traveller.phone"
+                        :class="{ 'field-invalid': showFieldError('phone') }"
                         type="tel"
                         placeholder="+33 6 00 00 00 00"
                         required
                       />
                     </label>
+                  </div>
+                  <div v-if="autofillEnabled" class="row row--autofill">
+                    <div class="autofill-wrap">
+                      <button
+                        type="button"
+                        class="autofill-btn"
+                        :disabled="autofillLoading"
+                        @click="fillAutoClient"
+                      >
+                        {{ autofillLoading ? 'Chargement…' : 'Fill auto' }}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -353,7 +493,7 @@
         <pre>booking/form response: {{ formatDebug(debugBookingFormRes) }}</pre>
         <pre>booking/form etg: {{ formatDebug(debugBookingFormEtg) }}</pre>
         <pre>booking/form error: {{ formatDebug(debugBookingFormErr) }}</pre>
-        <pre>systempay redirect: {{ formatDebug(debugSystempay) }}</pre>
+        <pre>kotan extern: {{ formatDebug(debugSystempay) }}</pre>
         <pre>floa deal request: {{ formatDebug(debugFloaReq) }}</pre>
         <pre>floa deal response: {{ formatDebug(debugFloaRes) }}</pre>
         <pre>floa deal error: {{ formatDebug(debugFloaErr) }}</pre>
@@ -364,20 +504,20 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   requestBookingForm,
-  createFloaHotelDeal,
-  finalizeFloaDeal,
+  createKotanExternPayment,
 } from '../services/bookingApi.js'
-import { API_BASE } from '../services/httpClient.js'
+import { API_BASE, safeJsonFetch } from '../services/httpClient.js'
 
 const route = useRoute()
-const router = useRouter()
 
 const PREBOOK_SUMMARY_KEY = 'booking:lastPrebook'
 const MARKUP_PERCENT = 10
+const CONDITIONS_VERSION = 'booking_conditions_v1'
+const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID
 
 const statusMessage = ref('')
 const statusType = ref('info')
@@ -392,6 +532,7 @@ const traveller = ref({
   firstName: '',
   lastName: '',
   company: '',
+  birthdate: '',
   email: '',
   phone: '',
   addressLine1: '',
@@ -404,6 +545,12 @@ const traveller = ref({
 const paymentMethod = ref('floa')
 const floaProduct = ref('')
 const payLoading = ref(false)
+const paypalReady = ref(false)
+const conditionsAccepted = ref(false)
+const submitAttempted = ref(false)
+
+const autofillEnabled = ref(false)
+const autofillLoading = ref(false)
 
 const debugBookingFormReq = ref(null)
 const debugBookingFormRes = ref(null)
@@ -442,20 +589,87 @@ const isFloaPayment = computed(
 
 const primaryActionLabel = computed(() => {
   if (payLoading.value) return 'Traitement du paiement…'
-  return isFloaPayment.value
-    ? 'Continuer avec Floa'
-    : 'Payer avec Systempay'
+  if (paymentMethod.value === 'floa') return 'Continuer avec Floa'
+  if (paymentMethod.value === 'cofidis') return 'Payer avec Cofidis'
+  if (paymentMethod.value === 'applepay') return 'Payer avec Apple Pay'
+  if (paymentMethod.value === 'paypal') return 'Payer avec PayPal'
+  return 'Payer avec Kotan Payments'
 })
 
 const isPrimaryDisabled = computed(
-  () =>
-    payLoading.value ||
-    (isFloaPayment.value && !floaProduct.value),
+  () => payLoading.value,
+)
+
+const requiredFieldKeys = [
+  'civility',
+  'firstName',
+  'lastName',
+  'birthdate',
+  'email',
+  'phone',
+]
+
+const missingRequiredFields = computed(() =>
+  requiredFieldKeys.filter((key) => !String(traveller.value?.[key] || '').trim()),
+)
+
+const showConditionsError = computed(
+  () => submitAttempted.value && !conditionsAccepted.value,
+)
+
+const showValidationHelp = computed(
+  () => submitAttempted.value && (missingRequiredFields.value.length > 0 || !conditionsAccepted.value),
 )
 
 function setStatus(message, type = 'info') {
   statusMessage.value = message || ''
   statusType.value = type
+}
+
+function showFieldError(fieldKey) {
+  return submitAttempted.value && missingRequiredFields.value.includes(fieldKey)
+}
+
+async function fetchAutofillConfig() {
+  try {
+    const { statusCode, data } = await safeJsonFetch(`${API_BASE}/api/config`)
+    if (statusCode === 200 && data && data.autofill === true) {
+      autofillEnabled.value = true
+    }
+  } catch (_) {
+    // Config fetch failure: keep autofill disabled
+  }
+}
+
+async function fillAutoClient() {
+  if (autofillLoading.value) return
+  autofillLoading.value = true
+  try {
+    const { statusCode, data } = await safeJsonFetch(`${API_BASE}/api/test-client`)
+    if (statusCode !== 200 || !data || typeof data !== 'object') {
+      setStatus('Données test indisponibles.', 'error')
+      return
+    }
+    const t = traveller.value
+    if (data.civility != null) t.civility = data.civility
+    if (data.firstName != null) t.firstName = data.firstName
+    if (data.lastName != null) t.lastName = data.lastName
+    if (data.company != null) t.company = data.company
+    if (data.birthdate != null) t.birthdate = data.birthdate
+    if (data.dateOfBirth != null) t.birthdate = data.dateOfBirth
+    if (data.email != null) t.email = data.email
+    if (data.phone != null) t.phone = data.phone
+    if (data.addressLine1 != null) t.addressLine1 = data.addressLine1
+    if (data.postalCode != null) t.postalCode = data.postalCode
+    if (data.city != null) t.city = data.city
+    if (data.zipCity != null) t.zipCity = data.zipCity
+    if (data.notes != null) t.notes = data.notes
+    setStatus('Informations client remplies.', 'info')
+  } catch (_) {
+    setStatus('Erreur lors du remplissage automatique.', 'error')
+  } finally {
+    autofillLoading.value = false
+  }
 }
 
 function formatDebug(value) {
@@ -861,12 +1075,13 @@ function buildCustomerContext() {
   const email = (traveller.value.email || '').trim()
   const phone = (traveller.value.phone || '').trim()
   const company = (traveller.value.company || '').trim()
+  const birthdate = (traveller.value.birthdate || '').trim()
 
-  if (!civility || !firstName || !lastName || !email || !phone) {
+  if (!civility || !firstName || !lastName || !birthdate || !email || !phone) {
     return {
       ok: false,
       error:
-        'Veuillez renseigner civilité, prénom, nom, email et téléphone avant le paiement.',
+        'Veuillez renseigner civilité, prénom, nom, date de naissance, email et téléphone avant le paiement.',
     }
   }
 
@@ -894,6 +1109,7 @@ function buildCustomerContext() {
     civility,
     firstName,
     lastName,
+    birthdate,
     email,
     mobilePhoneNumber: phone,
     homeAddress: {
@@ -912,10 +1128,115 @@ function buildCustomerContext() {
     firstName,
     lastName,
     fullName,
+    birthdate,
     email,
     phone,
     customer,
   }
+}
+
+function submitExternPaymentForm(action, externPaymentData) {
+  if (typeof window === 'undefined' || !window.document) return
+  const form = window.document.createElement('form')
+  form.method = 'POST'
+  form.action = action
+  form.style.display = 'none'
+
+  const input = window.document.createElement('input')
+  input.type = 'hidden'
+  input.name = 'extern_payment_data'
+  input.value = JSON.stringify(externPaymentData)
+  form.appendChild(input)
+
+  window.document.body.appendChild(form)
+  form.submit()
+}
+
+function loadPayPalSdk() {
+  if (typeof window === 'undefined') return
+
+  if (!PAYPAL_CLIENT_ID) {
+    setStatus('PayPal indisponible: VITE_PAYPAL_CLIENT_ID manquant.', 'error')
+    return
+  }
+
+  if (window.paypal) {
+    paypalReady.value = true
+    return
+  }
+
+  const existing = window.document.querySelector('script[data-paypal-sdk="1"]')
+  if (existing) {
+    existing.addEventListener('load', () => {
+      paypalReady.value = true
+    })
+    existing.addEventListener('error', () => {
+      setStatus('Impossible de charger PayPal SDK.', 'error')
+    })
+    return
+  }
+
+  const script = window.document.createElement('script')
+  const currency = 'EUR'
+  script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(
+    PAYPAL_CLIENT_ID,
+  )}&currency=${currency}&intent=capture&components=buttons`
+  script.async = true
+  script.setAttribute('data-paypal-sdk', '1')
+  script.onload = () => {
+    paypalReady.value = true
+  }
+  script.onerror = () => {
+    setStatus('Impossible de charger PayPal SDK.', 'error')
+  }
+  window.document.head.appendChild(script)
+}
+
+async function renderPayPalButtons() {
+  if (!paypalReady.value || typeof window === 'undefined' || !window.paypal) return
+
+  const container = window.document.getElementById('paypal-buttons')
+  if (!container) return
+  container.innerHTML = ''
+
+  window.paypal
+    .Buttons({
+      createOrder: async () => {
+        const ctx = buildCustomerContext()
+        if (!ctx.ok) throw new Error(ctx.error)
+
+        const { statusCode, data } = await safeJsonFetch(
+          `${API_BASE}/api/payments/paypal/order`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ partner_order_id: ctx.partnerId }),
+          },
+        )
+        if (statusCode !== 200 || !data?.orderId) {
+          throw new Error('PayPal order creation failed')
+        }
+        return data.orderId
+      },
+      onApprove: async (data) => {
+        const { statusCode, data: cap } = await safeJsonFetch(
+          `${API_BASE}/api/payments/paypal/order/${encodeURIComponent(data.orderID)}/capture`,
+          { method: 'POST' },
+        )
+        if (statusCode !== 200 || !cap?.paid) throw new Error('PayPal capture failed')
+
+        window.location.href = `/payment/success?partner_order_id=${encodeURIComponent(
+          partnerOrderId.value,
+        )}&provider=paypal`
+      },
+      onCancel: () => {
+        setStatus('Paiement PayPal annulé.', 'error')
+      },
+      onError: (err) => {
+        setStatus(`Erreur PayPal: ${err?.message || String(err)}`, 'error')
+      },
+    })
+    .render('#paypal-buttons')
 }
 
 async function startPayment(forcedMethod) {
@@ -932,6 +1253,7 @@ async function startPayment(forcedMethod) {
     firstName,
     lastName,
     fullName,
+    birthdate,
     email,
     phone,
     customer,
@@ -939,69 +1261,13 @@ async function startPayment(forcedMethod) {
 
   const method = forcedMethod || currentMethod
 
-  // Systempay path: redirect to Systempay test page
-  if (method === 'systempay') {
-    try {
-          if (typeof window !== 'undefined') {
-            const ss = window.sessionStorage
-            if (ss) {
-              ss.setItem('booking:lastPartnerOrderId', partnerId)
-              ss.setItem(
-                'booking:lastCustomer',
-                JSON.stringify({ civility, fullName, email, phone }),
-          )
-        }
-      router.push({
-        name: 'systempay-test',
-        query: {
-          partner_order_id: partnerId,
-          email,
-          first_name: firstName,
-          last_name: lastName,
-          phone,
-          civility,
-        },
-      })
-      debugSystempay.value = {
-        partner_order_id: partnerId,
-        email,
-        first_name: firstName,
-        last_name: lastName,
-        phone,
-        civility,
-      }
-      console.log('[Debug][BookingView] systempay redirect params', {
-        partner_order_id: partnerId,
-        email,
-        first_name: firstName,
-        last_name: lastName,
-        phone,
-        civility,
-      })
-      }
-    } catch (err) {
-      setStatus(
-        `Erreur lors de la préparation du paiement Systempay : ${
-          err?.message || String(err || '')
-        }`,
-        'error',
-      )
-    }
-    return
-  }
-
-  // Floa path
-  if (method === 'floa') {
-    const productCode = floaProduct.value || ''
-    if (!productCode) {
-      setStatus(
-        'Choisissez un produit Floa avant de démarrer le paiement.',
-        'error',
-      )
-      return
-    }
-
-    // Persist partner order + customer info for success page
+  // Kotan extern payment path (carte, Cofidis, or Floa bank → redirect to externPayment)
+  if (
+    method === 'systempay' ||
+    method === 'applepay' ||
+    method === 'cofidis' ||
+    method === 'floa'
+  ) {
     try {
       if (typeof window !== 'undefined') {
         const ss = window.sessionStorage
@@ -1013,146 +1279,118 @@ async function startPayment(forcedMethod) {
           )
         }
       }
-    } catch {
-      // best-effort only
-    }
-
-    const body = {
-      partner_order_id: partnerId,
-      productCode,
-      device: 'Desktop',
-      customer,
-    }
-
-    try {
-      debugFloaReq.value = body
-      debugFloaErr.value = null
-      console.log('[Debug][BookingView] floa deal request', body)
+      const isCofidis = method === 'cofidis'
+      const isFloa = method === 'floa'
+      const isApplePay = method === 'applepay'
       setStatus(
-        'Contact de FloaBank pour éligibilité et création du deal…',
+        isCofidis
+          ? 'Préparation de la redirection vers Cofidis…'
+          : isFloa
+            ? 'Préparation de la redirection vers Floa (Kotan Payments)…'
+            : isApplePay
+              ? 'Préparation de la redirection vers Apple Pay (Kotan Payments)…'
+              : 'Préparation de la redirection vers Kotan Payments…',
         'info',
       )
       payLoading.value = true
-      const payload = await createFloaHotelDeal(body)
-      debugFloaRes.value = payload
-      console.log('[Debug][BookingView] floa deal response', payload)
-
-      const deal = payload.deal || payload
-      const dealReference =
-        deal?.dealReference ||
-        deal?.reference ||
-        deal?.deal_reference ||
-        null
-      const dealMerchantReference =
-        deal?.merchantReference ||
-        deal?.merchant_reference ||
-        deal?.merchantreference ||
-        partnerId
-
-      if (!dealReference) {
-        setStatus(
-          'Deal Floa créé mais aucun dealReference retourné. Consultez le panneau debug.',
-          'error',
-        )
-        return
+      const kotanCustomer = {
+        civility,
+        firstName,
+        lastName,
+        birthdate,
+        email,
+        phone,
       }
-
-      setStatus('Deal Floa créé. Finalisation avec Floa…', 'info')
-
-      const finalizeBody = {
-        merchantReference: dealMerchantReference,
-        configuration: {
-          culture: 'fr-FR',
+      const optionalFields = {
+        addressLine1: traveller.value.addressLine1,
+        postalCode: traveller.value.postalCode,
+        city: traveller.value.city,
+        company: traveller.value.company,
+      }
+      Object.entries(optionalFields).forEach(([key, raw]) => {
+        const value = String(raw || '').trim()
+        if (value) kotanCustomer[key] = value
+      })
+      const createPayload = {
+        partner_order_id: partnerId,
+        customer: kotanCustomer,
+        conditions_acceptance: {
+          accepted: true,
+          conditions_version: CONDITIONS_VERSION,
+          accepted_at_client: new Date().toISOString(),
         },
       }
-      if (finalizeBody.configuration && !finalizeBody.configuration.returnUrl) {
-        const base =
-          API_BASE && API_BASE.length
-            ? API_BASE.replace(/\/$/, '')
-            : window.location.origin.replace(/\/$/, '')
-        finalizeBody.configuration.returnUrl = `${base}/floa-return`
-      }
-
-      const finalizePayload = await finalizeFloaDeal(
-        dealReference,
-        finalizeBody,
-      )
-
-      if (
-        finalizePayload?.error ||
-        finalizePayload?.status === 'nok'
-      ) {
-        const reason =
-          finalizePayload?.reason ||
-          finalizePayload?.error ||
-          finalizePayload?._raw ||
-          'Unknown error'
-        setStatus(
-          `Impossible de finaliser le deal Floa : ${reason}`,
-          'error',
-        )
-        return
-      }
-
-      const result = finalizePayload.result || finalizePayload
-      let redirectUrl = null
-
-      if (typeof result.redirectUrl === 'string') {
-        redirectUrl = result.redirectUrl
-      } else if (typeof result.redirectURL === 'string') {
-        redirectUrl = result.redirectURL
-      } else if (typeof result.url === 'string') {
-        redirectUrl = result.url
-      } else if (Array.isArray(result.links)) {
-        const link =
-          result.links.find(
-            (l) =>
-              l &&
-              typeof l.href === 'string' &&
-              (l.rel === 'payment-page' ||
-                l.rel === 'redirect' ||
-                l.rel === 'webpage'),
-          ) ||
-          result.links.find(
-            (l) => l && typeof l.href === 'string',
-          )
-        if (link && link.href) {
-          redirectUrl = link.href
-        }
-      }
-
-      if (redirectUrl) {
-        setStatus(
-          'Redirection vers la page de paiement Floa…',
-          'info',
-        )
-        if (typeof window !== 'undefined') {
-          window.location.href = redirectUrl
-        }
-      } else {
-        setStatus(
-          "Deal Floa finalisé. Consultez la réponse dans le panneau debug pour le lien de paiement.",
-          'info',
-        )
-      }
-    } catch (err) {
-      debugFloaErr.value = {
-        message: err?.message || String(err || ''),
-        detail: err?._detail || null,
+      if (isCofidis) createPayload.payment_variant = 'cofidis'
+      if (isFloa) createPayload.payment_variant = 'floa'
+      if (isApplePay) createPayload.payment_variant = 'applepay'
+      const payload = await createKotanExternPayment(createPayload)
+      debugSystempay.value = payload
+      console.log('[Debug][BookingView] kotan extern create response', payload)
+      const action =
+        typeof payload?.action === 'string' && payload.action.trim()
+          ? payload.action.trim()
+          : 'https://kotan-voyages.com/externPayment'
+      const externPaymentData = payload?.extern_payment_data || null
+      if (!externPaymentData) {
+        throw new Error('extern_payment_data manquant dans la réponse API')
       }
       setStatus(
-        `Erreur de paiement Floa : ${
+        isCofidis
+          ? 'Redirection vers Cofidis…'
+          : isFloa
+            ? 'Redirection vers Floa…'
+            : isApplePay
+              ? 'Redirection vers Apple Pay…'
+              : 'Redirection vers Kotan Payments…',
+        'info',
+      )
+      submitExternPaymentForm(action, externPaymentData)
+    } catch (err) {
+      let validationHint = ''
+      try {
+        const detail = JSON.parse(err?._detail || '{}')
+        const first = detail?.debug?.errors?.[0]
+        if (first?.path && first?.message) {
+          validationHint = ` (${first.path} ${first.message})`
+        }
+      } catch {
+        // ignore
+      }
+      setStatus(
+        `Erreur lors de la préparation du paiement : ${
           err?.message || String(err || '')
-        }`,
+        }${validationHint}`,
         'error',
       )
     } finally {
       payLoading.value = false
     }
+    return
   }
+
 }
 
 function handlePrimaryAction() {
+  submitAttempted.value = true
+  if (missingRequiredFields.value.length > 0) {
+    setStatus(
+      'Veuillez compléter tous les champs obligatoires avant de poursuivre le paiement.',
+      'error',
+    )
+    return
+  }
+  if (!conditionsAccepted.value) {
+    setStatus(
+      'Vous devez accepter les conditions de réservation avant de poursuivre le paiement.',
+      'error',
+    )
+    return
+  }
+  if (paymentMethod.value === 'paypal') {
+    setStatus('Utilisez les boutons PayPal ci-dessous pour payer.', 'info')
+    loadPayPalSdk()
+    return
+  }
   if (isFloaPayment.value) {
     startPayment()
   } else {
@@ -1160,8 +1398,20 @@ function handlePrimaryAction() {
   }
 }
 
+watch(paymentMethod, (method) => {
+  if (method === 'paypal') loadPayPalSdk()
+})
+
+watch([paypalReady, paymentMethod], async () => {
+  if (paymentMethod.value === 'paypal' && paypalReady.value) {
+    await nextTick()
+    renderPayPalButtons()
+  }
+})
+
 onMounted(() => {
   loadPrebookSummaryFromSession()
+  fetchAutofillConfig()
   if (token.value) {
     fetchBookingForm()
   } else {
@@ -1182,6 +1432,7 @@ onMounted(() => {
   font-size: 0.85rem;
   overflow: auto;
   margin-top: 1.5rem;
+  display: none;
 }
 
 .debug-panel summary {
@@ -1359,8 +1610,27 @@ onMounted(() => {
   color: #f9fafb;
 }
 
+.card-brand--applepay {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
 .payment-method-card__icon {
   font-size: 1rem;
+}
+
+.payment-method-card__title--with-logo {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.payment-method-card__logo {
+  display: inline-block;
+  height: 28px;
+  width: auto;
+  max-width: 100px;
+  object-fit: contain;
+  vertical-align: middle;
 }
 
 .payment-method-card__radio {
@@ -1411,7 +1681,89 @@ onMounted(() => {
 .payment-primary-action {
   margin-top: 0.75rem;
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
   justify-content: flex-end;
+}
+
+.conditions-summary {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.8rem;
+  background: #f8fafc;
+  padding: 0.75rem 0.9rem;
+}
+
+.conditions-summary__title {
+  margin: 0 0 0.45rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.conditions-summary__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: #334155;
+}
+
+.conditions-summary__list li {
+  position: relative;
+  padding-left: 1.25rem;
+}
+
+.conditions-summary__list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-weight: 700;
+  color: #dc2626;
+}
+
+.conditions-acceptance {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: #334155;
+  max-width: 100%;
+  text-align: left;
+}
+
+.conditions-acceptance input {
+  margin-top: 0.18rem;
+  width: 16px;
+  height: 16px;
+  accent-color: #a5141e;
+}
+
+.conditions-acceptance--invalid {
+  color: #b91c1c;
+}
+
+.conditions-acceptance--invalid input {
+  outline: 2px solid rgba(185, 28, 28, 0.45);
+  outline-offset: 1px;
+}
+
+.validation-help {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #b91c1c;
+  font-weight: 600;
+  text-align: left;
+}
+
+.conditions-link {
+  color: #a5141e;
+  font-weight: 700;
+  text-decoration: underline;
 }
 
 .payment-and-client {
@@ -1433,6 +1785,40 @@ onMounted(() => {
 .required-asterisk {
   color: #f97373;
   margin-left: 0.15rem;
+}
+
+.field-invalid {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.row--autofill {
+  margin-top: 0.25rem;
+}
+
+.autofill-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.autofill-btn {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  border: 1px solid rgba(55, 107, 176, 0.5);
+  background: rgba(55, 107, 176, 0.12);
+  color: #376bb0;
+  cursor: pointer;
+}
+
+.autofill-btn:hover:not(:disabled) {
+  background: rgba(55, 107, 176, 0.2);
+}
+
+.autofill-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .floa-accordion {

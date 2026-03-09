@@ -5,7 +5,11 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "smoke:multicomplete": "node test/multicomplete.smoke.js"
+    "smoke:multicomplete": "node test/multicomplete.smoke.js",
+    "build": "npm run build:ui",
+    "build:ui": "cd BedTrip_ui && npm ci && npm run build",
+    "start:api": "pm2 restart bedtrip || pm2 start index.js --name bedtrip",
+    "deploy": "npm ci && npm run build:ui && npm run start:api"
   },
   "author": "kev-dev",
   "license": "ISC",
@@ -17,7 +21,6 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
     "ioredis": "^5.8.1",
-    "pg": "^8.16.3",
-    "soap": "^1.6.1"
+    "pg": "^8.16.3"
   }
 }

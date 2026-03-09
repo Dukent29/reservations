@@ -65,6 +65,60 @@ function hotelStars(hotel) {
   return null;
 }
 
+function normalizePropertyTypeValue(value) {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return null;
+
+  if (
+    normalized.includes("apart") ||
+    normalized.includes("appart") ||
+    normalized.includes("flat") ||
+    normalized.includes("studio") ||
+    normalized.includes("condo")
+  ) {
+    return "apartment";
+  }
+
+  if (
+    normalized.includes("hotel") ||
+    normalized.includes("resort") ||
+    normalized.includes("hostel") ||
+    normalized.includes("guesthouse") ||
+    normalized.includes("motel") ||
+    normalized.includes("bnb") ||
+    normalized.includes("villa")
+  ) {
+    return "hotel";
+  }
+
+  return null;
+}
+
+function hotelPropertyType(hotel) {
+  if (!hotel || typeof hotel !== "object") return null;
+  const candidates = [
+    hotel?.kind,
+    hotel?.property_type,
+    hotel?.propertyType,
+    hotel?.accommodation_type,
+    hotel?.accommodationType,
+    hotel?.hotel_type,
+    hotel?.hotelType,
+    hotel?.type,
+    hotel?.rg_ext?.kind,
+    hotel?.rg_ext?.property_type,
+    hotel?.rg_ext?.accommodation_type,
+    hotel?.rg_ext?.hotel_type,
+    hotel?.rg_ext?.type,
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizePropertyTypeValue(candidate);
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
 function rateHasFreeCancellation(rate) {
   const fc = rate?.payment_options?.payment_types?.[0]?.cancellation_penalties?.free_cancellation_before;
   if (!fc) return false;
@@ -72,8 +126,211 @@ function rateHasFreeCancellation(rate) {
   return Number.isFinite(ts) ? ts > Date.now() : false;
 }
 
+function parseDistanceMeters(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  const raw = String(value).trim().toLowerCase();
+  if (!raw) return null;
+  const normalized = raw.replace(",", ".");
+  const kmMatch = normalized.match(/(\d+(?:\.\d+)?)\s*km\b/);
+  if (kmMatch) return Number(kmMatch[1]) * 1000;
+  const mMatch = normalized.match(/(\d+(?:\.\d+)?)\s*m\b/);
+  if (mMatch) return Number(mMatch[1]);
+  const miMatch = normalized.match(/(\d+(?:\.\d+)?)\s*mi\b/);
+  if (miMatch) return Number(miMatch[1]) * 1609.34;
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+}
+
+function firstDistanceFromCandidates(candidates = []) {
+  for (const candidate of candidates) {
+    const parsed = parseDistanceMeters(candidate);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+}
+
+function findPoiDistance(hotel, keywords = []) {
+  const poiGroups = [
+    hotel?.points_of_interest,
+    hotel?.pois,
+    hotel?.nearby_points,
+    hotel?.rg_ext?.points_of_interest,
+  ];
+  for (const pois of poiGroups) {
+    if (!Array.isArray(pois)) continue;
+    const matches = pois
+      .map((poi) => {
+        const label = String(
+          poi?.name || poi?.label || poi?.description || poi?.type || poi?.kind || ""
+        )
+          .trim()
+          .toLowerCase();
+        if (!label) return null;
+        const isMatch = keywords.some((kw) => label.includes(kw));
+        if (!isMatch) return null;
+        return firstDistanceFromCandidates([
+          poi?.distance,
+          poi?.distance_meters,
+          poi?.distance_center_meters,
+        ]);
+      })
+      .filter((num) => Number.isFinite(num));
+    if (matches.length) return Math.min(...matches);
+  }
+  return null;
+}
+
+function cityCenterDistanceMeters(hotel) {
+  const direct = firstDistanceFromCandidates([
+    hotel?.cityCenterDistanceM,
+    hotel?.geo?.cityCenterDistanceM,
+    hotel?.distance_to_city_center,
+    hotel?.distance_to_center,
+    hotel?.city_center_distance,
+    hotel?.center_distance,
+    hotel?.distance_center,
+    hotel?.distance,
+    hotel?.location?.distance_to_city_center,
+    hotel?.location?.distance_to_center,
+    hotel?.distances?.city_center,
+    hotel?.distances?.to_center,
+    hotel?.rg_ext?.distance_to_city_center,
+    hotel?.rg_ext?.distance_to_center,
+    hotel?.rg_ext?.city_center_distance,
+    hotel?.rg_ext?.center_distance,
+  ]);
+  if (direct !== null) return direct;
+  return findPoiDistance(hotel, [
+    "city center",
+    "city centre",
+    "center",
+    "centre",
+    "downtown",
+    "old town",
+    "centre-ville",
+  ]);
+}
+
+function beachDistanceMeters(hotel) {
+  const direct = firstDistanceFromCandidates([
+    hotel?.beachDistanceM,
+    hotel?.geo?.beachDistanceM,
+    hotel?.distance_to_beach,
+    hotel?.beach_distance,
+    hotel?.distance_beach,
+    hotel?.location?.distance_to_beach,
+    hotel?.distances?.beach,
+    hotel?.rg_ext?.distance_to_beach,
+    hotel?.rg_ext?.beach_distance,
+  ]);
+  if (direct !== null) return direct;
+  return findPoiDistance(hotel, ["beach", "plage", "sea", "shore", "coast"]);
+}
+
+function normalizeGeoProfile(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return null;
+  switch (normalized) {
+    case "in_city":
+    case "city_near":
+    case "center_near":
+    case "city_center_near":
+      return "in_city";
+    case "away_city":
+    case "city_far":
+    case "center_far":
+    case "city_center_far":
+      return "away_city";
+    case "near_beach":
+    case "beach_near":
+      return "near_beach";
+    case "far_beach":
+    case "beach_far":
+      return "far_beach";
+    default:
+      return normalized;
+  }
+}
+
+function hotelMatchesGeoProfile(hotel, profile) {
+  const CITY_NEAR_MAX_M = 2500;
+  const CITY_FAR_MIN_M = 5000;
+  const BEACH_NEAR_MAX_M = 1200;
+  const BEACH_FAR_MIN_M = 3000;
+  const cityDistance = cityCenterDistanceMeters(hotel);
+  const beachDistance = beachDistanceMeters(hotel);
+
+  switch (profile) {
+    case "in_city":
+      return Number.isFinite(cityDistance) ? cityDistance <= CITY_NEAR_MAX_M : false;
+    case "away_city":
+      return Number.isFinite(cityDistance) ? cityDistance >= CITY_FAR_MIN_M : false;
+    case "near_beach":
+      return Number.isFinite(beachDistance) ? beachDistance <= BEACH_NEAR_MAX_M : false;
+    case "far_beach":
+      return Number.isFinite(beachDistance) ? beachDistance >= BEACH_FAR_MIN_M : false;
+    default:
+      return true;
+  }
+}
+
+function resolveDistanceFilter(rawValue) {
+  if (Array.isArray(rawValue)) {
+    const candidates = rawValue
+      .map((value) => Number(value))
+      .filter((num) => Number.isFinite(num) && num > 0);
+    if (!candidates.length) return null;
+    return Math.max(...candidates);
+  }
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeMealCode(value) {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return null;
+
+  switch (normalized) {
+    case "ro":
+    case "room_only":
+    case "room-only":
+    case "roomonly":
+    case "nomeal":
+    case "no_meal":
+    case "no-meal":
+      return "nomeal";
+    case "bb":
+    case "bed_breakfast":
+    case "bed-breakfast":
+    case "breakfast":
+      return "breakfast";
+    case "hb":
+    case "half_board":
+    case "half-board":
+    case "halfboard":
+      return "half_board";
+    case "fb":
+    case "full_board":
+    case "full-board":
+    case "fullboard":
+      return "full_board";
+    case "ai":
+    case "al":
+    case "all_inclusive":
+    case "all-inclusive":
+    case "allinclusive":
+      return "all_inclusive";
+    default:
+      return normalized;
+  }
+}
+
 function rateMealCode(rate) {
-  return rate?.meal || rate?.meal_data?.value || null;
+  return normalizeMealCode(rate?.meal_data?.value || rate?.meal);
 }
 
 function rateCapacityFromRate(rate) {
@@ -154,7 +411,7 @@ function filterHotelsByPreferences(hotels = [], filters = {}) {
     const starSet = new Set(
       filters.stars
         .map((value) => Number(value))
-        .filter((num) => Number.isFinite(num) && num > 0)
+        .filter((num) => Number.isFinite(num) && num >= 2)
     );
     if (starSet.size) {
       working = working.filter((hotel) => {
@@ -164,18 +421,61 @@ function filterHotelsByPreferences(hotels = [], filters = {}) {
     }
   }
 
+  const rawPropertyTypes = Array.isArray(filters?.property_types)
+    ? filters.property_types
+    : Array.isArray(filters?.propertyTypes)
+      ? filters.propertyTypes
+      : [];
+  if (rawPropertyTypes.length) {
+    const propertyTypeSet = new Set(
+      rawPropertyTypes
+        .map((value) => normalizePropertyTypeValue(value))
+        .filter(Boolean)
+    );
+    if (propertyTypeSet.size) {
+      working = working.filter((hotel) => {
+        const type = hotelPropertyType(hotel);
+        return type ? propertyTypeSet.has(type) : false;
+      });
+    }
+  }
+
   const shouldFilterRates =
     (Array.isArray(filters?.meals) && filters.meals.length) ||
     filters?.free_cancel ||
     budgetMin !== null ||
     budgetMax !== null;
+  const cityDistanceMaxM = resolveDistanceFilter(
+    filters?.city_distance_max_m ?? filters?.cityDistanceMaxM
+  );
+  const beachDistanceMaxM = resolveDistanceFilter(
+    filters?.beach_distance_max_m ??
+      filters?.beachDistanceMaxM ??
+      filters?.beach_distance_options_m
+  );
+  const normalizedGeoProfiles = new Set(
+    (Array.isArray(filters?.geo_profiles)
+      ? filters.geo_profiles
+      : Array.isArray(filters?.geoProfiles)
+        ? filters.geoProfiles
+        : [])
+      .map((value) => normalizeGeoProfile(value))
+      .filter(Boolean)
+  );
 
   if (shouldFilterRates) {
+    const normalizedMealFilterSet = new Set(
+      (Array.isArray(filters?.meals) ? filters.meals : [])
+        .map((value) => normalizeMealCode(value))
+        .filter(Boolean)
+    );
     working = working
       .map((hotel) => {
         const rates = Array.isArray(hotel?.rates) ? hotel.rates : [];
         const filteredRates = rates.filter((rate) => {
-          const mealOk = filters?.meals?.length ? filters.meals.includes(rateMealCode(rate)) : true;
+          const mealOk = normalizedMealFilterSet.size
+            ? normalizedMealFilterSet.has(rateMealCode(rate))
+            : true;
           const cancelOk = filters?.free_cancel ? rateHasFreeCancellation(rate) : true;
           const nightlyPrice = (() => {
             const amount = ratePriceAmount(rate);
@@ -189,6 +489,35 @@ function filterHotelsByPreferences(hotels = [], filters = {}) {
         return { ...hotel, rates: filteredRates };
       })
       .filter((hotel) => Array.isArray(hotel.rates) && hotel.rates.length > 0);
+  }
+
+  if (normalizedGeoProfiles.size) {
+    working = working.filter((hotel) => {
+      for (const profile of normalizedGeoProfiles) {
+        if (hotelMatchesGeoProfile(hotel, profile)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }
+
+  if (cityDistanceMaxM !== null || beachDistanceMaxM !== null) {
+    working = working.filter((hotel) => {
+      if (cityDistanceMaxM !== null) {
+        const cityDistance = cityCenterDistanceMeters(hotel);
+        if (Number.isFinite(cityDistance) && cityDistance > cityDistanceMaxM) {
+          return false;
+        }
+      }
+      if (beachDistanceMaxM !== null) {
+        const beachDistance = beachDistanceMeters(hotel);
+        if (Number.isFinite(beachDistance) && beachDistance > beachDistanceMaxM) {
+          return false;
+        }
+      }
+      return true;
+    });
   }
 
   return working;

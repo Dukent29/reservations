@@ -4,28 +4,50 @@
 
 import { createRouter, createWebHistory } from 'vue-router'
 import {
+  failPageLoading,
   startPageLoading,
   stopPageLoading,
-  failPageLoading,
 } from '../services/pageLoader'
 
 // Views
-import BookingView from '../views/BookingView.vue'
+import ApiLogsView from '../views/ApiLogsView.vue'
+import BlogIndexView from '../views/BlogIndexView.vue'
+import BlogPostView from '../views/BlogPostView.vue'
 import BookingFinishedView from '../views/BookingFinishedView.vue'
+import BookingView from '../views/BookingView.vue'
+import ConditionsView from '../views/ConditionsView.vue'
+import DestinationSeoView from '../views/DestinationSeoView.vue'
 import HotelDetailView from '../views/HotelDetailView.vue'
-import ReservationView from '../views/ReservationView.vue'
-import PaymentSuccessView from '../views/PaymentSuccessView.vue'
-import PaymentErrorView from '../views/PaymentErrorView.vue'
-import SystempayTestView from '../views/SystempayTestView.vue'
-import SearchLandingView from '../views/SearchLandingView.vue'
 import MentionsLegalesView from '../views/MentionsLegalesView.vue'
+import PaymentErrorView from '../views/PaymentErrorView.vue'
+import PaymentSuccessView from '../views/PaymentSuccessView.vue'
 import PolitiqueDeConfidentialiteView from '../views/PolitiqueDeConfidentialiteView.vue'
+import ReservationView from '../views/ReservationView.vue'
+import EtgOrdersView from '../views/EtgOrdersView.vue'
+import ReservationsListView from '../views/ReservationsListView.vue'
+import SearchLandingView from '../views/SearchLandingView.vue'
+import SystempayTestView from '../views/SystempayTestView.vue'
 
 const routes = [
   {
     path: '/',
     name: 'search-landing',
     component: SearchLandingView,
+  },
+  {
+    path: '/destinations/:slug',
+    name: 'destination-seo',
+    component: DestinationSeoView,
+  },
+  {
+    path: '/blog',
+    name: 'blog-index',
+    component: BlogIndexView,
+  },
+  {
+    path: '/blog/:slug',
+    name: 'blog-post',
+    component: BlogPostView,
   },
   {
     // Results + filters (formerly reservation.html search list)
@@ -76,6 +98,21 @@ const routes = [
     component: PaymentErrorView,
   },
   {
+    path: '/show/reservations',
+    name: 'show-reservations',
+    component: ReservationsListView,
+  },
+  {
+    path: '/show/apilogs',
+    name: 'show-apilogs',
+    component: ApiLogsView,
+  },
+  {
+    path: '/show/etg',
+    name: 'show-etg',
+    component: EtgOrdersView,
+  },
+  {
     // Optional Systempay test page (formerly systempay-test.html)
     path: '/systempay-test',
     name: 'systempay-test',
@@ -92,6 +129,12 @@ const routes = [
     path: '/politique-de-confidentialite',
     name: 'politique-de-confidentialite',
     component: PolitiqueDeConfidentialiteView,
+  },
+  {
+    // Booking conditions page
+    path: '/conditions',
+    name: 'conditions',
+    component: ConditionsView,
   },
 ]
 

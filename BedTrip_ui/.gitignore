@@ -29,8 +29,15 @@ coverage
 .eslintcache
 
 # Cypress
+
 /cypress/videos/
 /cypress/screenshots/
-
+.env.local
+.env.*.local
+.env
 # Vitest
 __screenshots__/
+
+# Generated at build time
+public/sitemap.xml
+public/robots.txt

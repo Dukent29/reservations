@@ -10,5 +10,6 @@ router.post("/booking/form", validate(bookingSchemas.bookingForm), bookingContro
 router.post("/booking/start", validate(bookingSchemas.bookingStart), bookingController.startBooking);
 router.post("/booking/check", validate(bookingSchemas.bookingCheck), bookingController.checkBooking);
 router.get("/booking/status", validate(bookingSchemas.bookingStatus), bookingController.getBookingStatus);
+router.get("/booking/reservations", bookingController.listReservations);
 
 module.exports = router;

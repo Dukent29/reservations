@@ -3,6 +3,10 @@
 const { callETG } = require("../utils/etg");
 const httpError = require("../src/utils/httpError");
 
+const HOTEL_IMAGES_CACHE_TTL_MS = 10 * 60 * 1000;
+const hotelImagesCache = new Map();
+const hotelImagesInFlight = new Map();
+
 function buildHotelInfoPayload(body = {}) {
   if (!body.id && !body.hid) {
     throw httpError(400, "id or hid is required");
@@ -103,24 +107,66 @@ function replaceSizeToken(url, requestedSize) {
 }
 
 async function fetchHotelImages(options = {}) {
+  const language = (options.language || "en").trim() || "en";
   const limit = Number(options.limit);
   const hasLimit = Number.isFinite(limit) && limit > 0;
   const cappedLimit = hasLimit ? Math.max(1, Math.min(limit, 50)) : null;
-  const payload = buildHotelInfoPayload(options);
-  const info = await fetchHotelInfo(payload);
-  const candidates = normalizeCandidates(info);
-  const selected = cappedLimit ? candidates.slice(0, cappedLimit) : candidates;
   const size = options.size || "x500";
+  const cacheIdentity = options.hid || options.id || "";
+  const cacheKey = [
+    String(cacheIdentity),
+    language,
+    size,
+    cappedLimit == null ? "all" : cappedLimit,
+  ].join("|");
 
-  const images = selected
-    .map((candidate) => replaceSizeToken(candidate.url, size))
-    .filter((url) => typeof url === "string" && url.length);
+  const now = Date.now();
+  const cachedEntry = hotelImagesCache.get(cacheKey);
+  if (cachedEntry && cachedEntry.expiresAt > now) {
+    return cachedEntry.value;
+  }
+  if (hotelImagesInFlight.has(cacheKey)) {
+    return hotelImagesInFlight.get(cacheKey);
+  }
 
-  return {
-    images,
-    sizeUsed: size,
-    hid: info?.hid || payload.hid || payload.id,
-  };
+  const payload = buildHotelInfoPayload(options);
+  payload.language = language;
+
+  const requestPromise = (async () => {
+    const staleEntry = hotelImagesCache.get(cacheKey);
+    try {
+      const info = await fetchHotelInfo(payload);
+      const candidates = normalizeCandidates(info);
+      const selected = cappedLimit ? candidates.slice(0, cappedLimit) : candidates;
+
+      const images = selected
+        .map((candidate) => replaceSizeToken(candidate.url, size))
+        .filter((url) => typeof url === "string" && url.length);
+
+      const result = {
+        images,
+        sizeUsed: size,
+        hid: info?.hid || payload.hid || payload.id,
+      };
+
+      hotelImagesCache.set(cacheKey, {
+        expiresAt: Date.now() + HOTEL_IMAGES_CACHE_TTL_MS,
+        value: result,
+      });
+
+      return result;
+    } catch (error) {
+      if (staleEntry && staleEntry.value) {
+        return staleEntry.value;
+      }
+      throw error;
+    } finally {
+      hotelImagesInFlight.delete(cacheKey);
+    }
+  })();
+
+  hotelImagesInFlight.set(cacheKey, requestPromise);
+  return requestPromise;
 }
 
 module.exports = {

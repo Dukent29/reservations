@@ -60,3 +60,18 @@ export async function finalizeFloaDeal(dealReference, payload) {
   return data || {}
 }
 
+export async function createKotanExternPayment(body) {
+  const { statusCode, data } = await safeJsonFetch(
+    `${API_BASE}/api/payments/kotan/extern/create`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  )
+  if (statusCode >= 400 || data?.error || data?.status === 'nok') {
+    throw buildError('/api/payments/kotan/extern/create', statusCode, data)
+  }
+  return data || {}
+}
+

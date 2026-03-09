@@ -3,3 +3,27 @@
 node_modules/
 dist/
 build/
+
+# Code security analyse
+question*.ai
+.env
+!.env.example
+node_modules/
+dist/
+build/
+
+# Code security analyse
+question*.ai
+
+kotan-hotel
+kotan-hotel/**
+**/kotan-hotel/**
+ 
+# 
+scripts/*.sql
+docs/*.md
+docs/*.sh
+docs/*.json
+
+sitemap.xml
+**/sitemap.xml

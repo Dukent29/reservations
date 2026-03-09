@@ -7,8 +7,9 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
+    "generate:seo": "node ./scripts/generate-seo-assets.mjs --output-dir=./dist",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run generate:seo",
     "preview": "vite preview"
   },
   "dependencies": {

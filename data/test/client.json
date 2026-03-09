@@ -1,0 +1,13 @@
+{
+  "civility": "MR",
+  "firstName": "John",
+  "lastName": "Doe",
+  "company": "Example SARL",
+  "email": "john@example.com",
+  "phone": "+33 6 00 00 00 00",
+  "addressLine1": "1 Rue de la Paix",
+  "postalCode": "33000",
+  "city": "Bordeaux",
+  "zipCity": "",
+  "notes": ""
+}

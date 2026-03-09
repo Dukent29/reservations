@@ -105,16 +105,35 @@
 
         <div class="hotel-detail__gallery">
           <div
-            v-if="detailImagesLoading"
-            class="hotel-thumb__placeholder"
+            v-if="detailImagesLoading || detailImagesRetryPending"
+            class="hotel-gallery hotel-gallery--skeleton hotel-gallery--inline-loading"
+            aria-busy="true"
+          >
+            <div
+              v-for="n in 6"
+              :key="`gallery-inline-loading-${n}`"
+              class="skeleton-thumb"
+            ></div>
+          </div>
+          <p
+            v-if="detailImagesLoading || detailImagesRetryPending"
+            class="hotel-gallery__loading-note"
           >
             Chargement des photos de l’hôtel…
-          </div>
+            <span v-if="detailImagesRetryPending">nouvelle tentative en cours.</span>
+          </p>
           <div
             v-else-if="detailImagesError"
-            class="hotel-thumb__placeholder"
+            class="hotel-thumb__placeholder hotel-thumb__placeholder--error"
           >
-            {{ detailImagesError }}
+            <span>{{ detailImagesError }}</span>
+            <button
+              type="button"
+              class="secondary mini hotel-thumb__retry"
+              @click="retryDetailImages"
+            >
+              Réessayer
+            </button>
           </div>
           <div
             v-else-if="!detailImages.length"
@@ -321,7 +340,17 @@
                 </span>
               </div>
               <div class="room-card__details">
-                <div>
+                <div class="room-card__cancellation">
+                  <span
+                    :class="[
+                      'room-card__cancellation-badge',
+                      rateIsCancellable(rate)
+                        ? 'room-card__cancellation-badge--free'
+                        : 'room-card__cancellation-badge--nonrefund',
+                    ]"
+                  >
+                    {{ rateIsCancellable(rate) ? 'Annulable' : 'Non remboursable' }}
+                  </span>
                   {{ rateCancellationText(rate) }}
                 </div>
                 <div v-if="rateCapacityDetail(rate)">
@@ -405,7 +434,19 @@
                     </div>
                   </td>
                   <td class="compare-options">
-                    <div>{{ rateCancellationText(rate) }}</div>
+                    <div class="room-card__cancellation">
+                      <span
+                        :class="[
+                          'room-card__cancellation-badge',
+                          rateIsCancellable(rate)
+                            ? 'room-card__cancellation-badge--free'
+                            : 'room-card__cancellation-badge--nonrefund',
+                        ]"
+                      >
+                        {{ rateIsCancellable(rate) ? 'Annulable' : 'Non remboursable' }}
+                      </span>
+                      {{ rateCancellationText(rate) }}
+                    </div>
                     <div v-if="rateBeddingText(rate)">{{ rateBeddingText(rate) }}</div>
                     <div v-if="rateBathroomText(rate)">{{ rateBathroomText(rate) }}</div>
                   </td>
@@ -499,6 +540,10 @@ const PREBOOK_SUMMARY_KEY = 'booking:lastPrebook'
 const MARKUP_PERCENT = 10
 const DETAIL_IMAGE_SIZE = '1024x768'
 const DETAIL_IMAGE_LIMIT = 15
+const DETAIL_IMAGE_RETRY_DELAY_MS = 8000
+const DETAIL_IMAGE_ENDPOINT_COOLDOWN_MS = 30000
+const DETAIL_IMAGE_AUTO_RETRY_MAX = 3
+const DETAIL_IMAGE_FALLBACK_LIMITS = [10, 6, 3, 1]
 
 const MAX_GUESTS_PER_ROOM = 6
 const DEFAULT_CHILD_AGE = 8
@@ -549,11 +594,14 @@ const selectedHotelDetails = ref(null)
 const detailImages = ref([])
 const detailImagesLoading = ref(false)
 const detailImagesError = ref('')
+const detailImagesRetryPending = ref(false)
 const isLightboxOpen = ref(false)
 const lightboxIndex = ref(0)
 let latestDetailImagesToken = 0
 const detailImageCache = new Map()
 const detailImageCooldown = new Map()
+let detailImagesRetryTimer = null
+const detailImagesRetryCount = ref(0)
 
 const prebookLoadingIndex = ref(null)
 const prebookStatus = ref('')
@@ -695,14 +743,26 @@ function handleLightboxKey(event) {
 }
 function friendlyMeal(value) {
   switch ((value || '').toLowerCase()) {
+    case 'ro':
     case 'nomeal':
+    case 'room_only':
+    case 'room-only':
       return 'Room only'
+    case 'bb':
     case 'breakfast':
+    case 'bed_breakfast':
+    case 'bed-breakfast':
       return 'Breakfast'
+    case 'hb':
     case 'half_board':
+    case 'half-board':
       return 'Half board'
+    case 'fb':
     case 'full_board':
+    case 'full-board':
       return 'Full board'
+    case 'ai':
+    case 'al':
     case 'all-inclusive':
     case 'all_inclusive':
       return 'All inclusive'
@@ -804,16 +864,25 @@ function rateChipLabels(rate) {
   return chips
 }
 
+/**
+ * Cancellation policy from ETG: payment_options.payment_types[0].cancellation_penalties
+ * - free_cancellation_before: date until which free cancellation is allowed
+ * - policies: [{ start_at, end_at, amount_show, amount_charge }] — first policy with amount 0 = free until end_at
+ * A rate is cancellable (free cancellation) only if it has free_cancellation_before or a policy with amount 0.
+ * Cheapest rates often have no free window → "Tarif non remboursable".
+ */
 function rateCancellationText(rate) {
   const payment = getRatePayment(rate)
-  const freeBefore =
-    payment?.cancellation_penalties?.free_cancellation_before
-  if (freeBefore) {
-    let dateText = freeBefore
+  const penalties = payment?.cancellation_penalties
+  const freeBefore = penalties?.free_cancellation_before
+  const policies = Array.isArray(penalties?.policies) ? penalties.policies : []
+
+  const formatDate = (iso) => {
+    if (!iso) return ''
     try {
-      const d = new Date(freeBefore)
+      const d = new Date(iso)
       if (!Number.isNaN(d.getTime())) {
-        dateText = d.toLocaleString('fr-FR', {
+        return d.toLocaleString('fr-FR', {
           day: '2-digit',
           month: '2-digit',
           year: 'numeric',
@@ -822,11 +891,45 @@ function rateCancellationText(rate) {
         })
       }
     } catch {
-      // ignore parse errors
+      // ignore
     }
+    return iso
+  }
+
+  if (freeBefore) {
+    const dateText = formatDate(freeBefore) || freeBefore
     return `Annulation gratuite possible jusqu’au ${dateText}.`
   }
+  const freePolicy = policies.find(
+    (p) =>
+      p &&
+      (Number(p.amount_show) === 0 || Number(p.amount_charge) === 0),
+  )
+  if (freePolicy?.end_at) {
+    const dateText = formatDate(freePolicy.end_at) || freePolicy.end_at
+    return `Annulation gratuite possible jusqu’au ${dateText}.`
+  }
+  if (policies.length > 0) {
+    const firstPenalty = policies[0]
+    const amount =
+      firstPenalty?.amount_show ?? firstPenalty?.amount_charge
+    if (amount && Number(amount) > 0) {
+      return 'Tarif non remboursable — annulation non gratuite.'
+    }
+  }
   return 'Frais d’annulation peuvent s’appliquer selon les conditions du tarif.'
+}
+
+/** True if this rate has a free cancellation window (until a given date). */
+function rateIsCancellable(rate) {
+  const payment = getRatePayment(rate)
+  const penalties = payment?.cancellation_penalties
+  if (penalties?.free_cancellation_before) return true
+  const policies = Array.isArray(penalties?.policies) ? penalties.policies : []
+  return policies.some(
+    (p) =>
+      p && (Number(p.amount_show) === 0 || Number(p.amount_charge) === 0),
+  )
 }
 
 function rateCapacityDetail(rate) {
@@ -1123,6 +1226,11 @@ async function requestHotelImagesFromApi(payload) {
   return images
 }
 
+function isEndpointExceededError(err) {
+  const message = String(err?.message || '').toLowerCase()
+  return message.includes('endpoint_exceeded_limit')
+}
+
 async function fetchHotelImages(hotel, lang, size, limit = 1) {
   const identity = buildHotelImageIdentity(hotel)
   if (!identity.cacheKey) return []
@@ -1139,33 +1247,74 @@ async function fetchHotelImages(hotel, lang, size, limit = 1) {
   }`
   const cooldownUntil = detailImageCooldown.get(cacheKey)
   if (cooldownUntil && cooldownUntil > Date.now()) {
-    return []
+    throw new Error('endpoint_exceeded_limit')
   }
   if (detailImageCache.has(cacheKey)) {
     return await detailImageCache.get(cacheKey)
   }
-  const payload = {
-    language: safeLang,
-    size: safeSize,
+  const limitsToTry = []
+  if (cappedLimit !== null) limitsToTry.push(cappedLimit)
+  for (const fallbackLimit of DETAIL_IMAGE_FALLBACK_LIMITS) {
+    if (cappedLimit !== null && fallbackLimit > cappedLimit) continue
+    if (!limitsToTry.includes(fallbackLimit)) limitsToTry.push(fallbackLimit)
   }
-  if (cappedLimit !== null) payload.limit = cappedLimit
-  if (identity.hid !== null) payload.hid = identity.hid
-  else if (identity.fallbackId) payload.id = identity.fallbackId
-  const requestPromise = requestHotelImagesFromApi(payload)
+  if (!limitsToTry.length) limitsToTry.push(null)
+
+  const requestPromise = (async () => {
+    let lastError = null
+    for (const candidateLimit of limitsToTry) {
+      const payload = {
+        language: safeLang,
+        size: safeSize,
+      }
+      if (candidateLimit !== null) payload.limit = candidateLimit
+      if (identity.hid !== null) payload.hid = identity.hid
+      else if (identity.fallbackId) payload.id = identity.fallbackId
+      try {
+        return await requestHotelImagesFromApi(payload)
+      } catch (err) {
+        lastError = err
+        if (!isEndpointExceededError(err)) throw err
+      }
+    }
+    throw lastError || new Error('Image lookup failed')
+  })()
+
   detailImageCache.set(cacheKey, requestPromise)
   try {
     return await requestPromise
   } catch (err) {
-    const message = err?.message || ''
-    if (message.includes('endpoint_exceeded_limit')) {
-      detailImageCooldown.set(cacheKey, Date.now() + 30000)
+    if (isEndpointExceededError(err)) {
+      detailImageCooldown.set(
+        cacheKey,
+        Date.now() + DETAIL_IMAGE_ENDPOINT_COOLDOWN_MS,
+      )
     }
     detailImageCache.delete(cacheKey)
     throw err
   }
 }
 
+function clearDetailImagesRetryTimer() {
+  if (!detailImagesRetryTimer) return
+  clearTimeout(detailImagesRetryTimer)
+  detailImagesRetryTimer = null
+  detailImagesRetryPending.value = false
+}
+
+function scheduleDetailImagesRetry(hotel, token) {
+  clearDetailImagesRetryTimer()
+  detailImagesRetryPending.value = true
+  detailImagesRetryTimer = setTimeout(() => {
+    detailImagesRetryPending.value = false
+    if (token !== latestDetailImagesToken) return
+    hydrateHotelDetailGallery(hotel, token)
+  }, DETAIL_IMAGE_RETRY_DELAY_MS)
+}
+
 async function hydrateHotelDetailGallery(hotel, token) {
+  clearDetailImagesRetryTimer()
+  detailImagesRetryPending.value = false
   detailImagesLoading.value = true
   detailImagesError.value = ''
   try {
@@ -1178,12 +1327,30 @@ async function hydrateHotelDetailGallery(hotel, token) {
     )
     if (token !== latestDetailImagesToken) return
     detailImages.value = images || []
+    detailImagesRetryCount.value = 0
   } catch (err) {
     if (token !== latestDetailImagesToken) return
-    detailImages.value = []
+    const hasShownImages =
+      Array.isArray(detailImages.value) && detailImages.value.length > 0
+    if (isEndpointExceededError(err)) {
+      if (!hasShownImages) {
+        detailImagesError.value =
+          'Le service photo est momentanement sature. Nouvelle tentative automatique en cours.'
+      }
+      if (detailImagesRetryCount.value < DETAIL_IMAGE_AUTO_RETRY_MAX) {
+        detailImagesRetryCount.value += 1
+        scheduleDetailImagesRetry(hotel, token)
+      } else if (!hasShownImages) {
+        detailImagesError.value =
+          'Le service photo est temporairement indisponible. Reessayez dans quelques secondes.'
+      }
+      return
+    }
+    if (!hasShownImages) {
+      detailImages.value = []
+    }
     detailImagesError.value =
-      err?.message ||
-      "Impossible de charger les photos de l'hôtel."
+      "Impossible de charger les photos de l'hotel."
   } finally {
     if (token === latestDetailImagesToken) {
       detailImagesLoading.value = false
@@ -1202,6 +1369,9 @@ async function loadHotelDetails() {
   selectedHotelDetails.value = null
   detailImages.value = []
   detailImagesError.value = ''
+  detailImagesRetryPending.value = false
+  detailImagesRetryCount.value = 0
+  clearDetailImagesRetryTimer()
   const imagesToken = ++latestDetailImagesToken
   try {
     const regionId =
@@ -1239,6 +1409,16 @@ async function loadHotelDetails() {
   } finally {
     hotelDetailsLoading.value = false
   }
+}
+
+function retryDetailImages() {
+  if (!selectedHotelDetails.value) return
+  detailImagesRetryCount.value = 0
+  detailImagesError.value = ''
+  detailImagesRetryPending.value = false
+  clearDetailImagesRetryTimer()
+  const token = ++latestDetailImagesToken
+  hydrateHotelDetailGallery(selectedHotelDetails.value, token)
 }
 
 function persistPrebookSummary(apiResponse, hotel, rate) {
@@ -1402,6 +1582,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleLightboxKey)
   setBodyLock(false)
+  clearDetailImagesRetryTimer()
 })
 </script>
 
@@ -1853,6 +2034,31 @@ onBeforeUnmount(() => {
   gap: 0.35rem;
 }
 
+.room-card__cancellation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.room-card__cancellation-badge {
+  display: inline-block;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.room-card__cancellation-badge--free {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.room-card__cancellation-badge--nonrefund {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .room-card__footer {
   display: flex;
   justify-content: flex-end;
@@ -1868,6 +2074,16 @@ onBeforeUnmount(() => {
   color: #9ca3af;
 }
 
+.hotel-thumb__placeholder--error {
+  display: grid;
+  place-items: center;
+  gap: 0.6rem;
+}
+
+.hotel-thumb__retry {
+  width: fit-content;
+}
+
 .hotel-detail--skeleton {
   display: grid;
   gap: 1rem;
@@ -1879,6 +2095,16 @@ onBeforeUnmount(() => {
   column-gap: 0;
   gap: 0.5rem;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.hotel-gallery--inline-loading {
+  margin-bottom: 0;
+}
+
+.hotel-gallery__loading-note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
 }
 
 .skeleton-line,

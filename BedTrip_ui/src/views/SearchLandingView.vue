@@ -26,13 +26,11 @@
 
     <div class="hero__content">
       <p class="hero__eyebrow">BedTrip</p>
-      <h2 class="hero__title">Plateforme B2B de réservation d’hôtels pour agences de voyage et entreprises.</h2>
+      <h2 class="hero__title">Réservez votre hôtel en plusieurs fois</h2>
       <p class="hero__subtitle">
-        Comparez des hébergements au meilleur tarif pro, consultez les disponibilités en temps réel,
-    et réservez en quelques clics pour vos clients (villes, régions, hôtels).
-    BedTrip centralise la <strong>recherche d’hôtels B2B</strong>, l’<strong>inventaire</strong> et les
-    <strong>réservations professionnelles</strong> : Paris, Rome, Dubaï et des milliers de destinations.
-    Idéal pour <strong>travel managers</strong>, <strong>TMC</strong> et <strong>agences</strong>.
+        <strong>BedTrip.fr, un site dédié aux particuliers et aux professionnels.</strong>
+        Réservation d’hôtels pour vos vacances, week-ends ou déplacements professionnels,
+        avec des tarifs négociés pas cher et le paiement en plusieurs fois.
       </p>
 
       <div
@@ -55,117 +53,7 @@
 
       <div class="hero__search-shell">
         <div class="search-shell full">
-          <section class="card searchbar">
-            <form class="search-grid" @submit.prevent="goToResults">
-              <div
-                ref="suggestionRootRef"
-                class="field field--suggestions"
-              >
-                <label for="destination">Destination</label>
-                <input
-                  id="destination"
-                  v-model="destination"
-                  type="text"
-                  placeholder="Essayez Paris, Rome, Dubaï..."
-                  autocomplete="off"
-                  required
-                />
-                <small class="muted" style="font-size:.7rem;">
-                  Saisissez une ville ou une région ETG ; l’autocomplétion vous aidera.
-                </small>
-                <small
-                  v-if="suggestionStatus"
-                  class="muted"
-                  style="font-size:.7rem;"
-                >
-                  {{ suggestionStatus }}
-                </small>
-
-                <div
-                  v-if="hasSuggestions"
-                  class="suggestions-dropdown"
-                >
-                  <div
-                    v-if="regionSuggestions.length"
-                    class="suggestions-section"
-                  >
-                    <div class="suggestions-title">Régions</div>
-                    <button
-                      v-for="(region, idx) in regionSuggestions"
-                      :key="'r-' + idx"
-                      type="button"
-                      class="suggestion-option"
-                      @click="selectRegion(region)"
-                    >
-                      <span class="suggestion-option__name">
-                        {{ region.name || region.full_name || region.fullName || 'Région' }}
-                      </span>
-                    </button>
-                  </div>
-
-                  <div
-                    v-if="hotelSuggestions.length"
-                    class="suggestions-section"
-                  >
-                    <div class="suggestions-title">Hôtels</div>
-                    <button
-                      v-for="(hotel, idx) in hotelSuggestions"
-                      :key="'h-' + idx"
-                      type="button"
-                      class="suggestion-option"
-                      @click="selectHotelSuggestion(hotel)"
-                    >
-                      <span class="suggestion-option__name">
-                        {{ hotel.name || 'Hôtel' }}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="dateRangeInput">Séjour</label>
-                <div
-                  class="date-range-wrapper"
-                  role="button"
-                  tabindex="0"
-                  @click.prevent="openDateModal"
-                  @keydown.enter.prevent="openDateModal"
-                  @keydown.space.prevent="openDateModal"
-                >
-                  <input
-                    id="dateRangeInput"
-                    type="text"
-                    :value="dateRangeLabel"
-                    placeholder="Choisissez les dates"
-                    autocomplete="off"
-                    readonly
-                  />
-                  <input type="hidden" :value="checkin" />
-                  <input type="hidden" :value="checkout" />
-                </div>
-              </div>
-
-              <div class="field compact">
-                <label>Voyageurs</label>
-                <button
-                  type="button"
-                  class="secondary"
-                  style="text-align:left;"
-                  @click="openGuestModal"
-                >
-                  {{ guestsSummary }}
-                </button>
-              </div>
-
-              <div class="field action">
-                <label>&nbsp;</label>
-                <button class="primary" type="submit">
-                  Rechercher
-                </button>
-              </div>
-            </form>
-          </section>
+          <HotelSearchForm @submit-search="goToResults" />
         </div>
       </div>
     </div>
@@ -173,31 +61,31 @@
 
   <!-- About BedTrip -->
   <section class="landing-section landing-section--about">
-    <h2 class="landing-section__title">Le principe de BedTrip.</h2>
+    <h2 class="landing-section__title">BedTrip.fr pour particuliers et professionnels</h2>
     <p class="landing-section__subtitle muted">
-      BedTrip est une console hôtelière B2B pensée pour les agences et partenaires :
-      un seul outil pour chercher, comparer et réserver les meilleurs séjours pour vos clients.
+      BedTrip.fr simplifie la réservation d’hôtels pour tous les profils:
+      particuliers, familles, couples, voyageurs loisirs et professionnels en déplacement.
     </p>
     <div class="landing-section__grid">
       <article class="info-card">
-        <h3>Un moteur de recherche conçu pour les pros</h3>
+        <h3>Des séjours loisirs et professionnels</h3>
         <p>
-          Des filtres précis, des tarifs négociés et des disponibilités mises à jour en temps réel,
-          directement connectés à nos fournisseurs.
+          Réservation d’hôtels pour vos vacances, week-ends, séjours d’été ou d’hiver,
+          et aussi pour vos déplacements professionnels avec facture.
         </p>
       </article>
       <article class="info-card">
-        <h3>Une interface claire pour aller vite</h3>
+        <h3>Tarifs négociés et disponibilités en temps réel</h3>
         <p>
-          Une seule page pour visualiser les résultats, les détails d’hôtel, les conditions et les
-          options de chambre, sans perdre le fil de votre réservation.
+          BedTrip.fr vous donne accès à des partenaires hôteliers dans plusieurs pays,
+          avec des tarifs négociés, compétitifs et confirmés rapidement.
         </p>
       </article>
       <article class="info-card">
-        <h3>Un support pensé pour les équipes</h3>
+        <h3>Paiement flexible et service humain</h3>
         <p>
-          Des parcours alignés sur vos besoins opérationnels, avec un historique de commande clair
-          et des informations structurées pour vos équipes back-office.
+          Paiement 3x, 4x, 10x via Cofidis, PayPal, 3 chèques, Floabank, Alma, et bientôt Cetelem
+          ou Klarna, avec accompagnement de notre équipe.
         </p>
       </article>
     </div>
@@ -207,7 +95,7 @@
   <section class="landing-section landing-section--highlights">
     <h2 class="landing-section__title">Sélections & offres à ne pas manquer</h2>
     <p class="landing-section__subtitle muted">
-      Inspirez-vous de quelques idées de séjours : passez la souris sur une carte pour en savoir plus.
+      Inspirez-vous pour vos vacances, week-ends et déplacements professionnels.
     </p>
 
     <div class="landing-section__grid landing-section__grid--cards">
@@ -220,8 +108,8 @@
         <div class="highlight-card__overlay">
           <h3>Escapades urbaines</h3>
           <p>
-            Hôtels idéalement situés au cœur des grandes villes européennes, avec des tarifs
-            flexibles pour les voyages d’affaires de dernière minute.
+            Paris, Londres, Amsterdam, Rome, Milan ou Athènes:
+            des hôtels centraux pour city-breaks et déplacements professionnels.
           </p>
         </div>
       </article>
@@ -235,8 +123,8 @@
         <div class="highlight-card__overlay">
           <h3>Vue mer & séjours loisirs</h3>
           <p>
-            Une sélection de resorts et d’hôtels balnéaires adaptés aux familles, avec
-            des promotions saisonnières sur les séjours longs.
+            Antalya, Dubaï, Thaïlande et îles paradisiaques:
+            des offres loisirs pour familles, couples et vacances de saison.
           </p>
         </div>
       </article>
@@ -250,8 +138,8 @@
         <div class="highlight-card__overlay">
           <h3>Adresses confidentielles</h3>
           <p>
-            Petits boutique-hôtels et établissements de charme, parfaits pour des séjours sur mesure
-            et des expériences uniques pour vos clients.
+            Une sélection d’hôtels de charme pour week-ends premium,
+            séjours sur mesure ou voyages d’affaires confortables.
           </p>
         </div>
       </article>
@@ -260,192 +148,90 @@
 
   <!-- Payment advantages -->
   <section class="landing-section landing-section--payments">
-    <h2 class="landing-section__title">Des paiements simples et sécurisés</h2>
+    <h2 class="landing-section__title">Des paiements simples, flexibles et sécurisés</h2>
     <p class="landing-section__subtitle muted">
-      BedTrip s’appuie sur un partenaire de paiement sécurisé pour traiter chaque transaction
-      dans un cadre fiable et transparent.
+      Tarifs négociés pas cher et paiement en plusieurs fois pour faciliter chaque réservation
+      en toute sécurité.
     </p>
 
     <div class="landing-section__columns">
       <div class="payment-point">
-        <h3>Paiements sécurisés</h3>
+        <h3>Paiement en plusieurs fois</h3>
         <p>
-          Toutes les transactions passent par une plateforme certifiée,
-          avec chiffrement bout‑à‑bout et suivi des statuts de paiement en temps réel.
+          3x, 4x, 10x via Cofidis, PayPal, 3 chèques, Floabank, Alma,
+          et bientôt Cetelem ou Klarna selon les offres.
         </p>
       </div>
       <div class="payment-point">
-        <h3>Conditions claires</h3>
+        <h3>Conditions transparentes</h3>
         <p>
-          Dépôt, prépaiement ou paiement sur place : le type de paiement est affiché clairement
-          pour chaque offre, avec les conditions d’annulation associées.
+          Dépôt, prépaiement ou paiement sur place: toutes les règles sont affichées clairement,
+          avec les conditions d’annulation associées.
         </p>
       </div>
       <div class="payment-point">
-        <h3>Adapté aux équipes comptables</h3>
+        <h3>Facture pour la comptabilité</h3>
         <p>
-          Références partenaires et fournisseurs, montants et devises sont structurés pour faciliter
-          votre rapprochement comptable et la gestion de vos dossiers.
+          Pour les entreprises et indépendants, nous pouvons fournir une facture de déplacement
+          professionnel adaptée à la gestion comptable.
         </p>
       </div>
     </div>
   </section>
 
-  <teleport to="body">
-    <div
-      v-if="isDateModalOpen"
-      class="modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="dateModalTitle"
-      @click.self="closeDateModal"
-    >
-      <div class="modal__backdrop"></div>
-      <div class="modal__dialog">
-        <div class="modal__header">
-          <div class="modal__title" id="dateModalTitle">Séjour</div>
-          <button
-            type="button"
-            class="secondary mini"
-            aria-label="Fermer"
-            @click="closeDateModal"
-          >
-            ✕
-          </button>
-        </div>
-        <div class="modal__body">
-          <div class="date-calendar" aria-label="Sélection de la période">
-            <div class="date-calendar__header">
-              <div class="date-calendar__title">{{ calendarMonthLabel }}</div>
-              <div class="date-calendar__nav">
-                <button type="button" @click="shiftCalendar(-1)">‹</button>
-                <button type="button" @click="shiftCalendar(1)">›</button>
-              </div>
-            </div>
-            <div
-              class="date-calendar__grid"
-              @mouseleave="clearHoverPreview"
-            >
-              <div
-                v-for="dow in calendarWeekdays"
-                :key="`dow-${dow}`"
-                class="date-calendar__dow"
-              >
-                {{ dow }}
-              </div>
-              <template v-for="cell in calendarCells" :key="cell.key">
-                <div v-if="cell.type === 'empty'"></div>
-                <button
-                  v-else
-                  type="button"
-                  class="date-calendar__day"
-                  :class="cell.classObject"
-                  :disabled="cell.disabled"
-                  @click="selectCalendarDate(cell.date)"
-                  @mouseenter="!cell.disabled && previewCalendarDate(cell.date)"
-                >
-                  {{ cell.label }}
-                </button>
-              </template>
-            </div>
-          </div>
-        </div>
-        <div class="modal__footer">
-          <button type="button" class="primary" @click="applyDateSelection">
-            Valider
-          </button>
-        </div>
-      </div>
-    </div>
-  </teleport>
+  <section class="landing-section landing-section--about">
+    <h2 class="landing-section__title">À propos de bedTrip.fr</h2>
+    <p class="landing-section__subtitle muted">
+      bedTrip.fr appartient à la société Kotan Voyages, basée en Normandie, avec une agence physique
+      à Évreux, Elbeuf, Rouen et Petit-Quevilly. Cette présence locale apporte une sécurité
+      supplémentaire, une assistance personnalisée et un service après-vente humain et réactif.
+      bedTrip.fr, c’est le choix de la tranquillité, de la réactivité et du service client humain.
+    </p>
+  </section>
 
-  <teleport to="body">
-    <div
-      v-if="isGuestModalOpen"
-      class="modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="guestModalTitle"
-      @click.self="closeGuestModal"
-    >
-      <div class="modal__backdrop"></div>
-      <div class="modal__dialog">
-        <div class="modal__header">
-          <div class="modal__title" id="guestModalTitle">Voyageurs</div>
-          <button
-            type="button"
-            class="secondary mini"
-            aria-label="Fermer"
-            @click="closeGuestModal"
-          >
-            ✕
-          </button>
-        </div>
-        <div class="modal__body guest-modal__body">
-          <div class="guest-row">
-            <div>
-              <p class="guest-row__label">Adultes</p>
-              <small class="muted">A partir de 18 ans</small>
-            </div>
-            <div class="counter">
-              <button type="button" @click="decrementAdults">−</button>
-              <div class="value">{{ adultsCount }}</div>
-              <button type="button" @click="incrementAdults">+</button>
-            </div>
-          </div>
-          <div class="guest-row">
-            <div>
-              <p class="guest-row__label">Enfants</p>
-              <small class="muted">0 à 17 ans</small>
-            </div>
-            <div class="counter">
-              <button type="button" @click="removeChild">−</button>
-              <div class="value">{{ childrenCount }}</div>
-              <button type="button" @click="addChild">+</button>
-            </div>
-          </div>
-          <div
-            v-if="childrenAges.length"
-            class="children-ages"
-          >
-            <div
-              v-for="(age, idx) in childrenAges"
-              :key="`child-${idx}`"
-              class="child-age-row"
-            >
-              <label :for="`child-age-${idx}`">
-                Enfant {{ idx + 1 }} · âge
-              </label>
-              <select
-                :id="`child-age-${idx}`"
-                :value="age"
-                @change="updateChildAge(idx, $event.target.value)"
-              >
-                <option
-                  v-for="ageOption in childAgeOptions"
-                  :key="ageOption"
-                  :value="ageOption"
-                >
-                  {{ ageOption }} an{{ ageOption > 1 ? 's' : '' }}
-                </option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <div class="modal__footer">
-          <button type="button" class="primary" @click="applyGuestSelection">
-            Valider
-          </button>
-        </div>
-      </div>
+  <section class="landing-section landing-section--destinations">
+    <h2 class="landing-section__title">Nos destinations principales</h2>
+    <div class="landing-section__grid">
+      <article class="info-card">
+        <h3>France</h3>
+        <p>Paris, Rouen, Le Havre, Normandie, Lyon, Marseille.</p>
+      </article>
+      <article class="info-card">
+        <h3>Europe</h3>
+        <p>Munich, Prague, Zurich, Londres, Amsterdam, Rotterdam, Rome, Milan, Venise, Athènes.</p>
+      </article>
+      <article class="info-card">
+        <h3>International</h3>
+        <p>Turquie (Istanbul, Antalya, Izmir), Dubaï, Thaïlande et îles paradisiaques.</p>
+      </article>
     </div>
-  </teleport>
+  </section>
+
+  <section class="landing-section landing-section--reviews">
+    <h2 class="landing-section__title">Avis clients</h2>
+    <p class="landing-section__subtitle muted">
+      Nous avons des avis très positifs sur notre page Google.
+      Consultez les retours clients et déposez votre avis après votre séjour.
+    </p>
+    <a
+      class="destination-link"
+      :href="googleReviewsUrl"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      Voir les avis Google et déposer un avis
+    </a>
+  </section>
+
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { DESTINATION_SEO_ITEMS } from '../data/seoDestinations'
+import HotelSearchForm from '../components/search/HotelSearchForm.vue'
 import { API_BASE, safeJsonFetch } from '../services/httpClient.js'
+import { absoluteUrl, removeJsonLd, setPageSeo } from '../utils/seo'
 
 const router = useRouter()
 
@@ -469,6 +255,9 @@ const MIN_ADULTS = 1
 const DEFAULT_CHILD_AGE = 8
 const childAgeOptions = Array.from({ length: 18 }, (_, idx) => idx)
 let heroSlideTimer = null
+const destinationSeoItems = DESTINATION_SEO_ITEMS
+const LANDING_JSON_LD_ID = 'bedtrip-landing-seo'
+const googleReviewsUrl = 'https://www.google.com/search?q=Kotan+Voyages+avis'
 
 const checkin = ref('')
 const checkout = ref('')
@@ -825,7 +614,7 @@ async function loadSuggestions(term) {
     hotelSuggestions.value = hotels.slice(0, 5)
     if (!regions.length && !hotels.length) {
       suggestionStatus.value =
-        'Aucun résultat pour cette destination.'
+        'Aucun resultat pour cette destination ou cet hotel.'
     } else {
       suggestionStatus.value = `Suggestions : ${regions.length} région(s), ${hotels.length} hôtel(s)`
     }
@@ -877,23 +666,17 @@ function handleClickOutside(event) {
   closeSuggestions()
 }
 
-function goToResults() {
-  if (!destination.value || !checkin.value || !checkout.value) return
-
-  const childrenParam =
-    childrenAges.value.length > 0
-      ? childrenAges.value.map((age) => String(age)).join(',')
-      : undefined
-
+function goToResults(searchPayload) {
+  if (!searchPayload || !searchPayload.destination || !searchPayload.checkin || !searchPayload.checkout) return
   router.push({
     name: 'search-results',
     query: {
-      destination: destination.value,
-      checkin: checkin.value,
-      checkout: checkout.value,
-      adults: String(adultsCount.value || 1),
-      children: String(childrenCount.value || 0),
-      childrenAges: childrenParam,
+      destination: searchPayload.destination,
+      checkin: searchPayload.checkin,
+      checkout: searchPayload.checkout,
+      adults: String(searchPayload.adults || 1),
+      children: String(searchPayload.children || 0),
+      childrenAges: searchPayload.childrenAges,
     },
   })
 }
@@ -907,6 +690,24 @@ watch(
 )
 
 onMounted(() => {
+  setPageSeo({
+    title: 'BedTrip.fr | Réservez votre hôtel en plusieurs fois',
+    description:
+      'BedTrip.fr, un site dédié aux particuliers et aux professionnels. Réservation d’hôtels pour vos vacances, week-ends ou déplacements professionnels avec tarifs négociés et paiement en plusieurs fois.',
+    keywords:
+      'BedTrip.fr, particuliers et professionnels, réservation d’hôtels vacances week-ends déplacements professionnels, tarifs négociés pas cher, paiement en plusieurs fois, Cofidis, PayPal, Floabank, Alma',
+    canonical: absoluteUrl('/'),
+    robots: 'index,follow',
+    jsonLdId: LANDING_JSON_LD_ID,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'TravelAgency',
+      name: 'BedTrip',
+      url: absoluteUrl('/'),
+      serviceType: 'Hotel booking for leisure and business travel',
+      areaServed: ['Turkey', 'Morocco', 'Algeria', 'Tunisia', 'Dominican Republic', 'Italy', 'Spain', 'Egypt'],
+    },
+  })
   startHeroSlideshow()
   if (typeof window !== 'undefined') {
     window.addEventListener('click', handleClickOutside)
@@ -914,6 +715,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  removeJsonLd(LANDING_JSON_LD_ID)
   stopHeroSlideshow()
   if (typeof window !== 'undefined') {
     window.removeEventListener('click', handleClickOutside)
@@ -976,6 +778,9 @@ onBeforeUnmount(() => {
 
 .hero__subtitle {
   color: #ffffff;
+  font-size: 1.04rem;
+  line-height: 1.7;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .hero__search-shell {
@@ -1235,6 +1040,31 @@ onBeforeUnmount(() => {
 .landing-section__subtitle {
   margin: 0 0 1.25rem;
   max-width: 52rem;
+  font-size: 1rem;
+  line-height: 1.75;
+  color: #111827;
+  font-weight: 500;
+}
+
+.destination-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.destination-link {
+  text-decoration: none;
+  border-radius: 999px;
+  border: 1px solid rgba(165, 20, 30, 0.35);
+  padding: 0.4rem 0.85rem;
+  background: rgba(165, 20, 30, 0.08);
+  color: #7f1d1d;
+  font-size: 0.8rem;
+}
+
+.destination-link:hover,
+.destination-link:focus-visible {
+  background: rgba(165, 20, 30, 0.16);
 }
 
 .landing-section__grid {
@@ -1261,8 +1091,9 @@ onBeforeUnmount(() => {
 
 .info-card p {
   margin: 0;
-  font-size: 0.8rem;
-  color: #475569;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: #1f2937;
 }
 
 .info-card::after {
@@ -1337,7 +1168,9 @@ onBeforeUnmount(() => {
 
 .highlight-card__overlay p {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: #f8fafc;
 }
 
 .highlight-card:hover .highlight-card__image {
@@ -1376,7 +1209,7 @@ onBeforeUnmount(() => {
 }
 
 .payment-point p {
-  color: #475569;
+  color: #1f2937;
 }
 
 .payment-point h3 {
@@ -1386,8 +1219,9 @@ onBeforeUnmount(() => {
 
 .payment-point p {
   margin: 0;
-  font-size: 0.8rem;
-  color: #475569;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: #1f2937;
 }
 
 .payment-point::before {

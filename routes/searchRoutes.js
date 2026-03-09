@@ -8,5 +8,6 @@ const { searchSchemas } = require("../src/middlewares/requestSchemas");
 router.get("/regions/search", validate(searchSchemas.searchRegions), searchController.searchRegions);
 router.post("/search/serp", validate(searchSchemas.searchSerp), searchController.searchSerp);
 router.post("/search/hp", validate(searchSchemas.searchHp), searchController.searchHotelPage);
+router.post("/search/nearby", validate(searchSchemas.searchNearby), searchController.searchNearbyHotels);
 
 module.exports = router;

@@ -11,6 +11,14 @@ function pickArray(...candidates) {
   return [];
 }
 
+function pickCoordinateValue(...candidates) {
+  for (const candidate of candidates) {
+    const num = Number(candidate);
+    if (Number.isFinite(num)) return num;
+  }
+  return null;
+}
+
 async function fetchDestinationSuggestions(query, language = "en") {
   const response = await etg.post("/search/multicomplete/", { query, language });
   const raw = response?.data || {};
@@ -24,6 +32,25 @@ async function fetchDestinationSuggestions(query, language = "en") {
       country_code: region.country_code,
       full_name: region.full_name || region.fullName || null,
       is_searchable: region.is_searchable !== false,
+      latitude: pickCoordinateValue(
+        region.latitude,
+        region.lat,
+        region.center?.latitude,
+        region.center?.lat,
+        region.location?.latitude,
+        region.location?.lat
+      ),
+      longitude: pickCoordinateValue(
+        region.longitude,
+        region.lon,
+        region.lng,
+        region.center?.longitude,
+        region.center?.lon,
+        region.center?.lng,
+        region.location?.longitude,
+        region.location?.lon,
+        region.location?.lng
+      ),
     }));
 
   const hotels = pickArray(raw?.data?.hotels, raw?.results?.hotels, raw?.hotels)
@@ -40,6 +67,32 @@ async function fetchDestinationSuggestions(query, language = "en") {
 
 function normalizeLanguage(value) {
   return (value || "en").trim() || "en";
+}
+
+function normalizeText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function rankRegionSuggestion(region, target, idx) {
+  const name = normalizeText(region?.name);
+  const full = normalizeText(region?.full_name || region?.name);
+  const type = normalizeText(region?.type);
+  let score = 0;
+  if (name === target || full === target) score += 5;
+  if (type === "city") score += 2;
+  if (name.includes(target) || full.includes(target)) score += 1;
+  score -= idx * 0.01;
+  return score;
+}
+
+function rankHotelSuggestion(hotel, target, idx) {
+  const name = normalizeText(hotel?.name);
+  let score = 0;
+  if (name === target) score += 7;
+  if (name.startsWith(target)) score += 3;
+  if (name.includes(target)) score += 1;
+  score -= idx * 0.01;
+  return score;
 }
 
 function shouldResolveRegion(payload = {}) {
@@ -66,29 +119,52 @@ async function resolveDestination(payload = {}) {
   if (!regionIdIsNumeric && possibleQuery) {
     try {
       const suggestions = await fetchDestinationSuggestions(possibleQuery, language);
-      if (!suggestions.regions.length) {
-        throw httpError(404, "region_not_found", { query: possibleQuery });
+      if (!suggestions.regions.length && !suggestions.hotels.length) {
+        throw httpError(404, "destination_or_hotel_not_found", { query: possibleQuery });
       }
 
-      const norm = (value) => String(value || "").trim().toLowerCase();
-      const target = norm(possibleQuery);
+      const target = normalizeText(possibleQuery);
       const ranked = suggestions.regions
         .map((region, idx) => {
-          const name = norm(region.name);
-          const full = norm(region.full_name || region.name);
-          const type = norm(region.type);
-          let score = 0;
-          if (name === target || full === target) score += 5;
-          if (type === "city") score += 2;
-          if (name.includes(target) || full.includes(target)) score += 1;
-          score -= idx * 0.01;
+          const score = rankRegionSuggestion(region, target, idx);
           return { region, score };
+        })
+        .sort((a, b) => b.score - a.score);
+      const rankedHotels = suggestions.hotels
+        .map((hotel, idx) => {
+          const score = rankHotelSuggestion(hotel, target, idx);
+          return { hotel, score };
         })
         .sort((a, b) => b.score - a.score);
 
       const picked = ranked[0]?.region;
-      if (!picked) {
-        throw httpError(404, "region_not_found", { query: possibleQuery });
+      const pickedHotel = rankedHotels[0]?.hotel;
+
+      if (!picked && !pickedHotel) {
+        throw httpError(404, "destination_or_hotel_not_found", { query: possibleQuery });
+      }
+
+      // Prefer hotel-targeted search if hotel match quality is at least as good as region.
+      const regionScore = Number(ranked[0]?.score ?? -Infinity);
+      const hotelScore = Number(rankedHotels[0]?.score ?? -Infinity);
+      const shouldPickHotel = pickedHotel && hotelScore >= regionScore;
+
+      if (shouldPickHotel) {
+        const hidValue = pickedHotel?.hid ?? pickedHotel?.id ?? null;
+        if (!hidValue) {
+          throw httpError(404, "hotel_not_found", { query: possibleQuery });
+        }
+        delete cloned.region_id;
+        delete cloned.query;
+        delete cloned.ids;
+        cloned.hids = [hidValue];
+        return {
+          payload: cloned,
+          resolvedRegion: null,
+          regionSuggestions: suggestions.regions.slice(0, 7),
+          resolvedHotel: pickedHotel,
+          hotelSuggestions: suggestions.hotels.slice(0, 7),
+        };
       }
 
       cloned.region_id = picked.id;
@@ -96,14 +172,22 @@ async function resolveDestination(payload = {}) {
         payload: cloned,
         resolvedRegion: picked,
         regionSuggestions: suggestions.regions.slice(0, 7),
+        resolvedHotel: null,
+        hotelSuggestions: suggestions.hotels.slice(0, 7),
       };
     } catch (error) {
       if (error.http) throw error;
-      throw httpError(400, "region_lookup_failed", { message: error.message });
+      throw httpError(400, "destination_lookup_failed", { message: error.message });
     }
   }
 
-  return { payload: cloned, resolvedRegion: null, regionSuggestions: [] };
+  return {
+    payload: cloned,
+    resolvedRegion: null,
+    regionSuggestions: [],
+    resolvedHotel: null,
+    hotelSuggestions: [],
+  };
 }
 
 function buildSerpRequest(payload = {}) {
@@ -228,6 +312,60 @@ function getRequestedCapacity(guestsPayload = []) {
   }, 1);
 }
 
+function parseNearbyRadiusMeters(body = {}) {
+  const directMeters = Number(body.radius);
+  if (Number.isFinite(directMeters) && directMeters > 0) {
+    return Math.min(70000, Math.max(1, Math.round(directMeters)));
+  }
+  const radiusKm = Number(body.radius_km ?? body.radiusKm);
+  if (Number.isFinite(radiusKm) && radiusKm > 0) {
+    return Math.min(70000, Math.max(1, Math.round(radiusKm * 1000)));
+  }
+  return 5000;
+}
+
+function buildNearbySearchPayload(payload = {}) {
+  const body = { ...payload };
+  body.language = normalizeLanguage(body.language);
+  body.currency = (body.currency || "EUR").trim() || "EUR";
+  body.residency = (body.residency || "fr").trim().toLowerCase() || "fr";
+
+  if (!body.checkin || !body.checkout) {
+    throw httpError(400, "checkin & checkout are required (YYYY-MM-DD)");
+  }
+  if (!body.guests || !Array.isArray(body.guests) || body.guests.length === 0) {
+    throw httpError(400, "guests is required (e.g., [{ adults: 2 }])");
+  }
+  const latitude = Number(body.latitude);
+  const longitude = Number(body.longitude);
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    throw httpError(400, "latitude must be a valid number between -90 and 90");
+  }
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw httpError(400, "longitude must be a valid number between -180 and 180");
+  }
+
+  const radiusMeters = parseNearbyRadiusMeters(body);
+
+  return {
+    latitude,
+    longitude,
+    radiusMeters,
+    serpPayload: {
+      checkin: body.checkin,
+      checkout: body.checkout,
+      guests: body.guests,
+      language: body.language,
+      currency: body.currency,
+      residency: body.residency,
+      latitude,
+      longitude,
+      radius: radiusMeters,
+    },
+    filters: body.filters || {},
+  };
+}
+
 module.exports = {
   fetchDestinationSuggestions,
   resolveDestination,
@@ -236,4 +374,5 @@ module.exports = {
   buildHotelPageRequest,
   fetchHotelPage,
   getRequestedCapacity,
+  buildNearbySearchPayload,
 };

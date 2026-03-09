@@ -24,5 +24,17 @@ router.post(
   paymentController.cancelDeal
 );
 router.post("/payments/payota/init", validate(paymentSchemas.payotaInit), paymentController.createCreditCardToken);
+router.post("/payments/paypal/order", paymentController.createPayPalOrder);
+router.post("/payments/paypal/order/:orderId/capture", paymentController.capturePayPalOrder);
+router.post(
+  "/payments/kotan/extern/create",
+  validate(paymentSchemas.kotanExternCreate),
+  paymentController.createKotanExternPayment
+);
+router.get(
+  "/payments/kotan/extern/info",
+  validate(paymentSchemas.kotanExternInfo),
+  paymentController.getKotanExternPaymentInfo
+);
 
 module.exports = router;

@@ -36,3 +36,21 @@ npm run dev
 ```sh
 npm run build
 ```
+
+### SEO assets (sitemap + robots)
+
+Generate SEO crawl files manually:
+
+```sh
+npm run generate:seo
+```
+
+The generator writes:
+- `public/sitemap.xml`
+- `public/robots.txt`
+
+Base URL resolution order:
+1. `BEDTRIP_SITE_URL`
+2. `FRONT_BASE_URL`
+3. `VITE_SITE_URL`
+4. fallback: `https://bedtrip.fr`

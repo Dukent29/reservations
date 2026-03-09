@@ -284,7 +284,6 @@ button.secondary {
 @media (max-width: 600px) {
   .app-header {
     padding: 1rem;
-    border-radius: 1rem;
   }
 
   .hero {
