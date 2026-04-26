@@ -1,3 +1,15 @@
+<!--
+  ReservationsListView
+  ====================
+  Internal reservation monitor combining local booking records with ETG status.
+
+  Main responsibilities:
+  - Load reservation rows from the backend.
+  - Display local database status beside supplier status.
+  - Surface partner order IDs, ETG order IDs, traveler data and amounts.
+  - Show database and supplier error reasons for operational follow-up.
+-->
+
 <template>
   <section class="workspace__content reservations-list-view">
     <section class="card">

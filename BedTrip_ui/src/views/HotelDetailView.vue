@@ -1,3 +1,15 @@
+<!--
+  HotelDetailView
+  ===============
+  Hotel details page shown after a user selects a search result.
+
+  Main responsibilities:
+  - Load hotel details, images, POIs and rates from the search APIs.
+  - Present the hotel summary, gallery, location, amenities and available rooms.
+  - Open the full image lightbox while keeping the page gallery lightweight.
+  - Start prebooking for the selected room/rate and pass context to BookingView.
+-->
+
 <template>
   <section class="workspace__content hotel-detail-view">
     <div class="card details-card">
@@ -20,9 +32,12 @@
         <div class="hotel-detail__gallery">
           <div class="hotel-gallery hotel-gallery--skeleton">
             <div
-              v-for="n in 6"
+              v-for="n in GALLERY_PREVIEW_LIMIT"
               :key="`gallery-skeleton-${n}`"
-              class="skeleton-thumb"
+              :class="[
+                'skeleton-thumb',
+                { 'skeleton-thumb--primary': n === 1 },
+              ]"
             ></div>
           </div>
         </div>
@@ -110,9 +125,12 @@
             aria-busy="true"
           >
             <div
-              v-for="n in 6"
+              v-for="n in GALLERY_PREVIEW_LIMIT"
               :key="`gallery-inline-loading-${n}`"
-              class="skeleton-thumb"
+              :class="[
+                'skeleton-thumb',
+                { 'skeleton-thumb--primary': n === 1 },
+              ]"
             ></div>
           </div>
           <p
@@ -145,21 +163,39 @@
             v-else
             class="hotel-gallery"
           >
-            <button
-              v-for="(url, idx) in detailImages"
+            <div
+              v-for="(url, idx) in galleryPreviewImages"
               :key="url + '-' + idx"
-              class="hotel-gallery__item"
-              type="button"
-              :aria-label="`Afficher la photo ${idx + 1}`"
-              @click="openLightbox(idx)"
+              :class="[
+                'hotel-gallery__cell',
+                { 'hotel-gallery__cell--primary': idx === 0 },
+              ]"
             >
-              <img
-                :src="url"
-                :alt="`${hotelDisplayName(selectedHotelDetails) } · photo ${idx + 1}`"
-                loading="lazy"
-                decoding="async"
-              />
-            </button>
+              <button
+                class="hotel-gallery__item"
+                type="button"
+                :aria-label="`Afficher la photo ${idx + 1}`"
+                @click="openLightbox(idx)"
+              >
+                <img
+                  :src="url"
+                  :alt="`${hotelDisplayName(selectedHotelDetails) } · photo ${idx + 1}`"
+                  :loading="idx === 0 ? 'eager' : 'lazy'"
+                  :fetchpriority="idx === 0 ? 'high' : 'auto'"
+                  decoding="async"
+                />
+              </button>
+              <button
+                v-if="idx === galleryPreviewImages.length - 1 && hiddenGalleryImagesCount > 0"
+                class="hotel-gallery__show-all"
+                type="button"
+                :aria-label="`Afficher toutes les ${detailImages.length} photos`"
+                @click.stop="openLightbox(0)"
+              >
+                <i class="pi pi-images" aria-hidden="true"></i>
+                <span>Afficher toutes les photos</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -190,13 +226,40 @@
           </div>
 
           <div
-            v-if="hotelContactInfo.length"
-            class="hotel-detail__info-box"
+            v-if="hotelLocationLabel || hotelContactDetails.length"
+            class="hotel-detail__info-box hotel-detail__info-box--plain hotel-detail__info-box--location"
           >
             <h4>Contact & localisation</h4>
-            <ul class="hotel-detail__info-list">
+            <div
+              v-if="hotelLocationLabel"
+              class="hotel-detail__location-row"
+            >
+              <i
+                class="pi pi-map-marker hotel-detail__location-icon"
+                aria-hidden="true"
+              ></i>
+              <div class="hotel-detail__location-copy">
+                <p class="hotel-detail__location-text">
+                  {{ hotelLocationLabel }}
+                </p>
+                <a
+                  v-if="hotelMapsUrl"
+                  :href="hotelMapsUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="hotel-detail__map-link"
+                >
+                  <i class="pi pi-external-link" aria-hidden="true"></i>
+                  Ouvrir dans Maps
+                </a>
+              </div>
+            </div>
+            <ul
+              v-if="hotelContactDetails.length"
+              class="hotel-detail__info-list hotel-detail__info-list--compact"
+            >
               <li
-                v-for="item in hotelContactInfo"
+                v-for="item in hotelContactDetails"
                 :key="item"
               >
                 {{ item }}
@@ -291,13 +354,43 @@
 
           <div class="rooms-toolbar">
             <h4>Chambres et tarifs</h4>
-            <button
-              class="secondary mini"
-              type="button"
-              @click="compareView = !compareView"
+            <div
+              class="rooms-view-toggle"
+              role="group"
+              aria-label="Choisir la vue des chambres"
             >
-              {{ compareView ? 'Vue liste' : 'Comparer les chambres' }}
-            </button>
+              <button
+                type="button"
+                class="rooms-view-toggle__btn"
+                :class="{ 'is-active': !compareView }"
+                :aria-pressed="!compareView"
+                aria-label="Vue cartes"
+                title="Vue cartes"
+                @click="compareView = false"
+              >
+                <i class="pi pi-th-large" aria-hidden="true"></i>
+              </button>
+              <button
+                type="button"
+                class="rooms-view-toggle__btn"
+                :class="{ 'is-active': compareView }"
+                :aria-pressed="compareView"
+                aria-label="Vue tableau de comparaison"
+                title="Vue tableau de comparaison"
+                @click="compareView = true"
+              >
+                <i class="pi pi-table" aria-hidden="true"></i>
+              </button>
+              <button
+                type="button"
+                class="rooms-view-toggle__help"
+                aria-label="Aide sur les vues"
+                title="Icône carrée: Vue liste. Icône tableau: Comparer les chambres."
+                data-tip="Icône carrée: Vue liste. Icône tableau: Comparer les chambres."
+              >
+                ?
+              </button>
+            </div>
           </div>
           <div
             v-if="!limitedRates.length"
@@ -530,6 +623,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { API_BASE, safeJsonFetch } from '../services/httpClient.js'
+import { fetchHotelInfoSummary } from '../services/hotelInfoService.js'
+import { fetchHotelPois } from '../services/hotelPoiService.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -538,8 +633,12 @@ const compareView = ref(false)
 
 const PREBOOK_SUMMARY_KEY = 'booking:lastPrebook'
 const MARKUP_PERCENT = 10
+const DETAIL_IMAGE_PREVIEW_SIZE = 'x500'
 const DETAIL_IMAGE_SIZE = '1024x768'
 const DETAIL_IMAGE_LIMIT = 15
+const GALLERY_PREVIEW_LIMIT = 5
+const DETAIL_IMAGE_STORAGE_PREFIX = 'bedtrip:hotel-images:v2:'
+const DETAIL_IMAGE_STORAGE_TTL_MS = 12 * 60 * 60 * 1000
 const DETAIL_IMAGE_RETRY_DELAY_MS = 8000
 const DETAIL_IMAGE_ENDPOINT_COOLDOWN_MS = 30000
 const DETAIL_IMAGE_AUTO_RETRY_MAX = 3
@@ -590,7 +689,9 @@ const childrenList = computed(() => {
 const hotelDetailsLoading = ref(false)
 const hotelDetailsError = ref('')
 const selectedHotelDetails = ref(null)
+const importedHotelPois = ref([])
 
+const detailPreviewImages = ref([])
 const detailImages = ref([])
 const detailImagesLoading = ref(false)
 const detailImagesError = ref('')
@@ -657,14 +758,23 @@ function extractHotels(payload) {
 }
 
 function deriveHotelStars(hotel) {
+  const normalizeHotelStarsValue = (value) => {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed) || parsed <= 0) return null
+    const normalized = parsed > 5 && parsed <= 10
+      ? parsed / 2
+      : parsed
+    return Math.max(1, Math.min(5, Math.round(normalized)))
+  }
+
   const direct =
     hotel?.stars ?? hotel?.category ?? hotel?.rg_ext?.class
-  const directNum = Number(direct)
-  if (Number.isFinite(directNum) && directNum > 0) return directNum
+  const directNum = normalizeHotelStarsValue(direct)
+  if (directNum !== null) return directNum
   const vals = Array.isArray(hotel?.rates)
     ? hotel.rates
-        .map((r) => Number(r?.rg_ext?.class))
-        .filter((n) => Number.isFinite(n) && n > 0)
+        .map((r) => normalizeHotelStarsValue(r?.rg_ext?.class))
+        .filter((n) => n !== null)
     : []
   return vals.length ? Math.max(...vals) : null
 }
@@ -697,6 +807,17 @@ const lightboxImageUrl = computed(() => {
   )
   return detailImages.value[idx] || ''
 })
+
+const galleryPreviewImages = computed(() =>
+  (detailPreviewImages.value.length
+    ? detailPreviewImages.value
+    : detailImages.value
+  ).slice(0, GALLERY_PREVIEW_LIMIT),
+)
+
+const hiddenGalleryImagesCount = computed(() =>
+  Math.max(detailImages.value.length - galleryPreviewImages.value.length, 0),
+)
 
 function setBodyLock(locked) {
   if (typeof document === 'undefined') return
@@ -996,34 +1117,10 @@ const hotelHighlights = computed(() =>
 )
 
 const nearbyPoints = computed(() => {
-  const hotel = selectedHotelDetails.value
-  if (!hotel) return []
-  const pois =
-    hotel.points_of_interest ||
-    hotel.pois ||
-    hotel.nearby_points ||
-    []
-  if (!Array.isArray(pois) || !pois.length) return []
-  const formatDistance = (meters) => {
-    const num = Number(meters)
-    if (!Number.isFinite(num) || num <= 0) return ''
-    if (num >= 1000) {
-      const km = num / 1000
-      return `${km >= 10 ? km.toFixed(0) : km.toFixed(1)} km`
-    }
-    return `${Math.round(num)} m`
-  }
-  return pois
+  return importedHotelPois.value
     .map((poi) => {
-      const label =
-        poi?.name ||
-        poi?.label ||
-        poi?.description ||
-        null
-      const distanceText =
-        formatDistance(poi?.distance) ||
-        formatDistance(poi?.distance_meters) ||
-        formatDistance(poi?.distance_center_meters)
+      const label = poi?.name || poi?.name_en || null
+      const distanceText = poi?.distance_label || null
       if (!label || !distanceText) return null
       return { label, distanceText }
     })
@@ -1064,22 +1161,30 @@ const hotelStayInfo = computed(() => {
   return items
 })
 
-const hotelContactInfo = computed(() => {
+const hotelLocationLabel = computed(() => {
+  const hotel = selectedHotelDetails.value
+  if (!hotel) return ''
+  const region = hotel.region || {}
+  const primary = pickFirstString(
+    hotel.address,
+    hotel.address_full,
+    hotel.location?.address,
+  )
+  const locality = [
+    hotel.postal_code,
+    region.city || region.name,
+    region.country_name || region.country,
+  ].filter(Boolean).join(' ')
+  if (primary && locality && !primary.includes(locality)) {
+    return `${primary}, ${locality}`
+  }
+  return primary || locality || ''
+})
+
+const hotelContactDetails = computed(() => {
   const hotel = selectedHotelDetails.value
   if (!hotel) return []
   const items = []
-  const region = hotel.region || {}
-  if (hotel.address) {
-    items.push(hotel.address)
-  }
-  if (hotel.postal_code || region.city || region.name) {
-    const parts = [
-      hotel.postal_code,
-      region.city || region.name,
-      region.country_name || region.country,
-    ].filter(Boolean)
-    if (parts.length) items.push(parts.join(' '))
-  }
   if (hotel.phone) {
     items.push(`Téléphone : ${hotel.phone}`)
   }
@@ -1087,6 +1192,49 @@ const hotelContactInfo = computed(() => {
     items.push(`Email : ${hotel.email}`)
   }
   return items
+})
+
+function pickCoordinate(...values) {
+  for (const value of values) {
+    const num = Number(value)
+    if (Number.isFinite(num)) return num
+  }
+  return null
+}
+
+const hotelMapsUrl = computed(() => {
+  const hotel = selectedHotelDetails.value
+  if (!hotel) return ''
+  const latitude = pickCoordinate(
+    hotel.latitude,
+    hotel.lat,
+    hotel.location?.latitude,
+    hotel.location?.lat,
+    hotel.location?.center?.latitude,
+    hotel.location?.center?.lat,
+    hotel.region?.latitude,
+    hotel.region?.lat,
+  )
+  const longitude = pickCoordinate(
+    hotel.longitude,
+    hotel.lon,
+    hotel.lng,
+    hotel.location?.longitude,
+    hotel.location?.lon,
+    hotel.location?.lng,
+    hotel.location?.center?.longitude,
+    hotel.location?.center?.lon,
+    hotel.location?.center?.lng,
+    hotel.region?.longitude,
+    hotel.region?.lon,
+    hotel.region?.lng,
+  )
+  if (latitude !== null && longitude !== null) {
+    return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+  }
+  const label = hotelLocationLabel.value
+  if (!label) return ''
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label)}`
 })
 
 function normalizeAmenityGroupItem(value) {
@@ -1206,6 +1354,88 @@ function buildHotelImageIdentity(hotel) {
   return { hid, fallbackId, cacheKey }
 }
 
+function buildHotelImagesCacheKey(identity, lang, size, limit) {
+  const safeLang = (lang || 'en').trim() || 'en'
+  const safeSize = size || DETAIL_IMAGE_SIZE
+  const parsedLimit = Number(limit)
+  const cappedLimit =
+    Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.max(1, Math.min(parsedLimit, 50))
+      : null
+  return `${identity.cacheKey}|${safeLang}|${safeSize}|${
+    cappedLimit === null ? 'all' : cappedLimit
+  }`
+}
+
+function readStoredHotelImages(cacheKey) {
+  if (typeof window === 'undefined' || !cacheKey) return []
+  try {
+    const storageKey = `${DETAIL_IMAGE_STORAGE_PREFIX}${cacheKey}`
+    const raw = window.localStorage?.getItem(storageKey)
+    if (!raw) return []
+    const payload = JSON.parse(raw)
+    if (!payload || payload.expiresAt <= Date.now()) {
+      window.localStorage?.removeItem(storageKey)
+      return []
+    }
+    return Array.isArray(payload.images)
+      ? payload.images.filter((url) => typeof url === 'string' && url.length)
+      : []
+  } catch {
+    return []
+  }
+}
+
+function writeStoredHotelImages(cacheKey, images) {
+  if (typeof window === 'undefined' || !cacheKey || !Array.isArray(images) || !images.length) return
+  try {
+    window.localStorage?.setItem(
+      `${DETAIL_IMAGE_STORAGE_PREFIX}${cacheKey}`,
+      JSON.stringify({
+        expiresAt: Date.now() + DETAIL_IMAGE_STORAGE_TTL_MS,
+        images,
+      }),
+    )
+  } catch {
+    // Ignore storage quota/private mode failures.
+  }
+}
+
+function getCachedHotelImages(hotel, lang, size, limit) {
+  const identity = buildHotelImageIdentity(hotel)
+  if (!identity.cacheKey) return []
+  const cacheKey = buildHotelImagesCacheKey(identity, lang, size, limit)
+  const memoryValue = detailImageCache.get(cacheKey)
+  if (Array.isArray(memoryValue) && memoryValue.length) return memoryValue
+  return readStoredHotelImages(cacheKey)
+}
+
+const preconnectedImageOrigins = new Set()
+
+function warmGalleryImages(images) {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return
+  const urls = Array.isArray(images) ? images.filter(Boolean) : []
+  urls.slice(0, GALLERY_PREVIEW_LIMIT).forEach((url) => {
+    try {
+      const origin = new URL(url, window.location.href).origin
+      if (!origin || preconnectedImageOrigins.has(origin)) return
+      preconnectedImageOrigins.add(origin)
+      const link = document.createElement('link')
+      link.rel = 'preconnect'
+      link.href = origin
+      link.crossOrigin = ''
+      document.head.appendChild(link)
+    } catch {
+      // Ignore invalid image URLs.
+    }
+  })
+  if (urls[0]) {
+    const img = new Image()
+    img.decoding = 'async'
+    img.src = urls[0]
+  }
+}
+
 async function requestHotelImagesFromApi(payload) {
   const endpoint = `${API_BASE}/api/hotel/images`
   const { statusCode, data } = await safeJsonFetch(endpoint, {
@@ -1242,15 +1472,18 @@ async function fetchHotelImages(hotel, lang, size, limit = 1) {
     ? Math.max(1, Math.min(parsedLimit, 50))
     : null
   if (identity.hid === null && !identity.fallbackId) return []
-  const cacheKey = `${identity.cacheKey}|${safeLang}|${safeSize}|${
-    cappedLimit === null ? 'all' : cappedLimit
-  }`
+  const cacheKey = buildHotelImagesCacheKey(identity, safeLang, safeSize, cappedLimit)
   const cooldownUntil = detailImageCooldown.get(cacheKey)
   if (cooldownUntil && cooldownUntil > Date.now()) {
     throw new Error('endpoint_exceeded_limit')
   }
   if (detailImageCache.has(cacheKey)) {
     return await detailImageCache.get(cacheKey)
+  }
+  const storedImages = readStoredHotelImages(cacheKey)
+  if (storedImages.length) {
+    detailImageCache.set(cacheKey, storedImages)
+    return storedImages
   }
   const limitsToTry = []
   if (cappedLimit !== null) limitsToTry.push(cappedLimit)
@@ -1282,7 +1515,12 @@ async function fetchHotelImages(hotel, lang, size, limit = 1) {
 
   detailImageCache.set(cacheKey, requestPromise)
   try {
-    return await requestPromise
+    const images = await requestPromise
+    if (Array.isArray(images) && images.length) {
+      detailImageCache.set(cacheKey, images)
+      writeStoredHotelImages(cacheKey, images)
+    }
+    return images
   } catch (err) {
     if (isEndpointExceededError(err)) {
       detailImageCooldown.set(
@@ -1315,10 +1553,46 @@ function scheduleDetailImagesRetry(hotel, token) {
 async function hydrateHotelDetailGallery(hotel, token) {
   clearDetailImagesRetryTimer()
   detailImagesRetryPending.value = false
-  detailImagesLoading.value = true
+  const lang = 'fr'
+  const cachedFullImages = getCachedHotelImages(
+    hotel,
+    lang,
+    DETAIL_IMAGE_SIZE,
+    DETAIL_IMAGE_LIMIT,
+  )
+  const cachedPreviewImages = getCachedHotelImages(
+    hotel,
+    lang,
+    DETAIL_IMAGE_PREVIEW_SIZE,
+    GALLERY_PREVIEW_LIMIT,
+  )
+  const cachedImages = cachedFullImages.length ? cachedFullImages : cachedPreviewImages
+  if (cachedImages.length) {
+    detailImages.value = cachedImages
+    detailPreviewImages.value = cachedPreviewImages.length
+      ? cachedPreviewImages
+      : cachedImages.slice(0, GALLERY_PREVIEW_LIMIT)
+    warmGalleryImages(galleryPreviewImages.value)
+  }
+  detailImagesLoading.value = !cachedImages.length
   detailImagesError.value = ''
   try {
-    const lang = 'fr'
+    const previewImages = await fetchHotelImages(
+      hotel,
+      lang,
+      DETAIL_IMAGE_PREVIEW_SIZE,
+      GALLERY_PREVIEW_LIMIT,
+    )
+    if (token !== latestDetailImagesToken) return
+    if (previewImages.length) {
+      detailPreviewImages.value = previewImages
+      if (!detailImages.value.length) {
+        detailImages.value = previewImages
+      }
+      detailImagesLoading.value = false
+      warmGalleryImages(previewImages)
+    }
+
     const images = await fetchHotelImages(
       hotel,
       lang,
@@ -1326,7 +1600,8 @@ async function hydrateHotelDetailGallery(hotel, token) {
       DETAIL_IMAGE_LIMIT,
     )
     if (token !== latestDetailImagesToken) return
-    detailImages.value = images || []
+    detailImages.value = images?.length ? images : previewImages
+    warmGalleryImages(galleryPreviewImages.value)
     detailImagesRetryCount.value = 0
   } catch (err) {
     if (token !== latestDetailImagesToken) return
@@ -1347,6 +1622,7 @@ async function hydrateHotelDetailGallery(hotel, token) {
       return
     }
     if (!hasShownImages) {
+      detailPreviewImages.value = []
       detailImages.value = []
     }
     detailImagesError.value =
@@ -1358,15 +1634,35 @@ async function hydrateHotelDetailGallery(hotel, token) {
   }
 }
 
+async function loadImportedHotelPois(hotel) {
+  if (!hotel) {
+    importedHotelPois.value = []
+    return
+  }
+  try {
+    const response = await fetchHotelPois(hotel, {
+      featured: true,
+      limit: 8,
+      maxDistanceM: 8000,
+    })
+    importedHotelPois.value = Array.isArray(response?.pois) ? response.pois : []
+  } catch {
+    importedHotelPois.value = []
+  }
+}
+
 async function loadHotelDetails() {
   const hid = String(route.params.hid || '').trim()
   if (!hid) {
     selectedHotelDetails.value = null
+    importedHotelPois.value = []
     return
   }
   hotelDetailsLoading.value = true
   hotelDetailsError.value = ''
   selectedHotelDetails.value = null
+  importedHotelPois.value = []
+  detailPreviewImages.value = []
   detailImages.value = []
   detailImagesError.value = ''
   detailImagesRetryPending.value = false
@@ -1402,6 +1698,21 @@ async function loadHotelDetails() {
     const results = extractHotels(data?.results ?? data)
     selectedHotelDetails.value = results[0] || null
     if (selectedHotelDetails.value) {
+      try {
+        const info = await fetchHotelInfoSummary(selectedHotelDetails.value, { language: 'fr' })
+        if (info?.name || info?.address) {
+          selectedHotelDetails.value = {
+            ...selectedHotelDetails.value,
+            name: info.name || selectedHotelDetails.value.name,
+            address: info.address || selectedHotelDetails.value.address,
+          }
+        }
+      } catch {
+        // Keep /search/hp data if hotel/info is temporarily unavailable.
+      }
+    }
+    if (selectedHotelDetails.value) {
+      loadImportedHotelPois(selectedHotelDetails.value)
       hydrateHotelDetailGallery(selectedHotelDetails.value, imagesToken)
     }
   } catch (err) {
@@ -1416,6 +1727,8 @@ function retryDetailImages() {
   detailImagesRetryCount.value = 0
   detailImagesError.value = ''
   detailImagesRetryPending.value = false
+  detailPreviewImages.value = []
+  detailImages.value = []
   clearDetailImagesRetryTimer()
   const token = ++latestDetailImagesToken
   hydrateHotelDetailGallery(selectedHotelDetails.value, token)
@@ -1617,8 +1930,27 @@ onBeforeUnmount(() => {
 }
 
 .hotel-gallery {
-  column-count: 3;
-  column-gap: 0.5rem;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-rows: repeat(2, minmax(150px, 220px));
+  gap: 0.5rem;
+}
+
+.hotel-gallery__cell {
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+  border-radius: 0.65rem;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.25),
+    rgba(15, 23, 42, 0.6)
+  );
+}
+
+.hotel-gallery__cell--primary,
+.skeleton-thumb--primary {
+  grid-row: span 2;
 }
 
 .hotel-gallery__item {
@@ -1627,23 +1959,17 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(148, 163, 184, 0.3);
   padding: 0;
   width: 100%;
+  height: 100%;
   text-align: left;
-  border-radius: 0.65rem;
+  border-radius: inherit;
   overflow: hidden;
-  break-inside: avoid;
-  margin-bottom: 0.5rem;
   cursor: zoom-in;
-  background: linear-gradient(
-    135deg,
-    rgba(59, 130, 246, 0.25),
-    rgba(15, 23, 42, 0.6)
-  );
 }
 
 .hotel-gallery__item img {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   object-fit: cover;
   transition: transform 0.2s ease, filter 0.2s ease;
 }
@@ -1654,6 +1980,38 @@ onBeforeUnmount(() => {
 }
 
 .hotel-gallery__item:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.85);
+  outline-offset: 2px;
+}
+
+.hotel-gallery__show-all {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.26);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+  transition: transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.hotel-gallery__show-all:hover,
+.hotel-gallery__show-all:focus-visible {
+  background: #ffffff;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.34);
+  transform: translateY(-1px);
+}
+
+.hotel-gallery__show-all:focus-visible {
   outline: 2px solid rgba(59, 130, 246, 0.85);
   outline-offset: 2px;
 }
@@ -1737,19 +2095,40 @@ onBeforeUnmount(() => {
 
 @media (min-width: 1200px) {
   .hotel-gallery {
-    column-count: 4;
+    grid-template-rows: repeat(2, minmax(180px, 250px));
   }
 }
 
 @media (max-width: 900px) {
   .hotel-gallery {
-    column-count: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: 150px;
+  }
+
+  .hotel-gallery__cell--primary,
+  .skeleton-thumb--primary {
+    grid-column: span 2;
+    grid-row: span 2;
   }
 }
 
 @media (max-width: 700px) {
   .hotel-gallery {
-    column-count: 1;
+    grid-auto-rows: 120px;
+  }
+
+  .hotel-gallery__cell--primary,
+  .skeleton-thumb--primary {
+    grid-row: span 2;
+  }
+
+  .hotel-gallery__show-all {
+    right: 0.55rem;
+    bottom: 0.55rem;
+    max-width: calc(100% - 1.1rem);
+    padding: 0.5rem 0.65rem;
+    font-size: 0.75rem;
   }
 
   .gallery-lightbox__frame {
@@ -1809,6 +2188,12 @@ onBeforeUnmount(() => {
   background: rgba(15, 23, 42, 0.6);
 }
 
+.hotel-detail__info-box--plain {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
 .hotel-detail__description {
   margin: 0.5rem 0 0;
   font-size: 0.8rem;
@@ -1823,6 +2208,74 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.35rem;
   font-size: 0.8rem;
+}
+
+.hotel-detail__info-list--compact {
+  margin-top: 0.65rem;
+}
+
+.hotel-detail__location-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.hotel-detail__location-icon {
+  color: #a5141e;
+  font-size: 1rem;
+  margin-top: 0.15rem;
+}
+
+.hotel-detail__location-copy {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+.hotel-detail__location-text {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #a5141e;
+  font-weight: 600;
+}
+
+.hotel-detail__map-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  padding: 0.38rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(165, 20, 30, 0.22);
+  background: rgba(165, 20, 30, 0.08);
+  color: #7f1d1d;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.hotel-detail__map-link:hover,
+.hotel-detail__map-link:focus-visible {
+  background: rgba(165, 20, 30, 0.14);
+  border-color: rgba(165, 20, 30, 0.38);
+  color: #991b1b;
+}
+
+.hotel-detail__map-link i {
+  font-size: 0.72rem;
+}
+
+@media (max-width: 640px) {
+  .hotel-detail__location-row {
+    align-items: flex-start;
+  }
+
+  .hotel-detail__location-copy {
+    align-items: flex-start;
+  }
 }
 
 .hotel-detail__chip-list {
@@ -1863,6 +2316,110 @@ onBeforeUnmount(() => {
 
 .rooms-toolbar h4 {
   margin: 0;
+}
+
+.rooms-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.rooms-view-toggle__btn {
+  width: 2.1rem;
+  height: 2.1rem;
+  min-width: 2.1rem;
+  padding: 0;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: #eef2f7;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.rooms-view-toggle__btn i {
+  font-size: 0.95rem;
+}
+
+.rooms-view-toggle__btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+  border-color: rgba(148, 163, 184, 0.75);
+}
+
+.rooms-view-toggle__btn.is-active {
+  background: rgba(165, 20, 30, 0.12);
+  color: #a5141e;
+  border-color: rgba(165, 20, 30, 0.48);
+}
+
+.rooms-view-toggle__btn:focus-visible {
+  outline: 2px solid rgba(165, 20, 30, 0.3);
+  outline-offset: 2px;
+}
+
+.rooms-view-toggle__help {
+  position: relative;
+  width: 1.9rem;
+  height: 1.9rem;
+  min-width: 1.9rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: #f1f5f9;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: help;
+  flex-shrink: 0;
+}
+
+.rooms-view-toggle__help:hover,
+.rooms-view-toggle__help:focus-visible {
+  color: #334155;
+  border-color: rgba(148, 163, 184, 0.75);
+  background: #e2e8f0;
+}
+
+.rooms-view-toggle__help:focus-visible {
+  outline: 2px solid rgba(148, 163, 184, 0.3);
+  outline-offset: 2px;
+}
+
+.rooms-view-toggle__help::after {
+  content: attr(data-tip);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.45rem);
+  width: min(280px, 70vw);
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.rooms-view-toggle__help:hover::after,
+.rooms-view-toggle__help:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .compare-table-wrap {
@@ -2091,10 +2648,7 @@ onBeforeUnmount(() => {
 
 .hotel-gallery--skeleton {
   display: grid;
-  column-count: initial;
-  column-gap: 0;
   gap: 0.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
 
 .hotel-gallery--inline-loading {
@@ -2169,7 +2723,8 @@ onBeforeUnmount(() => {
 }
 
 .skeleton-thumb {
-  height: 120px;
+  height: 100%;
+  min-height: 120px;
   border-radius: 0.75rem;
   border: 1px solid rgba(148, 163, 184, 0.25);
 }

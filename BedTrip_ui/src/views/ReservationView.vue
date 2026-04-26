@@ -42,6 +42,10 @@
           :show-hint-text="false"
           submit-label="Mettre à jour la recherche"
           :initial-destination="destination"
+          :initial-destination-type="destinationType"
+          :initial-hotel-hid="selectedHotelHid"
+          :initial-hotel-id="selectedHotelId"
+          :initial-region-id="selectedRegionId"
           :initial-checkin="checkin"
           :initial-checkout="checkout"
           :initial-adults="adults"
@@ -61,40 +65,6 @@
       <p v-if="statusMessage" class="muted">
         {{ statusMessage }}
       </p>
-      <details class="geo-debug" open>
-        <summary>Debug Geo</summary>
-        <div class="geo-debug__grid">
-          <div>
-            <strong>Hôtels analysés:</strong> {{ geoDebug.total }}
-          </div>
-          <div>
-            <strong>Centre-ville (connus/manquants):</strong>
-            {{ geoDebug.cityKnown }} / {{ geoDebug.cityMissing }}
-          </div>
-          <div>
-            <strong>Plage (connus/manquants):</strong>
-            {{ geoDebug.beachKnown }} / {{ geoDebug.beachMissing }}
-          </div>
-          <div>
-            <strong>Filtre centre-ville (m):</strong>
-            {{ geoDebug.activeCityLimit ?? '—' }}
-          </div>
-          <div>
-            <strong>Filtre plage (m):</strong>
-            {{ geoDebug.activeBeachLimit ?? '—' }}
-          </div>
-        </div>
-        <div class="geo-debug__samples">
-          <strong>Exemples distances:</strong>
-          <ul>
-            <li v-for="row in geoDebug.samples" :key="row.key">
-              {{ row.name }} | ville:
-              {{ row.cityDistance ?? 'NA' }} ({{ row.citySource || '—' }}) | plage:
-              {{ row.beachDistance ?? 'NA' }} ({{ row.beachSource || '—' }})
-            </li>
-          </ul>
-        </div>
-      </details>
     </header>
     <div class="results-layout">
       <aside class="filters-panel card">
@@ -269,6 +239,34 @@
         </div>
 
         <div class="results-list" v-else>
+          <section v-if="showEmptyState" class="card empty-flex-dates">
+            <strong>Dates flexibles</strong>
+            <p>Essayez rapidement d’autres dates.</p>
+            <div class="empty-flex-dates__actions">
+              <button
+                type="button"
+                class="secondary mini"
+                @click="shiftStayByDays(1)"
+              >
+                +1 jour
+              </button>
+              <button
+                type="button"
+                class="secondary mini"
+                @click="shiftStayByDays(2)"
+              >
+                +2 jours
+              </button>
+              <button
+                type="button"
+                class="secondary mini"
+                @click="moveToNextWeekend"
+              >
+                Week-end suivant
+              </button>
+            </div>
+          </section>
+
           <div class="card results-card">
             <h3>
               Résultats de recherche
@@ -292,13 +290,104 @@
               </small>
             </div>
 
-            <div v-if="error" style="color:#dc2626;font-size:.8rem;">
+            <section
+              v-if="isMissingDatesError"
+              class="missing-dates-card"
+            >
+              <div class="missing-dates-card__main">
+                <span class="missing-dates-card__badge">Séjour incomplet</span>
+                <h4>Choisissez les dates pour afficher les hôtels disponibles</h4>
+                <p>
+                  Votre destination est bien prise en compte, mais il manque les dates d’arrivée
+                  et de départ pour lancer la recherche d’hôtels.
+                </p>
+
+                <div class="missing-dates-card__suggestion">
+                  <strong>{{ suggestedStayLabel }}</strong>
+                  <span>{{ guestRequestLabel }}</span>
+                </div>
+
+                <div class="missing-dates-card__actions">
+                  <button
+                    type="button"
+                    class="primary"
+                    @click="applySuggestedDates"
+                  >
+                    Utiliser ces dates
+                  </button>
+                  <button
+                    type="button"
+                    class="secondary"
+                    @click="openSearchEditor"
+                  >
+                    Choisir mes dates
+                  </button>
+                </div>
+              </div>
+
+              <aside class="missing-dates-card__aside">
+                <strong>Pourquoi ce bloc ?</strong>
+                <p>
+                  Les disponibilités et les prix changent selon la période. Sans dates, aucun
+                  résultat fiable ne peut être affiché.
+                </p>
+              </aside>
+            </section>
+            <div v-else-if="error" class="results-error-inline">
               {{ error }}
             </div>
             <div v-else>
-              <div v-if="!hotels.length" style="font-size:.7rem;color:#64748b;">
-                Aucun résultat pour cette recherche.
-              </div>
+              <section
+                v-if="showEmptyState"
+                class="empty-results-card"
+              >
+                <div class="empty-results-card__main">
+                  <span class="empty-results-card__badge">0 hôtel trouvé</span>
+                  <h4>Aucun hôtel disponible pour ces dates</h4>
+                  <p>
+                    Aucune disponibilité n’a été retournée pour vos dates et critères actuels.
+                    Essayez de décaler le séjour ou d’assouplir les filtres pour afficher plus d’options.
+                  </p>
+                  <div class="empty-results-card__actions">
+                    <button
+                      type="button"
+                      class="primary"
+                      @click="resetAllFilters"
+                    >
+                      Réinitialiser les filtres
+                    </button>
+                    <button
+                      type="button"
+                      class="secondary"
+                      @click="shiftStayByDays(1)"
+                    >
+                      Décaler de +1 jour
+                    </button>
+                    <button
+                      type="button"
+                      class="secondary"
+                      @click="openSearchEditor"
+                    >
+                      Modifier la recherche
+                    </button>
+                  </div>
+                </div>
+
+                <aside
+                  v-if="activeFilterChips.length"
+                  class="empty-results-card__filters"
+                >
+                  <strong>Filtres actifs</strong>
+                  <div class="empty-results-card__chips">
+                    <span
+                      v-for="chip in activeFilterChips"
+                      :key="chip"
+                    >
+                      {{ chip }}
+                    </span>
+                  </div>
+                </aside>
+              </section>
               <ul v-else class="hotel-list">
                 <li
                   v-for="hotel in paginatedHotels"
@@ -366,6 +455,15 @@
                             · {{ hotel.country }}
                           </span>
                         </p>
+                        <p
+                          v-if="hotelDistanceMeta(hotel)"
+                          class="hotel-distance-meta"
+                        >
+                          {{ hotelDistanceMeta(hotel) }}
+                        </p>
+                        <p v-if="hotelAddressLabel(hotel)" class="hotel-address">
+                          {{ hotelAddressLabel(hotel) }}
+                        </p>
                         <div class="hotel-card__stars">
                           <span
                             v-for="star in deriveHotelStars(hotel) || 0"
@@ -414,6 +512,18 @@
                             class="badge badge--meal"
                           >
                             {{ meal }}
+                          </span>
+                        </div>
+                        <div
+                          v-if="hotelCardPois(hotel).length"
+                          class="hotel-card__pois"
+                        >
+                          <span
+                            v-for="poi in hotelCardPois(hotel)"
+                            :key="`${poi.name}-${poi.distance_meters}`"
+                            class="hotel-card__poi-chip"
+                          >
+                            {{ poi.name }} · {{ poi.distance_label }}
                           </span>
                         </div>
                         <p class="hotel-request" v-if="guestRequestLabel">
@@ -471,11 +581,18 @@ import { useRoute, useRouter } from 'vue-router'
 import HotelSearchForm from '../components/search/HotelSearchForm.vue'
 import ResultsSkeleton from '../components/ResultsSkeleton.vue'
 import { API_BASE, safeJsonFetch } from '../services/httpClient.js'
+import { fetchHotelInfoSummary } from '../services/hotelInfoService.js'
+import {
+  fetchHotelPoisBatch,
+  getHotelPoisFromBatch,
+} from '../services/hotelPoiService.js'
 
 const route = useRoute()
 const router = useRouter()
 
 const PREBOOK_SUMMARY_KEY = 'booking:lastPrebook'
+const MISSING_DESTINATION_MESSAGE = 'Veuillez saisir une destination depuis la page de recherche.'
+const MISSING_DATES_MESSAGE = 'Les dates d’arrivée et de départ sont requises.'
 const MARKUP_PERCENT = 10
 const DEFAULT_IMAGE_SIZE = 'x300'
 const DETAIL_IMAGE_SIZE = '1024x768'
@@ -483,6 +600,7 @@ const CARD_IMAGE_LIMIT = 10
 const DETAIL_IMAGE_LIMIT = 13
 
 const hotelImageCache = new Map()
+const hotelInfoByKey = ref({})
 
 const MEAL_OPTIONS = [
   { value: 'nomeal', code: 'RO', label: 'Room only' },
@@ -503,8 +621,24 @@ const BEACH_DISTANCE_OPTIONS = [
 const STAR_FILTER_OPTIONS = [2, 3, 4, 5]
 const FILTER_DEBOUNCE_MS = 450
 
+function createDefaultFilters() {
+  return {
+    stars: [],
+    meals: [],
+    cityDistanceKm: CITY_DISTANCE_MAX_KM,
+    beachDistanceMeters: [],
+    freeCancel: false,
+    budgetMin: '',
+    budgetMax: '',
+  }
+}
+
 // Basic search state derived from route query.
 const destination = computed(() => String(route.query.destination || '').trim())
+const destinationType = computed(() => String(route.query.destinationType || '').trim())
+const selectedHotelHid = computed(() => String(route.query.hotelHid || '').trim())
+const selectedHotelId = computed(() => String(route.query.hotelId || '').trim())
+const selectedRegionId = computed(() => String(route.query.region_id || route.query.regionId || '').trim())
 const checkin = computed(() => String(route.query.checkin || '').trim())
 const checkout = computed(() => String(route.query.checkout || '').trim())
 const MAX_GUESTS_PER_ROOM = 6
@@ -563,19 +697,12 @@ const guestRequestLabel = computed(() => {
 const statusMessage = ref('')
 const loading = ref(false)
 const error = ref('')
+const hasSearched = ref(false)
 const hotels = ref([])
 const currentPage = ref(1)
 const pageSize = 8
 
-const filters = ref({
-  stars: [],
-  meals: [],
-  cityDistanceKm: CITY_DISTANCE_MAX_KM,
-  beachDistanceMeters: [],
-  freeCancel: false,
-  budgetMin: '',
-  budgetMax: '',
-})
+const filters = ref(createDefaultFilters())
 const budgetInputMin = ref('')
 const budgetInputMax = ref('')
 const BUDGET_RANGE_MIN = 0
@@ -594,6 +721,7 @@ const hotelImagesByKey = ref({})
 const detailImages = ref([])
 const detailImagesLoading = ref(false)
 const detailImagesError = ref('')
+const hotelPoisByKey = ref({})
 const mapContainerRef = ref(null)
 const leafletApi = ref(null)
 const resultsMap = ref(null)
@@ -655,6 +783,211 @@ const resultsMeta = computed(() => {
   if (!hotels.value.length) return ''
   return `${hotels.value.length} hôtels · page ${currentPage.value} / ${totalPages.value}`
 })
+
+const showEmptyState = computed(
+  () => hasSearched.value && !error.value && !hotels.value.length,
+)
+
+const isMissingDatesError = computed(() => error.value === MISSING_DATES_MESSAGE)
+
+function parseIsoDate(value) {
+  const raw = String(value || '').trim()
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw)
+  if (!match) return null
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  if (Number.isNaN(date.getTime())) return null
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
+function formatIsoDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function addDays(date, days) {
+  const next = new Date(date)
+  next.setDate(next.getDate() + Number(days || 0))
+  return next
+}
+
+function formatLongDateFr(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('fr-FR', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+  })
+}
+
+const stayNights = computed(() => {
+  const inDate = parseIsoDate(checkin.value)
+  const outDate = parseIsoDate(checkout.value)
+  if (!inDate || !outDate) return 1
+  const diff = Math.round((outDate.getTime() - inDate.getTime()) / 86400000)
+  return Math.max(1, diff)
+})
+
+const suggestedCheckinDate = computed(() => {
+  const existing = parseIsoDate(checkin.value)
+  if (existing) return existing
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return today
+})
+
+const suggestedCheckoutDate = computed(() => {
+  const existing = parseIsoDate(checkout.value)
+  if (existing && existing.getTime() > suggestedCheckinDate.value.getTime()) {
+    return existing
+  }
+  return addDays(suggestedCheckinDate.value, 2)
+})
+
+const suggestedStayNights = computed(() => {
+  const diff = Math.round(
+    (suggestedCheckoutDate.value.getTime() - suggestedCheckinDate.value.getTime()) / 86400000,
+  )
+  return Math.max(1, diff)
+})
+
+const suggestedStayLabel = computed(() => {
+  const inLabel = formatLongDateFr(suggestedCheckinDate.value)
+  const outLabel = formatLongDateFr(suggestedCheckoutDate.value)
+  return `${inLabel} → ${outLabel} · ${suggestedStayNights.value} nuit${suggestedStayNights.value > 1 ? 's' : ''}`
+})
+
+function mealFilterChipLabel(code) {
+  switch (String(code || '').toLowerCase()) {
+    case 'nomeal':
+      return 'Chambre seule'
+    case 'breakfast':
+      return 'Petit déjeuner inclus'
+    case 'half_board':
+      return 'Demi-pension'
+    case 'full_board':
+      return 'Pension complète'
+    case 'all_inclusive':
+      return 'Tout compris'
+    default:
+      return null
+  }
+}
+
+function formatMetersLabel(value) {
+  const num = Number(value)
+  if (!Number.isFinite(num) || num <= 0) return ''
+  if (num >= 1000) {
+    const km = num / 1000
+    return `${km >= 10 ? km.toFixed(0) : km.toFixed(1)} km`
+  }
+  return `${Math.round(num)} m`
+}
+
+const activeFilterChips = computed(() => {
+  const chips = []
+  const stars = Array.isArray(filters.value.stars)
+    ? filters.value.stars
+        .map((value) => Number(value))
+        .filter((num) => Number.isFinite(num) && num > 0)
+        .sort((a, b) => a - b)
+    : []
+  if (stars.length) {
+    if (stars.length === 2 && stars[0] === 4 && stars[1] === 5) {
+      chips.push('4 étoiles et +')
+    } else {
+      stars.forEach((star) => {
+        chips.push(`${star} étoile${star > 1 ? 's' : ''}`)
+      })
+    }
+  }
+  if (filters.value.freeCancel) {
+    chips.push('Annulation gratuite')
+  }
+  const meals = Array.isArray(filters.value.meals)
+    ? Array.from(
+        new Set(
+          filters.value.meals
+            .map((meal) => mealFilterChipLabel(meal))
+            .filter(Boolean),
+        ),
+      )
+    : []
+  chips.push(...meals)
+  const cityKm = Number(filters.value.cityDistanceKm)
+  if (
+    Number.isFinite(cityKm) &&
+    cityKm >= CITY_DISTANCE_MIN_KM &&
+    cityKm < CITY_DISTANCE_MAX_KM
+  ) {
+    chips.push(`Centre-ville ≤ ${cityKm} km`)
+  }
+  const beachMax = Math.max(
+    ...((Array.isArray(filters.value.beachDistanceMeters)
+      ? filters.value.beachDistanceMeters
+      : []
+    )
+      .map((value) => Number(value))
+      .filter((num) => Number.isFinite(num) && num > 0)),
+    0,
+  )
+  if (beachMax > 0) {
+    chips.push(`Plage ≤ ${formatMetersLabel(beachMax)}`)
+  }
+  const budgetMin = String(filters.value.budgetMin ?? '').trim()
+  const budgetMax = String(filters.value.budgetMax ?? '').trim()
+  if (budgetMin || budgetMax) {
+    if (budgetMin && budgetMax) chips.push(`Budget ${budgetMin}€ - ${budgetMax}€`)
+    else if (budgetMax) chips.push(`Budget max ${budgetMax}€`)
+    else chips.push(`Budget min ${budgetMin}€`)
+  }
+  return chips
+})
+
+function updateRouteDates(nextCheckinDate, nextCheckoutDate) {
+  const nextCheckin = formatIsoDate(nextCheckinDate)
+  const nextCheckout = formatIsoDate(nextCheckoutDate)
+  if (!nextCheckin || !nextCheckout || nextCheckout <= nextCheckin) return
+  router.push({
+    name: 'search-results',
+    query: {
+      ...route.query,
+      checkin: nextCheckin,
+      checkout: nextCheckout,
+    },
+  })
+}
+
+function shiftStayByDays(days = 1) {
+  const inDate = parseIsoDate(checkin.value)
+  const outDate = parseIsoDate(checkout.value)
+  if (!inDate || !outDate) return
+  updateRouteDates(addDays(inDate, days), addDays(outDate, days))
+}
+
+function moveToNextWeekend() {
+  const base = parseIsoDate(checkin.value) || new Date()
+  base.setHours(0, 0, 0, 0)
+  let daysToFriday = (5 - base.getDay() + 7) % 7
+  if (daysToFriday === 0) daysToFriday = 7
+  const nextFriday = addDays(base, daysToFriday)
+  const nextCheckout = addDays(nextFriday, stayNights.value)
+  updateRouteDates(nextFriday, nextCheckout)
+}
+
+function openSearchEditor() {
+  editPanelOpen.value = true
+  if (typeof window !== 'undefined') {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
+function applySuggestedDates() {
+  updateRouteDates(suggestedCheckinDate.value, suggestedCheckoutDate.value)
+}
 
 function parseDistanceMeters(value) {
   if (value === undefined || value === null) return null
@@ -1238,6 +1571,12 @@ function applyBudgetFilter() {
   filters.value.budgetMax = budgetInputMax.value
 }
 
+function resetAllFilters() {
+  filters.value = createDefaultFilters()
+  budgetSliderValue.value = 500
+  syncBudgetInputsFromSliders()
+}
+
 function formatBudgetLabel(value, isMax = false) {
   if (isMax && value >= BUDGET_RANGE_MAX) return `${BUDGET_RANGE_MAX}€+`
   return `${value}€`
@@ -1272,9 +1611,11 @@ function hotelKey(hotel) {
 }
 
 function hotelDisplayName(hotel) {
+  const info = hotelInfoByKey.value[hotelKey(hotel)] || null
   const fallbackId =
     hotel?.id || hotel?.hid || hotel?.hotel_id || hotel?.hotelId
   return (
+    info?.name ||
     hotel?.name ||
     hotel?.hotel_name ||
     hotel?.hotel_name_trans ||
@@ -1287,15 +1628,136 @@ function hotelDisplayName(hotel) {
   )
 }
 
+function hotelAddressLabel(hotel) {
+  const info = hotelInfoByKey.value[hotelKey(hotel)] || null
+  return pickFirstString(
+    info?.address,
+    typeof hotel?.address === 'string' ? hotel.address : null,
+    hotel?.address_line,
+    hotel?.address_full,
+    hotel?.address_trans,
+    hotel?.location?.address,
+  )
+}
+
+function hotelCardPois(hotel) {
+  return hotelPoisByKey.value[hotelKey(hotel)] || []
+}
+
+function hotelBeachPoiDistance(hotel) {
+  const pois = hotelCardPois(hotel)
+  if (!Array.isArray(pois) || !pois.length) return null
+  const beachPoi = pois.find((poi) => String(poi?.subtype || '').toLowerCase() === 'beach')
+  if (!beachPoi) return null
+  const distance = Number(beachPoi.distance_meters)
+  return Number.isFinite(distance) && distance >= 0 ? Math.round(distance) : null
+}
+
+function hotelDistanceMeta(hotel) {
+  const city = resolveCityDistance(hotel)
+  const beach = resolveBeachDistance(hotel)
+  const beachFallback = beach.distance === null
+    ? hotelBeachPoiDistance(hotel)
+    : null
+
+  const candidates = [
+    Number.isFinite(city.distance)
+      ? { label: 'du centre-ville', distance: city.distance }
+      : null,
+    Number.isFinite(beach.distance)
+      ? { label: 'de la plage', distance: beach.distance }
+      : Number.isFinite(beachFallback)
+        ? { label: 'de la plage', distance: beachFallback }
+        : null,
+  ].filter(Boolean)
+
+  if (!candidates.length) return ''
+  candidates.sort((a, b) => a.distance - b.distance)
+  const best = candidates[0]
+  return `A ${formatMetersLabel(best.distance)} ${best.label}`
+}
+
+async function hydrateVisibleHotelInfo(hotelsList = []) {
+  if (!Array.isArray(hotelsList) || !hotelsList.length) return
+  const nextEntries = {}
+  await Promise.all(
+    hotelsList.map(async (hotel) => {
+      const key = hotelKey(hotel)
+      if (!key || hotelInfoByKey.value[key]) return
+      try {
+        const info = await fetchHotelInfoSummary(hotel, { language: 'fr' })
+        if (info?.name || info?.address) {
+          nextEntries[key] = info
+        }
+      } catch {
+        // Ignore per-card hotel info failures and keep the existing card data.
+      }
+    }),
+  )
+  if (!Object.keys(nextEntries).length) return
+  hotelInfoByKey.value = {
+    ...hotelInfoByKey.value,
+    ...nextEntries,
+  }
+}
+
+async function hydrateVisibleHotelPois(hotelsList = []) {
+  if (!Array.isArray(hotelsList) || !hotelsList.length) return
+
+  const missingHotels = hotelsList.filter((hotel) => {
+    const key = hotelKey(hotel)
+    return key && !Object.prototype.hasOwnProperty.call(hotelPoisByKey.value, key)
+  })
+  if (!missingHotels.length) return
+
+  try {
+    const batchResponse = await fetchHotelPoisBatch(missingHotels, {
+      featured: true,
+      limitPerHotel: 3,
+      maxDistanceM: 5000,
+    })
+    const nextEntries = {}
+    missingHotels.forEach((hotel) => {
+      const key = hotelKey(hotel)
+      if (!key) return
+      nextEntries[key] = getHotelPoisFromBatch(batchResponse, hotel)
+    })
+    hotelPoisByKey.value = {
+      ...hotelPoisByKey.value,
+      ...nextEntries,
+    }
+  } catch {
+    const emptyEntries = {}
+    missingHotels.forEach((hotel) => {
+      const key = hotelKey(hotel)
+      if (!key) return
+      emptyEntries[key] = []
+    })
+    hotelPoisByKey.value = {
+      ...hotelPoisByKey.value,
+      ...emptyEntries,
+    }
+  }
+}
+
 function deriveHotelStars(hotel) {
+  const normalizeHotelStarsValue = (value) => {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed) || parsed <= 0) return null
+    const normalized = parsed > 5 && parsed <= 10
+      ? parsed / 2
+      : parsed
+    return Math.max(1, Math.min(5, Math.round(normalized)))
+  }
+
   const direct =
     hotel?.stars ?? hotel?.category ?? hotel?.rg_ext?.class
-  const directNum = Number(direct)
-  if (Number.isFinite(directNum) && directNum > 0) return directNum
+  const directNum = normalizeHotelStarsValue(direct)
+  if (directNum !== null) return directNum
   const vals = Array.isArray(hotel?.rates)
     ? hotel.rates
-        .map((r) => Number(r?.rg_ext?.class))
-        .filter((n) => Number.isFinite(n) && n > 0)
+        .map((r) => normalizeHotelStarsValue(r?.rg_ext?.class))
+        .filter((n) => n !== null)
     : []
   return vals.length ? Math.max(...vals) : null
 }
@@ -1962,11 +2424,11 @@ async function searchHotels() {
   hotels.value = []
 
   if (!destination.value) {
-    error.value = 'Veuillez saisir une destination depuis la page de recherche.'
+    error.value = MISSING_DESTINATION_MESSAGE
     return
   }
   if (!checkin.value || !checkout.value) {
-    error.value = 'Les dates d’arrivée et de départ sont requises.'
+    error.value = MISSING_DATES_MESSAGE
     return
   }
 
@@ -1976,7 +2438,16 @@ async function searchHotels() {
     language: 'fr',
     guests: buildGuestsPayload(),
     filters: buildFilterPayload(),
-    query: destination.value,
+  }
+
+  if (destinationType.value === 'hotel' && selectedHotelHid.value) {
+    body.hids = [selectedHotelHid.value]
+  } else if (destinationType.value === 'hotel' && selectedHotelId.value) {
+    body.ids = [selectedHotelId.value]
+  } else if (destinationType.value === 'region' && selectedRegionId.value) {
+    body.region_id = selectedRegionId.value
+  } else {
+    body.query = destination.value
   }
 
   loading.value = true
@@ -2004,6 +2475,7 @@ async function searchHotels() {
       (await geocodeDestinationCenter(destination.value))
     const results = extractHotels(data?.results ?? data)
     hotels.value = results
+    hotelInfoByKey.value = {}
     hotelImagesByKey.value = {}
     detailImages.value = []
     detailImagesError.value = ''
@@ -2019,6 +2491,7 @@ async function searchHotels() {
     })
     error.value = err.message || String(err || '')
   } finally {
+    hasSearched.value = true
     loading.value = false
   }
 }
@@ -2241,6 +2714,10 @@ function goNextPage() {
 
 function submitEditedSearch(searchPayload = {}) {
   const nextDestination = String(searchPayload.destination || '').trim()
+  const nextDestinationType = String(searchPayload.destinationType || '').trim() || undefined
+  const nextHotelHid = String(searchPayload.hotelHid || '').trim() || undefined
+  const nextHotelId = String(searchPayload.hotelId || '').trim() || undefined
+  const nextRegionId = String(searchPayload.regionId || '').trim() || undefined
   const nextCheckin = String(searchPayload.checkin || '').trim()
   const nextCheckout = String(searchPayload.checkout || '').trim()
   const nextAdults = Math.min(6, Math.max(1, Number(searchPayload.adults) || 1))
@@ -2262,6 +2739,10 @@ function submitEditedSearch(searchPayload = {}) {
     query: {
       ...route.query,
       destination: nextDestination,
+      destinationType: nextDestinationType,
+      hotelHid: nextHotelHid,
+      hotelId: nextHotelId,
+      region_id: nextRegionId,
       checkin: nextCheckin,
       checkout: nextCheckout,
       adults: String(nextAdults),
@@ -2299,8 +2780,21 @@ onMounted(() => {
 
 // Re-run search when filters change.
 watch(
+  () => paginatedHotels.value,
+  (list) => {
+    hydrateVisibleHotelInfo(list)
+    hydrateVisibleHotelPois(list)
+  },
+  { immediate: true },
+)
+
+watch(
   () => [
     route.query.destination,
+    route.query.destinationType,
+    route.query.hotelHid,
+    route.query.hotelId,
+    route.query.region_id,
     route.query.checkin,
     route.query.checkout,
     route.query.adults,
@@ -2701,6 +3195,239 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.empty-flex-dates {
+  border: 1px solid rgba(147, 197, 253, 0.55);
+  background: linear-gradient(
+    140deg,
+    rgba(239, 246, 255, 0.94) 0%,
+    rgba(241, 245, 249, 0.94) 100%
+  );
+}
+
+.empty-flex-dates strong {
+  display: block;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.empty-flex-dates p {
+  margin: 0.35rem 0 0.7rem;
+  color: #334155;
+  font-size: 0.84rem;
+}
+
+.empty-flex-dates__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.empty-flex-dates__actions > button {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 112px;
+}
+
+.missing-dates-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 280px);
+  gap: 1rem;
+  padding: 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  background:
+    radial-gradient(circle at top right, rgba(251, 191, 36, 0.18), transparent 30%),
+    linear-gradient(145deg, rgba(255, 251, 235, 0.96), rgba(255, 247, 237, 0.98));
+}
+
+.missing-dates-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.45rem;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(255, 255, 255, 0.7);
+  color: #9a3412;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.missing-dates-card h4 {
+  margin: 0.7rem 0 0;
+  color: #0f172a;
+  font-size: 1.24rem;
+}
+
+.missing-dates-card p {
+  margin: 0.55rem 0 0;
+  color: #475569;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.missing-dates-card__suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.9rem;
+  align-items: center;
+  margin-top: 1rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.missing-dates-card__suggestion strong {
+  color: #0f172a;
+  font-size: 0.92rem;
+}
+
+.missing-dates-card__suggestion span {
+  color: #92400e;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.missing-dates-card__actions {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.missing-dates-card__actions > button {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 170px;
+}
+
+.missing-dates-card__aside {
+  align-self: stretch;
+  padding: 0.9rem;
+  border-radius: 0.95rem;
+  background: rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.missing-dates-card__aside strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.88rem;
+}
+
+.missing-dates-card__aside p {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.results-error-inline {
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  background: rgba(254, 242, 242, 0.92);
+  color: #b91c1c;
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+
+.empty-results-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 230px);
+  gap: 1rem;
+  padding: 0.8rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(248, 250, 252, 0.75);
+}
+
+.empty-results-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.35rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.18);
+  color: #92400e;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.empty-results-card h4 {
+  margin: 0.65rem 0 0;
+  color: #0f172a;
+  font-size: 1.22rem;
+}
+
+.empty-results-card p {
+  margin: 0.55rem 0 0;
+  color: #334155;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.empty-results-card__actions {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.empty-results-card__actions > button {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 170px;
+}
+
+.empty-results-card__filters {
+  align-self: start;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(241, 245, 249, 0.88);
+  border-radius: 0.9rem;
+  padding: 0.65rem 0.7rem;
+}
+
+.empty-results-card__filters strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.empty-results-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.empty-results-card__chips span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.45rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: #fff;
+  color: #0f172a;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .missing-dates-card {
+    grid-template-columns: 1fr;
+  }
+
+  .empty-results-card {
+    grid-template-columns: 1fr;
+  }
+}
+
 .results-map-block {
   margin: 0.7rem 0 1rem;
   padding: 0.7rem;
@@ -2899,6 +3626,19 @@ onBeforeUnmount(() => {
   color: rgba(148,163,184,0.95);
 }
 
+.hotel-distance-meta {
+  margin: 0.18rem 0 0;
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.hotel-address {
+  margin: 0.18rem 0 0;
+  font-size: 0.78rem;
+  color: #475569;
+  line-height: 1.35;
+}
+
 .hotel-card__stars span {
   color: #fbbf24;
   font-size: 0.85rem;
@@ -2966,6 +3706,24 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+}
+
+.hotel-card__pois {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.hotel-card__poi-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: #f6f1e8;
+  color: #6a4d2f;
+  font-size: 0.72rem;
+  line-height: 1.2;
 }
 
 .hotel-request {

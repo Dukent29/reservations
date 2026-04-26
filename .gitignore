@@ -27,3 +27,8 @@ docs/*.json
 
 sitemap.xml
 **/sitemap.xml
+
+data/
+*.zst
+*.json
+*.jsonl

@@ -1,8 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DESTINATION_SEO_ITEMS } from '../src/data/seoDestinations.js'
-import { BLOG_POSTS } from '../src/data/blogPosts.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -51,18 +49,32 @@ function normalizeBaseUrl(rawUrl) {
   }
 }
 
-function buildSitemapXml(baseUrl) {
+async function loadOptionalArrayExport(modulePath, exportName) {
+  try {
+    const module = await import(modulePath)
+    const value = module?.[exportName]
+    return Array.isArray(value) ? value : []
+  } catch (error) {
+    if (error?.code === 'ERR_MODULE_NOT_FOUND') {
+      return []
+    }
+    throw error
+  }
+}
+
+function buildSitemapXml(baseUrl, blogPosts = []) {
   const staticPaths = [
     '/',
     '/blog',
+    '/contact',
     '/mentions-legales',
     '/politique-de-confidentialite',
+    '/conditions',
   ]
-  const destinationPaths = DESTINATION_SEO_ITEMS.map(
-    (item) => `/destinations/${item.slug}`,
-  )
-  const blogPaths = BLOG_POSTS.map((post) => `/blog/${post.slug}`)
-  const allPaths = [...staticPaths, ...destinationPaths, ...blogPaths]
+  const blogPaths = blogPosts
+    .map((post) => `/blog/${post?.slug || ''}`)
+    .filter((routePath) => routePath !== '/blog/')
+  const allPaths = [...new Set([...staticPaths, ...blogPaths])]
   const lastmod = new Date().toISOString()
 
   const urls = allPaths
@@ -101,6 +113,10 @@ async function main() {
   await loadDotEnvFile(path.join(projectRoot, '.env'))
   await loadDotEnvFile(path.resolve(projectRoot, '..', '.env'))
   const outputDir = resolveOutputDir()
+  const blogPosts = await loadOptionalArrayExport(
+    '../src/data/blogPosts.js',
+    'BLOG_POSTS',
+  )
 
   const baseUrl = normalizeBaseUrl(
     process.env.BEDTRIP_SITE_URL ||
@@ -108,7 +124,7 @@ async function main() {
       process.env.VITE_SITE_URL,
   )
 
-  const sitemapXml = buildSitemapXml(baseUrl)
+  const sitemapXml = buildSitemapXml(baseUrl, blogPosts)
   const robotsTxt = buildRobotsTxt(baseUrl)
 
   await fs.mkdir(outputDir, { recursive: true })

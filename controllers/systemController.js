@@ -34,7 +34,13 @@ function getConfig(_req, res) {
   const autofill = String(process.env.autofill || "").toLowerCase() === "true";
   const etgEnv = (process.env.ETG_ENV || "prod").toLowerCase();
   const etgEnvLabel = etgEnv === "sandbox" ? "TEST (Sandbox)" : "LIVE (Production)";
-  res.json({ autofill, etgEnv, etgEnvLabel });
+  const paypalClientId = "AUVsjMjnuX-I-TfeKOLdcFHAlpyidqNK_HipRv3WHWaPGrOdFO-VSaVVmfyYoMk-eVVsNFeSBDtcDiDv";
+  res.json({
+    autofill,
+    etgEnv,
+    etgEnvLabel,
+    paypalClientId: paypalClientId || null,
+  });
 }
 
 /**

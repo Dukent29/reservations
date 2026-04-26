@@ -1,145 +1,236 @@
-<!--
-  AppFooter
-  =========
-  Shared footer for BedTrip UI.
-
-  Responsibilities:
-  - Show environment information (e.g. "Intégration", "Recette", "Production").
-  - Display technical links (API documentation, support).
-  - Remain visually light to not distract from main flows.
--->
-
 <template>
   <footer class="app-footer">
     <div class="app-footer__inner">
-      <div class="app-footer__brand">
-        <strong>BedTrip</strong>
-        <span class="app-footer__tagline">Particuliers et professionnels</span>
+      <div class="footer-navigation">
+        <div class="app-footer__brand">
+          <div class="app-footer__brand-title">
+            <img
+              class="app-footer__logo"
+              src="/images/bedtrip-white-logo.png"
+              alt=""
+              aria-hidden="true"
+            />
+            <strong>BedTrip</strong>
+          </div>
+          <span class="app-footer__tagline">
+            Hôtels pour particuliers et professionnels, avec paiement flexible.
+          </span>
+        </div>
+
+        <div class="footer-links-group">
+          <nav class="footer-column" aria-label="Navigation principale">
+            <h3>Liens rapides</h3>
+            <RouterLink class="footer-link" to="/">Accueil</RouterLink>
+            <RouterLink class="footer-link" to="/blog">Blog</RouterLink>
+            <RouterLink class="footer-link" to="/contact">Contact</RouterLink>
+            <a
+              class="footer-link"
+              href="https://kotan-voyages.com"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Acheter un billet
+            </a>
+          </nav>
+
+          <nav class="footer-column" aria-label="Informations légales">
+            <h3>Informations</h3>
+            <RouterLink class="footer-link" to="/conditions">Conditions</RouterLink>
+            <RouterLink class="footer-link" to="/mentions-legales">Mentions légales</RouterLink>
+            <RouterLink class="footer-link" to="/politique-de-confidentialite">Confidentialité</RouterLink>
+            <button
+              class="footer-link footer-link--button"
+              type="button"
+              @click="cookieConsent.openPreferences"
+            >
+              Préférences cookies
+            </button>
+          </nav>
+        </div>
       </div>
-      <nav class="app-footer__links" aria-label="Navigation du pied de page">
-        <RouterLink class="footer-link" to="/">Accueil</RouterLink>
-        <span class="footer-link footer-link--active" aria-current="page">BedTrip</span>
-        <a
-          class="footer-link"
-          href="https://kotan-voyages.com"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Acheter un billet (Gatefly)
-        </a>
-        <RouterLink class="footer-link" to="/mentions-legales">Mentions légales</RouterLink>
-        <RouterLink class="footer-link" to="/politique-de-confidentialite">Confidentialité</RouterLink>
-        <RouterLink class="footer-link" to="/conditions">Conditions</RouterLink>
-        <RouterLink class="footer-link" to="/blog">Blog</RouterLink>
-      </nav>
-      <nav class="app-footer__links app-footer__links--destinations" aria-label="Destinations">
-        <RouterLink
-          v-for="item in destinationSeoItems"
-          :key="item.slug"
-          class="footer-link footer-link--destination"
-          :to="`/destinations/${item.slug}`"
-        >
-          {{ item.country }}
-        </RouterLink>
-      </nav>
-    </div>
-    <div class="app-footer__meta">
-      <small>Environnement de test · BedTrip UI</small>
+
+      <div class="footer-bottom">
+        <span>© BedTrip 2026. Tous droits réservés.</span>
+        <div class="footer-bottom__links" aria-label="Contact rapide">
+          <a href="tel:+33235082249" aria-label="Téléphone BedTrip">
+            <i class="pi pi-phone" aria-hidden="true"></i>
+          </a>
+          <a href="mailto:kotanvoyages@outlook.com" aria-label="Email BedTrip">
+            <i class="pi pi-envelope" aria-hidden="true"></i>
+          </a>
+          <RouterLink to="/contact" aria-label="Page contact BedTrip">
+            <i class="pi pi-send" aria-hidden="true"></i>
+          </RouterLink>
+        </div>
+      </div>
     </div>
   </footer>
 </template>
 
 <script setup>
-import { DESTINATION_SEO_ITEMS } from '../../data/seoDestinations'
+import { useCookieConsentStore } from '../../stores/cookieConsent'
 
-const destinationSeoItems = DESTINATION_SEO_ITEMS
+const cookieConsent = useCookieConsentStore()
 </script>
 
 <style scoped>
 .app-footer {
-  background: #000814;
+  background: #101010;
   color: #f9fafb;
-  padding: 1rem 1.25rem;
+  padding: clamp(1.5rem, 3vw, 2.4rem) 0 1rem;
   border-radius: 0;
   width: 100vw;
   margin-left: calc(50% - 50vw);
 }
 
 .app-footer__inner {
+  width: min(1440px, calc(100% - (var(--shell-pad, 1rem) * 2)));
+  margin: 0 auto;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.footer-navigation {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
+  gap: clamp(2rem, 7vw, 7rem);
 }
 
 .app-footer__brand {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.85rem;
+  max-width: 22rem;
+}
+
+.app-footer__brand-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #ffffff;
+  font-size: 1.05rem;
+}
+
+.app-footer__logo {
+  width: 2rem;
+  height: 1.95rem;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .app-footer__tagline {
-  font-size: 0.72rem;
-  color: rgba(248, 250, 252, 0.7);
+  font-size: 0.84rem;
+  line-height: 1.65;
+  color: #cbd5e1;
 }
 
-.app-footer__links {
+.footer-links-group {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
+  gap: clamp(2.5rem, 7vw, 6rem);
+  flex: 1 1 auto;
 }
 
-.app-footer__links--destinations {
-  width: 100%;
-  justify-content: flex-start;
+.footer-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.footer-column h3 {
+  margin: 0 0 0.45rem;
+  color: #fca5a5;
+  font-size: 0.74rem;
+  line-height: 1.2;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 .footer-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  border: 1px solid rgba(226, 232, 240, 0.35);
+  width: fit-content;
+  border: 0;
   background: transparent;
-  color: #f8fafc;
-  font-size: 0.7rem;
+  color: #e5e7eb;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  text-align: left;
   text-decoration: none;
-  white-space: nowrap;
+  padding: 0.1rem 0;
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+
+.footer-link--button {
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .footer-link:hover,
 .footer-link:focus-visible {
-  border-color: rgba(248, 250, 252, 0.75);
-  background: rgba(248, 250, 252, 0.08);
+  color: #ffffff;
+  transform: translateX(3px);
 }
 
-.footer-link--active {
-  border-color: rgba(248, 250, 252, 0.85);
-  background: rgba(248, 250, 252, 0.15);
+.footer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(248, 250, 252, 0.12);
+  color: #9ca3af;
+  font-size: 0.78rem;
 }
 
-.footer-link--destination {
-  border-color: rgba(226, 232, 240, 0.26);
-  font-size: 0.68rem;
+.footer-bottom__links {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
 }
 
-.app-footer__meta {
-  margin-top: 0.75rem;
-  font-size: 0.7rem;
-  color: rgba(248, 250, 252, 0.65);
+.footer-bottom__links a {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  border: 1px solid rgba(248, 250, 252, 0.18);
+  color: #f9fafb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 
-@media (max-width: 720px) {
-  .app-footer__inner {
-    align-items: flex-start;
+.footer-bottom__links a:hover,
+.footer-bottom__links a:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(248, 250, 252, 0.42);
+}
+
+@media (max-width: 900px) {
+  .footer-navigation {
+    flex-direction: column;
+    gap: 1.7rem;
   }
 
-  .app-footer__links {
-    justify-content: flex-start;
+  .footer-links-group {
+    width: 100%;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .footer-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .footer-links-group {
+    flex-direction: column;
+    gap: 1.6rem;
   }
 }
 </style>

@@ -5,6 +5,8 @@ const hotelController = require("../controllers/hotelController");
 const { validate } = require("../src/middlewares/validateRequest");
 const { hotelSchemas } = require("../src/middlewares/requestSchemas");
 
+router.get("/hotel/pois", validate(hotelSchemas.hotelPois), hotelController.getHotelPois);
+router.post("/hotel/pois/batch", validate(hotelSchemas.hotelPoisBatch), hotelController.getHotelPoisBatch);
 router.post("/hotel/info", validate(hotelSchemas.hotelInfo), hotelController.getHotelInfo);
 router.post("/hotel/images", validate(hotelSchemas.hotelImages), hotelController.getHotelImages);
 

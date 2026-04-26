@@ -16,8 +16,21 @@ const etg = axios.create({
 });
 
 etg.interceptors.request.use((cfg) => {
-  cfg.headers["Accept"] = "application/json";
-  cfg.headers["User-Agent"] = process.env.APP_USER_AGENT || "KotanVoyages/1.0 (+tech@kotan)";
+  cfg.headers = cfg.headers || {};
+  const hasAcceptHeader =
+    Boolean(cfg.headers.Accept) ||
+    Boolean(cfg.headers.accept) ||
+    Boolean(cfg.headers["Accept"]);
+  const hasUserAgentHeader =
+    Boolean(cfg.headers["User-Agent"]) || Boolean(cfg.headers["user-agent"]);
+
+  if (!hasAcceptHeader) {
+    cfg.headers["Accept"] = "application/json";
+  }
+  if (!hasUserAgentHeader) {
+    cfg.headers["User-Agent"] =
+      process.env.APP_USER_AGENT || "KotanVoyages/1.0 (+tech@kotan)";
+  }
   cfg.headers["Authorization"] = AUTH; // <-- force HTTP Basic
   return cfg;
 });

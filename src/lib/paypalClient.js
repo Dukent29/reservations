@@ -2,12 +2,12 @@
 
 const axios = require("axios");
 
-const PAYPAL_ENV = (process.env.PAYPAL_ENV || "sandbox").toLowerCase(); // sandbox|live
+const PAYPAL_ENV = "live"; // forced live on master/prod (temporary)
 const PAYPAL_BASE_URL =
-  PAYPAL_ENV === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
+  PAYPAL_ENV === "live" ? "https://api-m.paypal.com" : "";
 
-const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
-const PAYPAL_SECRET = process.env.PAYPAL_SECRET;
+const PAYPAL_CLIENT_ID = "AUVsjMjnuX-I-TfeKOLdcFHAlpyidqNK_HipRv3WHWaPGrOdFO-VSaVVmfyYoMk-eVVsNFeSBDtcDiDv";
+const PAYPAL_SECRET = "EHBRGdosZPlHTTWnSB6yF9ezsR1WC1S1gXqh3CpreIlU6K0lwRrnyu8u1sGt-fQ5zxOEif1oDly8lh5b";
 
 if (!PAYPAL_CLIENT_ID || !PAYPAL_SECRET) {
   console.warn("[PayPal] Missing PAYPAL_CLIENT_ID / PAYPAL_SECRET");

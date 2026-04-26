@@ -41,6 +41,7 @@ let prebookDetailsColumn = null;
 let prebookExpiryColumn = null;
 let paymentsSchemaEnsured = false;
 let bookingsSchemaEnsured = false;
+let adminNotificationsSchemaEnsured = false;
 
 async function ensurePrebookSchema() {
   if (prebookSchemaEnsured) return;
@@ -241,13 +242,40 @@ async function ensureBookingsSchema() {
         amount NUMERIC,
         currency_code TEXT,
         raw JSONB,
-        created_at TIMESTAMPTZ DEFAULT NOW()
+        voucher_status TEXT,
+        voucher_attempts INTEGER NOT NULL DEFAULT 0,
+        voucher_last_error TEXT,
+        voucher_filename TEXT,
+        voucher_ready_at TIMESTAMPTZ,
+        voucher_last_attempt_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
-    bookingsSchemaEnsured = true;
   } catch (err) {
     console.error("[DB] ensureBookingsSchema failed:", err.message);
+    return;
   }
+
+  const schemaChanges = [
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS voucher_status TEXT`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS voucher_attempts INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS voucher_last_error TEXT`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS voucher_filename TEXT`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS voucher_ready_at TIMESTAMPTZ`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS voucher_last_attempt_at TIMESTAMPTZ`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
+  ];
+
+  for (const change of schemaChanges) {
+    try {
+      await db.query(change);
+    } catch (err) {
+      console.warn("[DB] ensureBookingsSchema warning:", err.message);
+    }
+  }
+
+  bookingsSchemaEnsured = true;
 }
 
 async function savePayment({
@@ -347,6 +375,164 @@ async function saveBooking({
   }
 }
 
+async function ensureAdminNotificationsSchema() {
+  if (adminNotificationsSchemaEnsured) return;
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS admin_notifications (
+        id BIGSERIAL PRIMARY KEY,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT,
+        entity_type TEXT,
+        entity_key TEXT,
+        payload JSONB,
+        read_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.query(
+      "CREATE INDEX IF NOT EXISTS idx_admin_notifications_created_at ON admin_notifications(created_at DESC)"
+    );
+    await db.query(
+      "CREATE INDEX IF NOT EXISTS idx_admin_notifications_read_at ON admin_notifications(read_at)"
+    );
+    adminNotificationsSchemaEnsured = true;
+  } catch (err) {
+    console.error("[DB] ensureAdminNotificationsSchema failed:", err.message);
+  }
+}
+
+async function createAdminNotification({
+  kind,
+  title,
+  message,
+  entityType,
+  entityKey,
+  payload,
+}) {
+  try {
+    await ensureAdminNotificationsSchema();
+    await db.query(
+      `INSERT INTO admin_notifications (
+         kind,
+         title,
+         message,
+         entity_type,
+         entity_key,
+         payload
+       ) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        String(kind || "generic"),
+        String(title || "Notification"),
+        message ? String(message) : null,
+        entityType ? String(entityType) : null,
+        entityKey ? String(entityKey) : null,
+        payload ? JSON.stringify(payload) : null,
+      ]
+    );
+  } catch (err) {
+    console.error("[DB] createAdminNotification failed:", err.message);
+  }
+}
+
+async function listAdminNotifications(limit = 20) {
+  await ensureAdminNotificationsSchema();
+  const normalizedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  const result = await db.query(
+    `SELECT id, kind, title, message, entity_type, entity_key, payload, read_at, created_at
+       FROM admin_notifications
+      ORDER BY created_at DESC
+      LIMIT $1`,
+    [normalizedLimit]
+  );
+  return result.rows || [];
+}
+
+async function markAdminNotificationRead(id) {
+  await ensureAdminNotificationsSchema();
+  const result = await db.query(
+    `UPDATE admin_notifications
+        SET read_at = COALESCE(read_at, NOW())
+      WHERE id = $1
+      RETURNING id, read_at`,
+    [String(id)]
+  );
+  return result.rows[0] || null;
+}
+
+async function updateBookingVoucherState(partnerOrderId, fields = {}) {
+  if (!partnerOrderId) return;
+
+  await ensureBookingsSchema();
+
+  const mappings = [
+    ["voucherStatus", "voucher_status"],
+    ["voucherAttempts", "voucher_attempts"],
+    ["voucherLastError", "voucher_last_error"],
+    ["voucherFilename", "voucher_filename"],
+    ["voucherReadyAt", "voucher_ready_at"],
+    ["voucherLastAttemptAt", "voucher_last_attempt_at"],
+  ];
+
+  const updates = [];
+  const values = [];
+  const nowIso = new Date().toISOString();
+
+  for (const [fieldName, columnName] of mappings) {
+    if (Object.prototype.hasOwnProperty.call(fields, fieldName)) {
+      values.push(fields[fieldName] ?? null);
+      updates.push(`${columnName} = $${values.length}`);
+    }
+  }
+
+  values.push(nowIso);
+  updates.push(`updated_at = $${values.length}`);
+
+  const latestResult = await db.query(
+    `SELECT id
+     FROM bookings
+     WHERE partner_order_id = $1
+     ORDER BY id DESC
+     LIMIT 1`,
+    [partnerOrderId],
+  );
+
+  const latestId = latestResult.rows[0]?.id || null;
+  if (latestId) {
+    values.push(latestId);
+    await db.query(
+      `UPDATE bookings
+       SET ${updates.join(", ")}
+       WHERE id = $${values.length}`,
+      values,
+    );
+    return;
+  }
+
+  const insertColumns = ["partner_order_id"];
+  const insertValues = [partnerOrderId];
+  const insertPlaceholders = ["$1"];
+
+  for (const [fieldName, columnName] of mappings) {
+    if (Object.prototype.hasOwnProperty.call(fields, fieldName)) {
+      insertValues.push(fields[fieldName] ?? null);
+      insertColumns.push(columnName);
+      insertPlaceholders.push(`$${insertValues.length}`);
+    }
+  }
+
+  insertValues.push(nowIso);
+  insertColumns.push("updated_at");
+  insertPlaceholders.push(`$${insertValues.length}`);
+
+  await db.query(
+    `INSERT INTO bookings (${insertColumns.join(", ")})
+     VALUES (${insertPlaceholders.join(", ")})`,
+    insertValues,
+  );
+}
+
 async function saveBookingForm({ partnerOrderId, prebookToken, form }) {
   console.log("[DB] saveBookingForm called with", { partnerOrderId, prebookToken });
   try {
@@ -436,8 +622,14 @@ module.exports = {
   savePrebook,
   getPrebookSummary,
   ensurePaymentsSchema,
+  ensureBookingsSchema,
+  ensureAdminNotificationsSchema,
   savePayment,
   saveBooking,
+  createAdminNotification,
+  listAdminNotifications,
+  markAdminNotificationRead,
+  updateBookingVoucherState,
   saveBookingForm,
   parseAmount,
   ensureApiLogsSchema,

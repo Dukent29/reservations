@@ -24,7 +24,7 @@ router.post(
   paymentController.cancelDeal
 );
 router.post("/payments/payota/init", validate(paymentSchemas.payotaInit), paymentController.createCreditCardToken);
-router.post("/payments/paypal/order", paymentController.createPayPalOrder);
+router.post("/payments/paypal/order", validate(paymentSchemas.paypalOrderCreate), paymentController.createPayPalOrder);
 router.post("/payments/paypal/order/:orderId/capture", paymentController.capturePayPalOrder);
 router.post(
   "/payments/kotan/extern/create",

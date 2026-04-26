@@ -2,6 +2,7 @@
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const guestSchema = {
   adults: { type: "number", min: 1, max: 10, required: true },
@@ -143,6 +144,12 @@ const bookingSchemas = {
       partner_order_id: { type: "string", minLen: 6, maxLen: 80, required: true },
     },
   },
+  bookingVoucher: {
+    query: {
+      partner_order_id: { type: "string", minLen: 6, maxLen: 80, required: true },
+      language: { type: "string", minLen: 2, maxLen: 10, optional: true },
+    },
+  },
 };
 
 const hotelSchemas = {
@@ -174,12 +181,104 @@ const hotelSchemas = {
       }
     },
   },
+  hotelPois: {
+    allowUnknownQuery: false,
+    query: {
+      id: { type: ["string", "number"], optional: true },
+      hid: { type: ["string", "number"], optional: true },
+      subtype: { type: "string", minLen: 1, maxLen: 80, optional: true },
+      max_distance_m: { type: ["string", "number"], optional: true },
+      limit: { type: ["string", "number"], optional: true },
+      featured: { type: ["string", "number"], optional: true },
+    },
+    custom: (req, errors) => {
+      const query = req.query || {};
+      if (!query.id && !query.hid) {
+        errors.push({ path: "query.id|query.hid", message: "id or hid is required" });
+      }
+    },
+  },
+  hotelPoisBatch: {
+    allowUnknownBody: false,
+    body: {
+      hids: {
+        type: "array",
+        minLen: 1,
+        maxLen: 100,
+        items: { type: ["string", "number"] },
+        optional: true,
+      },
+      ids: {
+        type: "array",
+        minLen: 1,
+        maxLen: 100,
+        items: { type: ["string", "number"] },
+        optional: true,
+      },
+      subtype: { type: "string", minLen: 1, maxLen: 80, optional: true },
+      max_distance_m: { type: "number", min: 1, max: 100000, optional: true },
+      limit_per_hotel: { type: "number", min: 1, max: 12, optional: true },
+      featured: { type: ["string", "number", "boolean"], optional: true },
+    },
+    custom: (req, errors) => {
+      const body = req.body || {};
+      const hasHids = Array.isArray(body.hids) && body.hids.length > 0;
+      const hasIds = Array.isArray(body.ids) && body.ids.length > 0;
+      if (!hasHids && !hasIds) {
+        errors.push({ path: "body.hids|body.ids", message: "hids or ids is required" });
+      }
+    },
+  },
 };
 
 const contentSchemas = {
   hotelDump: {
     body: {
       language: { type: "string", minLen: 2, maxLen: 10, optional: true },
+    },
+  },
+};
+
+const contactTopicValues = [
+  "reservation",
+  "payment",
+  "cancellation",
+  "general",
+  "partnership",
+];
+
+const contactReservationReasonValues = [
+  "information",
+  "modify_booking",
+  "cancel_refund",
+  "voucher_confirmation",
+  "payment_invoice",
+  "arrival_time",
+  "other",
+];
+
+const contactSchemas = {
+  contactRequest: {
+    allowUnknownBody: false,
+    body: {
+      topic: { type: "string", minLen: 3, maxLen: 40, enum: contactTopicValues, required: true },
+      reservation_reason: { type: "string", minLen: 3, maxLen: 60, enum: contactReservationReasonValues, optional: true },
+      reservation_reference: { type: "string", minLen: 0, maxLen: 120, optional: true },
+      name: { type: "string", minLen: 2, maxLen: 120, required: true },
+      email: { type: "string", minLen: 3, maxLen: 320, pattern: emailPattern, required: true },
+      phone: { type: "string", minLen: 0, maxLen: 40, optional: true },
+      subject: { type: "string", minLen: 0, maxLen: 160, optional: true },
+      message: { type: "string", minLen: 10, maxLen: 3000, required: true },
+      consent: { type: "boolean", required: true },
+    },
+    custom: (req, errors) => {
+      const body = req.body || {};
+      if (body.topic === "reservation" && !body.reservation_reason) {
+        errors.push({ path: "body.reservation_reason", message: "is required for reservation requests" });
+      }
+      if (body.consent !== true) {
+        errors.push({ path: "body.consent", message: "must be accepted" });
+      }
     },
   },
 };
@@ -260,6 +359,24 @@ const paymentSchemas = {
       is_cvc_required: { type: ["boolean", "string"], required: true },
     },
   },
+  paypalOrderCreate: {
+    allowUnknownBody: false,
+    body: {
+      partner_order_id: { type: "string", minLen: 6, maxLen: 120, required: true },
+      customer_email: { type: "string", minLen: 3, maxLen: 320, pattern: emailPattern, optional: true },
+      conditions_acceptance: {
+        type: "object",
+        required: true,
+        shape: {
+          accepted: { type: ["boolean", "string"], required: true },
+          conditions_version: { type: "string", minLen: 1, maxLen: 80, optional: true },
+          privacy_policy_accepted: { type: ["boolean", "string"], required: true },
+          privacy_policy_version: { type: "string", minLen: 1, maxLen: 80, optional: true },
+          accepted_at_client: { type: "string", minLen: 10, maxLen: 80, optional: true },
+        },
+      },
+    },
+  },
   systempayCreateOrder: {
     body: {
       partner_order_id: { type: "string", minLen: 6, maxLen: 80, required: true },
@@ -279,6 +396,8 @@ const paymentSchemas = {
         shape: {
           accepted: { type: ["boolean", "string"], required: true },
           conditions_version: { type: "string", minLen: 1, maxLen: 80, optional: true },
+          privacy_policy_accepted: { type: ["boolean", "string"], required: true },
+          privacy_policy_version: { type: "string", minLen: 1, maxLen: 80, optional: true },
           accepted_at_client: { type: "string", minLen: 10, maxLen: 80, optional: true },
         },
       },
@@ -311,10 +430,197 @@ const paymentSchemas = {
   },
 };
 
+const promoSchemas = {
+  validatePromo: {
+    allowUnknownBody: false,
+    body: {
+      code: { type: "string", minLen: 3, maxLen: 40, required: true },
+      partner_order_id: { type: "string", minLen: 6, maxLen: 120, required: true },
+      user_email: { type: "string", minLen: 3, maxLen: 320, pattern: emailPattern, optional: true },
+      user_id: { type: "string", minLen: 1, maxLen: 120, optional: true },
+    },
+  },
+  clearPromo: {
+    allowUnknownBody: false,
+    body: {
+      partner_order_id: { type: "string", minLen: 6, maxLen: 120, required: true },
+    },
+  },
+  adminListPromoCodes: {
+    allowUnknownQuery: false,
+    query: {
+      limit: { type: ["string", "number"], optional: true },
+      offset: { type: ["string", "number"], optional: true },
+    },
+  },
+  adminPromoCodeId: {
+    allowUnknownParams: false,
+    params: {
+      id: { type: "string", minLen: 1, maxLen: 24, required: true },
+    },
+  },
+  adminCreatePromoCode: {
+    allowUnknownBody: false,
+    body: {
+      code: { type: "string", minLen: 3, maxLen: 40, required: true },
+      type: { type: "string", minLen: 5, maxLen: 10, enum: ["percentage", "fixed"], required: true },
+      value: { type: ["number", "string"], required: true },
+      min_amount: { type: ["number", "string"], optional: true },
+      max_uses: { type: ["number", "string"], optional: true },
+      per_user_limit: { type: ["number", "string"], optional: true },
+      start_date: { type: "string", minLen: 10, maxLen: 80, required: true },
+      end_date: { type: "string", minLen: 10, maxLen: 80, required: true },
+      is_active: { type: ["boolean", "string"], optional: true },
+    },
+  },
+  adminUpdatePromoCode: {
+    allowUnknownParams: false,
+    allowUnknownBody: false,
+    params: {
+      id: { type: "string", minLen: 1, maxLen: 24, required: true },
+    },
+    body: {
+      code: { type: "string", minLen: 3, maxLen: 40, required: true },
+      type: { type: "string", minLen: 5, maxLen: 10, enum: ["percentage", "fixed"], required: true },
+      value: { type: ["number", "string"], required: true },
+      min_amount: { type: ["number", "string"], optional: true },
+      max_uses: { type: ["number", "string"], optional: true },
+      per_user_limit: { type: ["number", "string"], optional: true },
+      start_date: { type: "string", minLen: 10, maxLen: 80, required: true },
+      end_date: { type: "string", minLen: 10, maxLen: 80, required: true },
+      is_active: { type: ["boolean", "string"], optional: true },
+    },
+  },
+};
+
+const authSchemas = {
+  adminLogin: {
+    allowUnknownBody: false,
+    body: {
+      email: { type: "string", minLen: 3, maxLen: 320, pattern: emailPattern, required: true },
+      password: { type: "string", minLen: 3, maxLen: 200, required: true },
+    },
+  },
+  adminListUsers: {
+    allowUnknownQuery: false,
+    query: {
+      limit: { type: ["string", "number"], optional: true },
+      offset: { type: ["string", "number"], optional: true },
+    },
+  },
+  adminUpdateUserRole: {
+    allowUnknownParams: false,
+    allowUnknownBody: false,
+    params: {
+      id: { type: "string", minLen: 1, maxLen: 64, required: true },
+    },
+    body: {
+      role: { type: "string", minLen: 4, maxLen: 10, enum: ["admin", "editor", "viewer"], required: true },
+    },
+  },
+  adminListPayments: {
+    allowUnknownQuery: false,
+    query: {
+      limit: { type: ["string", "number"], optional: true },
+      offset: { type: ["string", "number"], optional: true },
+    },
+  },
+  adminListReservations: {
+    allowUnknownQuery: false,
+    query: {
+      limit: { type: ["string", "number"], optional: true },
+      offset: { type: ["string", "number"], optional: true },
+      q: { type: "string", minLen: 1, maxLen: 120, optional: true },
+    },
+  },
+  adminDownloadVoucher: {
+    allowUnknownParams: false,
+    params: {
+      partnerOrderId: { type: "string", minLen: 6, maxLen: 120, required: true },
+    },
+    query: {
+      language: { type: "string", minLen: 2, maxLen: 10, optional: true },
+    },
+  },
+};
+
+const blogSchemas = {
+  adminListPosts: {
+    allowUnknownQuery: false,
+    query: {
+      status: { type: "string", minLen: 5, maxLen: 9, enum: ["draft", "published"], optional: true },
+      q: { type: "string", minLen: 1, maxLen: 120, optional: true },
+      limit: { type: ["string", "number"], optional: true },
+      offset: { type: ["string", "number"], optional: true },
+    },
+  },
+  adminPostId: {
+    allowUnknownParams: false,
+    params: {
+      id: { type: "string", minLen: 1, maxLen: 24, required: true },
+    },
+  },
+  adminCreatePost: {
+    allowUnknownBody: false,
+    body: {
+      title: { type: "string", minLen: 3, maxLen: 200, required: true },
+      slug: { type: "string", minLen: 3, maxLen: 200, pattern: slugPattern, optional: true },
+      excerpt: { type: "string", minLen: 1, maxLen: 500, optional: true },
+      content: { type: "string", minLen: 10, maxLen: 100000, required: true },
+      coverImageUrl: { type: "string", minLen: 1, maxLen: 2000, optional: true },
+      imageUrls: {
+        type: "array",
+        minLen: 1,
+        maxLen: 24,
+        items: { type: "string", minLen: 1, maxLen: 2000 },
+        optional: true,
+      },
+      category: { type: "string", minLen: 1, maxLen: 120, optional: true },
+      tags: { type: ["array", "string"], optional: true },
+      status: { type: "string", minLen: 5, maxLen: 9, enum: ["draft", "published"], required: true },
+    },
+  },
+  adminUpdatePost: {
+    allowUnknownParams: false,
+    allowUnknownBody: false,
+    params: {
+      id: { type: "string", minLen: 1, maxLen: 24, required: true },
+    },
+    body: {
+      title: { type: "string", minLen: 3, maxLen: 200, required: true },
+      slug: { type: "string", minLen: 3, maxLen: 200, pattern: slugPattern, optional: true },
+      excerpt: { type: "string", minLen: 1, maxLen: 500, optional: true },
+      content: { type: "string", minLen: 10, maxLen: 100000, required: true },
+      coverImageUrl: { type: "string", minLen: 1, maxLen: 2000, optional: true },
+      imageUrls: {
+        type: "array",
+        minLen: 1,
+        maxLen: 24,
+        items: { type: "string", minLen: 1, maxLen: 2000 },
+        optional: true,
+      },
+      category: { type: "string", minLen: 1, maxLen: 120, optional: true },
+      tags: { type: ["array", "string"], optional: true },
+      status: { type: "string", minLen: 5, maxLen: 9, enum: ["draft", "published"], required: true },
+    },
+  },
+  adminUploadCover: {
+    allowUnknownBody: false,
+    body: {
+      fileName: { type: "string", minLen: 3, maxLen: 200, optional: true },
+      contentBase64: { type: "string", minLen: 20, maxLen: 10000000, required: true },
+    },
+  },
+};
+
 module.exports = {
   searchSchemas,
   bookingSchemas,
   hotelSchemas,
   contentSchemas,
+  contactSchemas,
   paymentSchemas,
+  promoSchemas,
+  authSchemas,
+  blogSchemas,
 };

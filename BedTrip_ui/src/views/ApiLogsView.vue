@@ -1,3 +1,15 @@
+<!--
+  ApiLogsView
+  ===========
+  Internal diagnostics page for API request logs.
+
+  Main responsibilities:
+  - Load recent API calls made by hotel search, ETG and booking flows.
+  - Filter logs by sandbox/prod endpoint usage.
+  - Expand individual rows to inspect request and response payloads.
+  - Provide quick visibility into integration errors without reading server logs.
+-->
+
 <template>
   <section class="workspace__content api-logs-view">
     <section class="card">

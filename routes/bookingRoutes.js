@@ -9,6 +9,7 @@ router.post("/prebook", validate(bookingSchemas.prebook), bookingController.preb
 router.post("/booking/form", validate(bookingSchemas.bookingForm), bookingController.bookingForm);
 router.post("/booking/start", validate(bookingSchemas.bookingStart), bookingController.startBooking);
 router.post("/booking/check", validate(bookingSchemas.bookingCheck), bookingController.checkBooking);
+router.get("/booking/voucher", validate(bookingSchemas.bookingVoucher), bookingController.downloadVoucher);
 router.get("/booking/status", validate(bookingSchemas.bookingStatus), bookingController.getBookingStatus);
 router.get("/booking/reservations", bookingController.listReservations);
 

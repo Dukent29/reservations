@@ -23,11 +23,32 @@
       <div class="header-title">
         <RouterLink to="/" class="header-title-link" aria-label="Retour accueil" title="Retour accueil">
           <h1>
-            BedTrip reservations
+            <span class="header-logo-stack" aria-hidden="true">
+              <img
+                class="header-logo header-logo--default"
+                src="/images/bedtrip-red-logo.png"
+                alt=""
+              />
+              <img
+                class="header-logo header-logo--compact"
+                src="/images/bedtrip-white-logo.png"
+                alt=""
+              />
+            </span>
+            <span>BedTrip Hotels</span>
           </h1>
         </RouterLink>
       </div>
       <div class="header-right">
+        <a
+          class="header-phone"
+          href="tel:+33235082249"
+          aria-label="Appeler l'agence Kotan Voyages"
+          title="Appeler l'agence"
+        >
+          <i class="pi pi-phone" aria-hidden="true"></i>
+          <span>02 35 08 22 49</span>
+        </a>
         <button
           type="button"
           class="menu-toggle"
@@ -89,6 +110,20 @@
               aria-hidden="true"
             ></i>
             <span class="header-link__label">Blog</span>
+          </RouterLink>
+
+          <RouterLink
+            class="header-link"
+            to="/contact"
+            aria-label="Contacter BedTrip"
+            title="Contacter BedTrip"
+            @click="closeMenu"
+          >
+            <i
+              class="pi pi-envelope header-link__icon"
+              aria-hidden="true"
+            ></i>
+            <span class="header-link__label">Contact</span>
           </RouterLink>
 
           <a
@@ -195,6 +230,32 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
 }
 
+.header-logo-stack {
+  position: relative;
+  width: 2rem;
+  height: 1.9rem;
+  flex: 0 0 auto;
+}
+
+.header-logo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+.header-logo--default {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.header-logo--compact {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
 .header-links {
   display: flex;
   flex-wrap: nowrap;
@@ -223,6 +284,27 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.6rem;
   flex-wrap: nowrap;
+}
+
+.header-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(165, 20, 30, 0.08);
+  border: 1px solid rgba(165, 20, 30, 0.18);
+  color: #7f1d1d;
+  text-decoration: none;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.header-phone:hover,
+.header-phone:focus-visible {
+  background: rgba(165, 20, 30, 0.14);
+  border-color: rgba(165, 20, 30, 0.28);
 }
 
 
@@ -297,6 +379,28 @@ onBeforeUnmount(() => {
 .app-header--compact .header-title h1 {
   font-size: 1.1rem;
   color: #ffffff;
+}
+
+.app-header--compact .header-phone {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.32);
+  color: #ffffff;
+}
+
+.app-header--compact .header-phone:hover,
+.app-header--compact .header-phone:focus-visible {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.48);
+}
+
+.app-header--compact .header-logo--default {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.app-header--compact .header-logo--compact {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .app-header--compact .brand .sub {
@@ -383,6 +487,10 @@ onBeforeUnmount(() => {
 
   .header-link {
     justify-content: flex-start;
+  }
+
+  .header-phone {
+    display: none;
   }
 
   .language-icon {

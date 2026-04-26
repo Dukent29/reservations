@@ -25,12 +25,19 @@
 
     <!-- Optional footer with environment / legal information -->
     <AppFooter />
+
+    <CookieBanner />
+    <CookiePreferencesModal />
+    <ChatWidget />
   </div>
 </template>
 
 <script setup>
 import AppHeader from '../components/layout/AppHeader.vue'
 import AppFooter from '../components/layout/AppFooter.vue'
+import ChatWidget from '../components/chatbot/ChatWidget.vue'
+import CookieBanner from '../components/cookies/CookieBanner.vue'
+import CookiePreferencesModal from '../components/cookies/CookiePreferencesModal.vue'
 </script>
 
 <style scoped>
