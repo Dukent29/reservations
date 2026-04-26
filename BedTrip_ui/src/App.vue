@@ -1,15 +1,22 @@
 <script setup>
+import { computed } from 'vue'
+import { RouterView, useRoute } from 'vue-router'
 import AppShell from './layouts/AppShell.vue'
 import PageProgressBar from './components/PageProgressBar.vue'
-import { RouterView } from 'vue-router'
+
+const route = useRoute()
+const usesPublicShell = computed(() => route.meta?.appShell !== false)
 </script>
 
 <template>
   <div id="bedtrip-app">
     <PageProgressBar />
-    <AppShell>
-      <RouterView />
-    </AppShell>
+    <RouterView v-slot="{ Component }">
+      <AppShell v-if="usesPublicShell">
+        <component :is="Component" />
+      </AppShell>
+      <component :is="Component" v-else />
+    </RouterView>
   </div>
 </template>
 

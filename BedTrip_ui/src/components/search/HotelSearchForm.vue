@@ -63,8 +63,36 @@
               class="suggestion-option"
               @click="selectHotelSuggestion(hotel)"
             >
-              <span class="suggestion-option__name">
-                {{ hotel.name || 'Hôtel' }}
+              <span class="suggestion-option__hotel">
+                <span class="suggestion-option__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" focusable="false">
+                    <path
+                      d="M4 20V7.5C4 6.67 4.67 6 5.5 6H10V4.5C10 3.67 10.67 3 11.5 3H18.5C19.33 3 20 3.67 20 4.5V20"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M8 10H8.01M8 13.5H8.01M8 17H8.01M13 8H17M13 11H17M13 14H17M10 20V17.5C10 16.67 10.67 16 11.5 16H12.5C13.33 16 14 16.67 14 17.5V20"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span class="suggestion-option__content">
+                  <span class="suggestion-option__name">
+                    {{ hotel.name || 'Hôtel' }}
+                  </span>
+                  <span
+                    v-if="hotelSuggestionMeta(hotel)"
+                    class="suggestion-option__meta"
+                  >
+                    {{ hotelSuggestionMeta(hotel) }}
+                  </span>
+                </span>
               </span>
             </button>
           </div>
@@ -130,11 +158,11 @@
           <div :id="dateModalTitleId" class="modal__title">Séjour</div>
           <button
             type="button"
-            class="secondary mini"
+            class="modal__close"
             aria-label="Fermer"
             @click="closeDateModal"
           >
-            ✕
+            ×
           </button>
         </div>
         <div class="modal__body">
@@ -198,11 +226,11 @@
           <div :id="guestModalTitleId" class="modal__title">Voyageurs</div>
           <button
             type="button"
-            class="secondary mini"
+            class="modal__close"
             aria-label="Fermer"
             @click="closeGuestModal"
           >
-            ✕
+            ×
           </button>
         </div>
         <div class="modal__body guest-modal__body">
@@ -280,6 +308,10 @@ const props = defineProps({
   showHintText: { type: Boolean, default: true },
   submitLabel: { type: String, default: 'Rechercher' },
   initialDestination: { type: String, default: '' },
+  initialDestinationType: { type: String, default: '' },
+  initialHotelHid: { type: [String, Number], default: '' },
+  initialHotelId: { type: [String, Number], default: '' },
+  initialRegionId: { type: [String, Number], default: '' },
   initialCheckin: { type: String, default: '' },
   initialCheckout: { type: String, default: '' },
   initialAdults: { type: Number, default: 2 },
@@ -309,6 +341,11 @@ const suggestionRootRef = ref(null)
 const regionSuggestions = ref([])
 const hotelSuggestions = ref([])
 const suggestionStatus = ref('')
+const selectedDestinationType = ref('')
+const selectedHotelHid = ref('')
+const selectedHotelId = ref('')
+const selectedRegionId = ref('')
+const selectedDestinationLabel = ref('')
 let suggestionTimer = null
 
 const isDateModalOpen = ref(false)
@@ -320,6 +357,13 @@ const hoverDate = ref(null)
 
 function syncFromProps() {
   destination.value = String(props.initialDestination || '')
+  selectedDestinationType.value = String(props.initialDestinationType || '').trim()
+  selectedHotelHid.value = String(props.initialHotelHid || '').trim()
+  selectedHotelId.value = String(props.initialHotelId || '').trim()
+  selectedRegionId.value = String(props.initialRegionId || '').trim()
+  selectedDestinationLabel.value = selectedDestinationType.value
+    ? String(props.initialDestination || '').trim()
+    : ''
   checkin.value = String(props.initialCheckin || '')
   checkout.value = String(props.initialCheckout || '')
   adultsCount.value = Math.min(MAX_GUESTS, Math.max(MIN_ADULTS, Number(props.initialAdults) || 2))
@@ -544,6 +588,14 @@ function clearHoverPreview() {
   }
 }
 
+function clearSelectedDestination() {
+  selectedDestinationType.value = ''
+  selectedHotelHid.value = ''
+  selectedHotelId.value = ''
+  selectedRegionId.value = ''
+  selectedDestinationLabel.value = ''
+}
+
 function applyDateSelection() {
   const start = rangeStartDate.value
   const end = rangeEndDate.value || hoverDate.value
@@ -611,13 +663,37 @@ function scheduleSuggestions(value) {
 function selectRegion(region) {
   const label = region.name || region.full_name || region.fullName || region.id || ''
   destination.value = String(label)
+  selectedDestinationType.value = 'region'
+  selectedHotelHid.value = ''
+  selectedHotelId.value = ''
+  selectedRegionId.value = String(region?.id || '').trim()
+  selectedDestinationLabel.value = String(label)
   closeSuggestions()
 }
 
 function selectHotelSuggestion(hotel) {
   const label = hotel.name || hotel.hid || ''
   destination.value = String(label)
+  selectedDestinationType.value = 'hotel'
+  selectedHotelHid.value = String(hotel?.hid || '').trim()
+  selectedHotelId.value = String(hotel?.id || '').trim()
+  selectedRegionId.value = String(hotel?.region_id || '').trim()
+  selectedDestinationLabel.value = String(label)
   closeSuggestions()
+}
+
+function hotelSuggestionMeta(hotel) {
+  if (!hotel || typeof hotel !== 'object') return ''
+  const parts = [
+    hotel.address,
+    hotel.city,
+    hotel.city_name,
+    hotel.country_name,
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+
+  return Array.from(new Set(parts)).join(' · ')
 }
 
 const hasSuggestions = computed(() =>
@@ -635,6 +711,10 @@ function submitSearch() {
   if (!destination.value || !checkin.value || !checkout.value) return
   emit('submit-search', {
     destination: destination.value,
+    destinationType: selectedDestinationType.value || undefined,
+    hotelHid: selectedHotelHid.value || undefined,
+    hotelId: selectedHotelId.value || undefined,
+    regionId: selectedRegionId.value || undefined,
     checkin: checkin.value,
     checkout: checkout.value,
     adults: String(adultsCount.value || 1),
@@ -646,6 +726,13 @@ function submitSearch() {
 watch(
   () => destination.value,
   (val) => {
+    const normalizedValue = String(val || '').trim()
+    if (
+      selectedDestinationLabel.value &&
+      normalizedValue !== selectedDestinationLabel.value
+    ) {
+      clearSelectedDestination()
+    }
     scheduleSuggestions(val)
   },
 )
@@ -653,6 +740,10 @@ watch(
 watch(
   () => [
     props.initialDestination,
+    props.initialDestinationType,
+    props.initialHotelHid,
+    props.initialHotelId,
+    props.initialRegionId,
     props.initialCheckin,
     props.initialCheckout,
     props.initialAdults,
@@ -766,6 +857,35 @@ onBeforeUnmount(() => {
 .modal__title {
   font-size: 0.95rem;
   font-weight: 700;
+}
+
+.modal__close {
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(165, 20, 30, 0.38);
+  background: #fff5f5;
+  color: #a5141e;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.modal__close:hover {
+  background: #fee2e2;
+  border-color: rgba(165, 20, 30, 0.55);
+}
+
+.modal__close:focus-visible {
+  outline: 2px solid rgba(165, 20, 30, 0.3);
+  outline-offset: 2px;
 }
 
 .date-calendar {

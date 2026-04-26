@@ -3,7 +3,11 @@
 const { callETG } = require("../utils/etg");
 const httpError = require("../src/utils/httpError");
 
-const HOTEL_IMAGES_CACHE_TTL_MS = 10 * 60 * 1000;
+const HOTEL_IMAGES_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const HOTEL_INFO_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const HOTEL_CACHE_MAX_ENTRIES = 300;
+const hotelInfoCache = new Map();
+const hotelInfoInFlight = new Map();
 const hotelImagesCache = new Map();
 const hotelImagesInFlight = new Map();
 
@@ -19,6 +23,55 @@ function buildHotelInfoPayload(body = {}) {
 
 async function fetchHotelInfo(payload) {
   return callETG("POST", "/hotel/info/", payload);
+}
+
+function pruneCache(cache) {
+  const now = Date.now();
+  for (const [key, entry] of cache.entries()) {
+    if (!entry || entry.expiresAt <= now) {
+      cache.delete(key);
+    }
+  }
+  while (cache.size > HOTEL_CACHE_MAX_ENTRIES) {
+    const oldestKey = cache.keys().next().value;
+    if (!oldestKey) break;
+    cache.delete(oldestKey);
+  }
+}
+
+async function fetchCachedHotelInfo(payload, cacheIdentity, language) {
+  const cacheKey = `${String(cacheIdentity)}|${language}`;
+  const now = Date.now();
+  const cachedEntry = hotelInfoCache.get(cacheKey);
+  if (cachedEntry && cachedEntry.expiresAt > now) {
+    return cachedEntry.value;
+  }
+  if (hotelInfoInFlight.has(cacheKey)) {
+    return hotelInfoInFlight.get(cacheKey);
+  }
+
+  const requestPromise = (async () => {
+    const staleEntry = hotelInfoCache.get(cacheKey);
+    try {
+      const info = await fetchHotelInfo(payload);
+      hotelInfoCache.set(cacheKey, {
+        expiresAt: Date.now() + HOTEL_INFO_CACHE_TTL_MS,
+        value: info,
+      });
+      pruneCache(hotelInfoCache);
+      return info;
+    } catch (error) {
+      if (staleEntry && staleEntry.value) {
+        return staleEntry.value;
+      }
+      throw error;
+    } finally {
+      hotelInfoInFlight.delete(cacheKey);
+    }
+  })();
+
+  hotelInfoInFlight.set(cacheKey, requestPromise);
+  return requestPromise;
 }
 
 function categoryBonus(slug = "") {
@@ -135,7 +188,7 @@ async function fetchHotelImages(options = {}) {
   const requestPromise = (async () => {
     const staleEntry = hotelImagesCache.get(cacheKey);
     try {
-      const info = await fetchHotelInfo(payload);
+      const info = await fetchCachedHotelInfo(payload, cacheIdentity, language);
       const candidates = normalizeCandidates(info);
       const selected = cappedLimit ? candidates.slice(0, cappedLimit) : candidates;
 
@@ -153,6 +206,7 @@ async function fetchHotelImages(options = {}) {
         expiresAt: Date.now() + HOTEL_IMAGES_CACHE_TTL_MS,
         value: result,
       });
+      pruneCache(hotelImagesCache);
 
       return result;
     } catch (error) {

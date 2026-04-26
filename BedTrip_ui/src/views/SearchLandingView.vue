@@ -179,9 +179,9 @@
     </div>
   </section>
 
-  <section class="landing-section landing-section--about">
+  <section class="landing-section landing-section--about landing-section--about-banner">
     <h2 class="landing-section__title">À propos de bedTrip.fr</h2>
-    <p class="landing-section__subtitle muted">
+    <p class="landing-section__subtitle--about-banner">
       bedTrip.fr appartient à la société Kotan Voyages, basée en Normandie, avec une agence physique
       à Évreux, Elbeuf, Rouen et Petit-Quevilly. Cette présence locale apporte une sécurité
       supplémentaire, une assistance personnalisée et un service après-vente humain et réactif.
@@ -228,7 +228,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { DESTINATION_SEO_ITEMS } from '../data/seoDestinations'
 import HotelSearchForm from '../components/search/HotelSearchForm.vue'
 import { API_BASE, safeJsonFetch } from '../services/httpClient.js'
 import { absoluteUrl, removeJsonLd, setPageSeo } from '../utils/seo'
@@ -255,7 +254,6 @@ const MIN_ADULTS = 1
 const DEFAULT_CHILD_AGE = 8
 const childAgeOptions = Array.from({ length: 18 }, (_, idx) => idx)
 let heroSlideTimer = null
-const destinationSeoItems = DESTINATION_SEO_ITEMS
 const LANDING_JSON_LD_ID = 'bedtrip-landing-seo'
 const googleReviewsUrl = 'https://www.google.com/search?q=Kotan+Voyages+avis'
 
@@ -668,10 +666,19 @@ function handleClickOutside(event) {
 
 function goToResults(searchPayload) {
   if (!searchPayload || !searchPayload.destination || !searchPayload.checkin || !searchPayload.checkout) return
+  const destinationType = String(searchPayload.destinationType || '').trim() || undefined
+  const hotelHid = String(searchPayload.hotelHid || '').trim() || undefined
+  const hotelId = String(searchPayload.hotelId || '').trim() || undefined
+  const regionId = String(searchPayload.regionId || '').trim() || undefined
+
   router.push({
     name: 'search-results',
     query: {
       destination: searchPayload.destination,
+      destinationType,
+      hotelHid,
+      hotelId,
+      region_id: regionId,
       checkin: searchPayload.checkin,
       checkout: searchPayload.checkout,
       adults: String(searchPayload.adults || 1),
@@ -705,7 +712,7 @@ onMounted(() => {
       name: 'BedTrip',
       url: absoluteUrl('/'),
       serviceType: 'Hotel booking for leisure and business travel',
-      areaServed: ['Turkey', 'Morocco', 'Algeria', 'Tunisia', 'Dominican Republic', 'Italy', 'Spain', 'Egypt'],
+      areaServed: ['France', 'Europe', 'International'],
     },
   })
   startHeroSlideshow()
@@ -1029,6 +1036,53 @@ onBeforeUnmount(() => {
 .landing-section {
   margin-top: 2.5rem;
   padding: 1.5rem 0 0.5rem;
+}
+
+.landing-section--about-banner {
+  position: relative;
+  isolation: isolate;
+  padding: 3.5rem 0;
+}
+
+.landing-section--about-banner::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  z-index: -2;
+  background: linear-gradient(95deg, #a5141e 0%, #8e1019 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.22);
+  box-shadow: 0 22px 44px -34px rgba(15, 23, 42, 0.65);
+}
+
+.landing-section--about-banner::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 30%, rgba(255, 255, 255, 0.14) 0 130px, transparent 132px),
+    radial-gradient(circle at 82% 74%, rgba(255, 255, 255, 0.1) 0 170px, transparent 172px),
+    radial-gradient(circle at 68% 16%, rgba(255, 255, 255, 0.08) 0 90px, transparent 92px);
+}
+
+.landing-section--about-banner .landing-section__title {
+  color: #ffffff;
+}
+
+.landing-section--about-banner .landing-section__subtitle--about-banner {
+  margin-bottom: 0;
+  max-width: none;
+  color: rgba(255, 255, 255, 0.96);
 }
 
 .landing-section__title {

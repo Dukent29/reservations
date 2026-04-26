@@ -1,3 +1,15 @@
+<!--
+  BookingFinishedView
+  ===================
+  Final confirmation screen shown after the reservation flow has completed.
+
+  Main responsibilities:
+  - Show partner and supplier booking references returned by the booking flow.
+  - Give the user immediate print and navigation actions.
+  - Redirect back to the expected destination after a short countdown.
+  - Keep debug details visible while the booking integration is being validated.
+-->
+
 <template>
   <section class="workspace__content booking-finished-view">
     <section class="card confirmation-card">
@@ -90,6 +102,8 @@ import 'primeicons/primeicons.css'
 
 const route = useRoute()
 const router = useRouter()
+const PREBOOK_SUMMARY_KEY = 'booking:lastPrebook'
+const LAST_CUSTOMER_KEY = 'booking:lastCustomer'
 
 const partnerOrderId = ref('')
 const supplierReference = ref('')
@@ -99,6 +113,9 @@ const nextPath = ref('/booking')
 const debugEtg = ref(null)
 
 const bookingDetails = ref(null)
+const storedPrebookSummary = ref(null)
+const storedPrebookPayload = ref(null)
+const storedCustomer = ref(null)
 
 let timerId = null
 
@@ -154,6 +171,35 @@ function hydrateEtgDebug() {
   }
 }
 
+function hydrateSessionData() {
+  try {
+    if (typeof window === 'undefined') return
+    const ss = window.sessionStorage
+    if (!ss) return
+
+    const rawSummary = ss.getItem(PREBOOK_SUMMARY_KEY)
+    if (rawSummary) {
+      const parsed = JSON.parse(rawSummary)
+      if (parsed?.summary || parsed?.payload) {
+        storedPrebookSummary.value = parsed.summary || null
+        storedPrebookPayload.value = parsed.payload || null
+      } else {
+        storedPrebookSummary.value = parsed || null
+        storedPrebookPayload.value = parsed?.payload || null
+      }
+    }
+
+    const rawCustomer = ss.getItem(LAST_CUSTOMER_KEY)
+    if (rawCustomer) {
+      storedCustomer.value = JSON.parse(rawCustomer)
+    }
+  } catch {
+    storedPrebookSummary.value = storedPrebookSummary.value || null
+    storedPrebookPayload.value = storedPrebookPayload.value || null
+    storedCustomer.value = storedCustomer.value || null
+  }
+}
+
 async function fetchBookingDetails() {
   const pid = partnerOrderId.value
   if (!pid) return
@@ -176,31 +222,105 @@ function escapeHtml(str) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+function joinNameParts(...parts) {
+  return parts
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+}
+
+function formatDisplayDate(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return '-'
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00` : raw
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) return raw
+  try {
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    }).format(date)
+  } catch {
+    return raw
+  }
+}
+
+function resolveGuestName(booking, form) {
+  const bookingRaw = booking?.raw && typeof booking.raw === 'object' ? booking.raw : {}
+  const formCustomer = form?.customer || form?.user || form?.traveller || {}
+
+  return (
+    String(booking?.user_name || '').trim() ||
+    joinNameParts(bookingRaw?.user?.first_name, bookingRaw?.user?.last_name) ||
+    joinNameParts(formCustomer?.firstName, formCustomer?.lastName) ||
+    joinNameParts(formCustomer?.first_name, formCustomer?.last_name) ||
+    String(storedCustomer.value?.fullName || '').trim() ||
+    joinNameParts(storedCustomer.value?.firstName, storedCustomer.value?.lastName) ||
+    '-'
+  )
+}
+
+function resolveStayDates(form) {
+  const hotel = form?.hotel || form?.hotel_info || form?.hotel_data || form?.item?.hotel || {}
+  const payloadHotel =
+    storedPrebookPayload.value?.hotel ||
+    storedPrebookPayload.value?.offer?.hotel ||
+    {}
+  const summaryStay = storedPrebookSummary.value?.stay || {}
+
+  const checkIn =
+    form?.checkin ||
+    form?.check_in ||
+    form?.arrival_date ||
+    form?.order?.checkin ||
+    form?.stay?.checkin ||
+    hotel?.checkin ||
+    payloadHotel?.checkin ||
+    summaryStay?.checkin ||
+    '-'
+
+  const checkOut =
+    form?.checkout ||
+    form?.check_out ||
+    form?.departure_date ||
+    form?.order?.checkout ||
+    form?.stay?.checkout ||
+    hotel?.checkout ||
+    payloadHotel?.checkout ||
+    summaryStay?.checkout ||
+    '-'
+
+  return {
+    checkIn: formatDisplayDate(checkIn),
+    checkOut: formatDisplayDate(checkOut),
+  }
+}
+
 function openPrintConfirmation() {
   const d = bookingDetails.value
   const form = d?.booking_form?.form || {}
   const hotel = form.hotel || form.hotel_info || form.hotel_data || form.item?.hotel || {}
-  const stay = form.stay || {}
   const paymentType = Array.isArray(form.payment_types) && form.payment_types[0] ? form.payment_types[0] : null
   const booking = d?.booking || {}
   const payment = d?.payment || {}
-
   const hotelName = hotel.name || form.hotel_name || form.hotelName || form.name || 'Hébergement'
   const address = hotel.address || hotel.address_full || form.address || ''
   const city = hotel.city || hotel.city_name || form.city || ''
   const country = hotel.country || hotel.country_name || form.country || ''
   const fullAddress = [address, city, country].filter(Boolean).join(', ').trim() || '-'
 
-  const checkIn = form.checkin || form.check_in || form.arrival_date || stay.checkin || '-'
-  const checkOut = form.checkout || form.check_out || form.departure_date || stay.checkout || '-'
+  const { checkIn, checkOut } = resolveStayDates(form)
 
   const amount = payment.amount ?? paymentType?.amount ?? booking.amount ?? form.total_amount ?? '-'
   const currency = payment.currency_code || paymentType?.currency_code || booking.currency_code || form.currency_code || 'EUR'
-  const amountFormatted = amount !== '-' && Number(amount) != null
-    ? `${Number(amount).toFixed(2).replace('.', ',')} ${currency}`
+  const amountNumber = Number(amount)
+  const amountFormatted = Number.isFinite(amountNumber)
+    ? `${amountNumber.toFixed(2).replace('.', ',')} ${currency}`
     : '-'
 
-  const guestName = booking.user_name || '-'
+  const guestName = resolveGuestName(booking, form)
   const refPartenaire = partnerOrderId.value || '-'
   const refFournisseur = supplierReference.value || '-'
 
@@ -315,6 +435,7 @@ function tickCountdown() {
 onMounted(() => {
   hydrateFromQuery()
   hydrateEtgDebug()
+  hydrateSessionData()
   fetchBookingDetails()
   tickCountdown()
 })

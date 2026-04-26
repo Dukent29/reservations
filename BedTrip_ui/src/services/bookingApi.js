@@ -75,3 +75,27 @@ export async function createKotanExternPayment(body) {
   return data || {}
 }
 
+export async function validatePromoCode(body) {
+  const { statusCode, data } = await safeJsonFetch(`${API_BASE}/api/promo/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (statusCode >= 400 || data?.error) {
+    throw buildError('/api/promo/validate', statusCode, data)
+  }
+  return data || {}
+}
+
+export async function clearPromoCode(partnerOrderId) {
+  const { statusCode, data } = await safeJsonFetch(`${API_BASE}/api/promo/clear`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ partner_order_id: partnerOrderId }),
+  })
+  if (statusCode >= 400 || data?.error) {
+    throw buildError('/api/promo/clear', statusCode, data)
+  }
+  return data || {}
+}
+

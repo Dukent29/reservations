@@ -39,6 +39,10 @@
             En cas de problème de transport, BedTrip exige d'être contacté immédiatement
             par téléphone afin d'étudier la situation avec le fournisseur.
           </p>
+          <p class="conditions-contact">
+            <strong>Numéro de l'agence :</strong>
+            <a href="tel:+33235082249">02 35 08 22 49</a>
+          </p>
           <p>
             BedTrip ne peut pas garantir au client le remboursement des nuitées non utilisées
             (no-show, arrivée tardive, départ anticipé, absence de check-in / check-out).
@@ -120,6 +124,11 @@
   color: #334155;
   font-size: 0.9rem;
   line-height: 1.5;
+}
+
+.conditions-contact a {
+  color: #0f172a;
+  font-weight: 700;
 }
 
 @media (max-width: 720px) {

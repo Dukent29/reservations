@@ -4,7 +4,8 @@ function errorHandler(err, req, res, _next) {
   console.error(`[API Error] ${req.method} ${req.originalUrl}`, err);
   const status = err?.http || err?.statusCode || err?.status || 500;
   const message = err?.message || err?.error || "Internal Server Error";
-  const debug = err?.debug || null;
+  const isProd = String(process.env.NODE_ENV || "").toLowerCase() === "production";
+  const debug = isProd ? null : err?.debug || null;
 
   res.status(status).json({
     error: message,

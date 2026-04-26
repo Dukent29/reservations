@@ -9,11 +9,34 @@ const rateLimit = require("express-rate-limit");
 const path = require("path");
 
 const apiRoutes = require("../routes/api");
+const { getAdminLoginPath } = require("./config/adminAccess");
+const attachCookieJar = require("./middlewares/cookieJar");
 const errorHandler = require("./middlewares/errorHandler");
 const { enforceObjectBody } = require("./middlewares/validateRequest");
+const { setSecurityHeaders } = require("./middlewares/security");
 const { insertApiLog } = require("../utils/repo");
 
 const app = express();
+app.disable("x-powered-by");
+const adminLoginPath = getAdminLoginPath();
+
+const allowedCorsOrigins = String(process.env.CORS_ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+function isLocalDevOrigin(origin) {
+  if (!origin) return false;
+  try {
+    const parsed = new URL(origin);
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
 
 // Required when behind a reverse proxy (nginx, etc.) so express-rate-limit
 // can use X-Forwarded-For for client IP. 1 = trust first proxy.
@@ -29,14 +52,32 @@ const searchLimiter = rateLimit({
 });
 
 app.use(compression());
+app.use(setSecurityHeaders);
 app.use(express.json({ limit: "500kb" }));
 app.use(express.urlencoded({ extended: false })); // useful for return URLs, forms, etc.
+app.use(attachCookieJar);
 
 /**
  * C O R S (keep as you had — although "*" in prod is risky)
  */
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
+  const origin = String(req.get("origin") || "");
+  const hasAllowlist = allowedCorsOrigins.length > 0;
+  const isAllowedOrigin = origin && allowedCorsOrigins.includes(origin);
+  const shouldEchoOrigin = hasAllowlist ? isAllowedOrigin : isLocalDevOrigin(origin);
+
+  if (hasAllowlist && String(req.path || "").startsWith("/api/admin") && origin && !isAllowedOrigin) {
+    return res.status(403).json({ error: "forbidden_origin", http: 403 });
+  }
+
+  if (shouldEchoOrigin) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Vary", "Origin");
+  } else if (!hasAllowlist) {
+    res.header("Access-Control-Allow-Origin", "*");
+  }
+
   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.header(
     "Access-Control-Allow-Headers",
@@ -54,6 +95,7 @@ app.use((req, res, next) => {
  *   bedtrip/BedTrip_ui/dist
  */
 const vueDist = path.resolve(process.cwd(), "BedTrip_ui", "dist");
+const uploadsRoot = path.resolve(process.cwd(), "uploads");
 console.log("cwd =", process.cwd());
 console.log("vueDist =", vueDist);
 console.log("vueDist index exists? =", require("fs").existsSync(path.join(vueDist, "index.html")));
@@ -89,6 +131,14 @@ function sendPaymentResult(req, res, vuePath, legacyFile) {
   }
   // Fallback: serve legacy static HTML pages if dist is missing
   return res.sendFile(path.join(legacyFrontRoot, legacyFile));
+}
+
+function sendSpaNotFound(res) {
+  if (hasVueDist()) {
+    return res.status(404).sendFile(path.join(vueDist, "index.html"));
+  }
+
+  return res.status(404).send("Not Found");
 }
 
 /**
@@ -189,6 +239,13 @@ app.all("/floa-return", (req, res) => {
 app.use("/api/search", searchLimiter);
 app.use("/api", enforceObjectBody);
 app.use("/api", apiRoutes);
+app.use("/uploads", express.static(uploadsRoot));
+
+if (adminLoginPath !== "/admin/login") {
+  app.get(["/admin/login", "/admin/login/"], (_req, res) => {
+    return sendSpaNotFound(res);
+  });
+}
 
 /**
  * --- SERVE VUE AS DEFAULT FRONTEND ---
@@ -201,7 +258,7 @@ if (hasVueDist()) {
   app.use(express.static(vueDist));
 
   // SPA fallback (history mode): any non-API route returns index.html
-  app.get(/^(?!\/api).*/, (_req, res) => {
+  app.get(/^(?!\/api|\/uploads).*/, (_req, res) => {
     return res.sendFile(path.join(vueDist, "index.html"));
   });
 } else {

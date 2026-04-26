@@ -83,15 +83,24 @@ function validateValue(value, rules, path, errors) {
   }
 
   if (isPlainObject(value) && rules.shape) {
-    validateObject(value, rules.shape, path, errors);
+    validateObject(value, rules.shape, path, errors, rules.allowUnknown !== false);
   }
 }
 
-function validateObject(target, shape, path, errors) {
+function validateObject(target, shape, path, errors, allowUnknown = true) {
   if (!isPlainObject(target)) {
     pushError(errors, path, "must be an object");
     return;
   }
+
+  if (!allowUnknown) {
+    Object.keys(target).forEach((key) => {
+      if (!Object.prototype.hasOwnProperty.call(shape, key)) {
+        pushError(errors, `${path}.${key}`, "is not allowed");
+      }
+    });
+  }
+
   Object.keys(shape).forEach((key) => {
     const rules = shape[key];
     validateValue(target[key], rules, `${path}.${key}`, errors);
@@ -103,13 +112,13 @@ function validate(schema = {}) {
     const errors = [];
 
     if (schema.body) {
-      validateObject(req.body || {}, schema.body, "body", errors);
+      validateObject(req.body || {}, schema.body, "body", errors, schema.allowUnknownBody !== false);
     }
     if (schema.query) {
-      validateObject(req.query || {}, schema.query, "query", errors);
+      validateObject(req.query || {}, schema.query, "query", errors, schema.allowUnknownQuery !== false);
     }
     if (schema.params) {
-      validateObject(req.params || {}, schema.params, "params", errors);
+      validateObject(req.params || {}, schema.params, "params", errors, schema.allowUnknownParams !== false);
     }
 
     if (typeof schema.custom === "function") {

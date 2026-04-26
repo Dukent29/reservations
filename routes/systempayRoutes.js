@@ -5,9 +5,10 @@ const router = require("express").Router();
 const axios = require("axios");
 const { systempayConfig } = require("../config/systempay");
 const db = require("../utils/db");
-const { parseAmount, savePayment, getPrebookSummary } = require("../utils/repo");
+const { parseAmount, savePayment } = require("../utils/repo");
 const { validate } = require("../src/middlewares/validateRequest");
 const { paymentSchemas } = require("../src/middlewares/requestSchemas");
+const promoCodeModel = require("../models/promoCodeModel");
 
 router.post("/payments/systempay/create-order", validate(paymentSchemas.systempayCreateOrder), async (req, res) => {
   try {
@@ -76,15 +77,14 @@ router.post("/payments/systempay/create-order", validate(paymentSchemas.systempa
       });
     }
 
-    const prebookSummary = bf.prebook_token ? await getPrebookSummary(bf.prebook_token) : null;
-    const summaryAmount = Number(prebookSummary?.summary?.room?.price ?? prebookSummary?.room?.price);
-    const formPricingAmount = Number(bf?.form?.pricing?.total_amount);
+    const promoPricing = await promoCodeModel.resolvePayableAmount(
+      bf,
+      customerEmail || null,
+    );
     const resolvedAmount =
-      Number.isFinite(formPricingAmount) && formPricingAmount > 0
-        ? formPricingAmount
-        : Number.isFinite(summaryAmount) && summaryAmount > 0
-          ? summaryAmount
-          : applyMarkupAmount(amount);
+      Number.isFinite(Number(promoPricing?.amount)) && Number(promoPricing.amount) > 0
+        ? Number(promoPricing.amount)
+        : applyMarkupAmount(amount);
     const currency = bf.currency_code || (paymentType && paymentType.currency_code) || "EUR";
     const amountInCents = Math.round(resolvedAmount * 100);
 
@@ -192,7 +192,11 @@ router.post("/payments/systempay/create-order", validate(paymentSchemas.systempa
         amount: resolvedAmount,
         currencyCode: currency,
         externalReference,
-        payload: customer ? { ...raw, customer } : raw,
+        payload: {
+          ...raw,
+          ...(customer ? { customer } : {}),
+          promo: promoPricing?.promo || null,
+        },
       });
     } catch (e) {
       console.error("[Systempay] savePayment failed:", e.message);

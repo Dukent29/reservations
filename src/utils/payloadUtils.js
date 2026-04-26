@@ -52,14 +52,26 @@ function trimSerpPayload(payload, options = {}) {
   return clone;
 }
 
+function normalizeHotelStarsValue(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+
+  // Some upstream payloads appear to expose a 10-point category/class value.
+  const normalized = parsed > 5 && parsed <= 10
+    ? parsed / 2
+    : parsed;
+
+  return Math.max(1, Math.min(5, Math.round(normalized)));
+}
+
 function hotelStars(hotel) {
   const direct = hotel?.stars ?? hotel?.category ?? hotel?.rg_ext?.class;
-  const directNum = Number(direct);
-  if (Number.isFinite(directNum) && directNum > 0) return directNum;
+  const directNum = normalizeHotelStarsValue(direct);
+  if (directNum !== null) return directNum;
   if (Array.isArray(hotel?.rates)) {
     const vals = hotel.rates
-      .map((rate) => Number(rate?.rg_ext?.class))
-      .filter((value) => Number.isFinite(value) && value > 0);
+      .map((rate) => normalizeHotelStarsValue(rate?.rg_ext?.class))
+      .filter((value) => value !== null);
     if (vals.length) return Math.max(...vals);
   }
   return null;

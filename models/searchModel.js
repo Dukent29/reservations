@@ -4,11 +4,23 @@ const { callETG } = require("../utils/etg");
 const { etg } = require("../src/lib/etgClient");
 const httpError = require("../src/utils/httpError");
 
+const HOTEL_SUGGESTION_INFO_CACHE_TTL_MS = 10 * 60 * 1000;
+const hotelSuggestionInfoCache = new Map();
+
 function pickArray(...candidates) {
   for (const candidate of candidates) {
     if (Array.isArray(candidate)) return candidate;
   }
   return [];
+}
+
+function pickFirstString(...candidates) {
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null) continue;
+    const text = String(candidate).trim();
+    if (text) return text;
+  }
+  return null;
 }
 
 function pickCoordinateValue(...candidates) {
@@ -17,6 +29,50 @@ function pickCoordinateValue(...candidates) {
     if (Number.isFinite(num)) return num;
   }
   return null;
+}
+
+function normalizeNumericId(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const text = String(value).trim();
+  if (!/^\d+$/.test(text)) return null;
+  const num = Number(text);
+  return Number.isFinite(num) ? num : null;
+}
+
+async function fetchHotelSuggestionInfo(hotel = {}, language = "en") {
+  const hid = normalizeNumericId(hotel?.hid);
+  const id = pickFirstString(hotel?.id);
+  if (hid === null && !id) return null;
+
+  const cacheKey = `${hid !== null ? `hid:${hid}` : `id:${id}`}|${language}`;
+  const cached = hotelSuggestionInfoCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  const payload = { language };
+  if (hid !== null) payload.hid = hid;
+  else payload.id = id;
+
+  try {
+    const info = await callETG("POST", "/hotel/info/", payload);
+    const summary = {
+      name: pickFirstString(info?.name, info?.hotel_name, info?.full_name),
+      address: pickFirstString(
+        info?.address,
+        info?.address_full,
+        info?.location?.address
+      ),
+    };
+    hotelSuggestionInfoCache.set(cacheKey, {
+      expiresAt: Date.now() + HOTEL_SUGGESTION_INFO_CACHE_TTL_MS,
+      value: summary,
+    });
+    return summary;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchDestinationSuggestions(query, language = "en") {
@@ -53,7 +109,7 @@ async function fetchDestinationSuggestions(query, language = "en") {
       ),
     }));
 
-  const hotels = pickArray(raw?.data?.hotels, raw?.results?.hotels, raw?.hotels)
+  const baseHotels = pickArray(raw?.data?.hotels, raw?.results?.hotels, raw?.hotels)
     .filter((hotel) => hotel && (hotel.hid || hotel.id))
     .map((hotel) => ({
       id: hotel.id || null,
@@ -61,6 +117,17 @@ async function fetchDestinationSuggestions(query, language = "en") {
       name: hotel.name || null,
       region_id: hotel.region_id || null,
     }));
+
+  const hotels = await Promise.all(
+    baseHotels.map(async (hotel) => {
+      const info = await fetchHotelSuggestionInfo(hotel, language);
+      return {
+        ...hotel,
+        name: info?.name || hotel.name || null,
+        address: info?.address || null,
+      };
+    })
+  );
 
   return { regions, hotels };
 }
@@ -71,6 +138,33 @@ function normalizeLanguage(value) {
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function sanitizeHotelIds(ids = []) {
+  const out = [];
+  const seen = new Set();
+  for (const value of ids) {
+    const normalized = String(value || "").trim();
+    if (!normalized) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  return out;
+}
+
+function sanitizeHotelHids(hids = []) {
+  const out = [];
+  const seen = new Set();
+  for (const value of hids) {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num <= 0) continue;
+    const normalized = Math.floor(num);
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  return out;
 }
 
 function rankRegionSuggestion(region, target, idx) {
@@ -95,6 +189,26 @@ function rankHotelSuggestion(hotel, target, idx) {
   return score;
 }
 
+const HOTEL_SCORE_LEAD_TO_OVERRIDE_REGION = 4;
+
+function resolveDestinationIntent(payload = {}) {
+  const raw =
+    payload?.destination_type ??
+    payload?.destinationType ??
+    payload?.destination_kind ??
+    payload?.destinationKind ??
+    "";
+  const normalized = normalizeText(raw);
+  if (!normalized) return null;
+  if (["hotel", "property", "hid", "id"].includes(normalized)) {
+    return "hotel";
+  }
+  if (["region", "city", "destination"].includes(normalized)) {
+    return "region";
+  }
+  return null;
+}
+
 function shouldResolveRegion(payload = {}) {
   const rawRegionId = typeof payload.region_id === "string" ? payload.region_id.trim() : null;
   const regionIdIsNumeric =
@@ -114,6 +228,7 @@ function shouldResolveRegion(payload = {}) {
 async function resolveDestination(payload = {}) {
   const cloned = { ...payload };
   const language = normalizeLanguage(cloned.language);
+  const destinationIntent = resolveDestinationIntent(cloned);
   const { regionIdIsNumeric, possibleQuery } = shouldResolveRegion(cloned);
 
   if (!regionIdIsNumeric && possibleQuery) {
@@ -144,20 +259,38 @@ async function resolveDestination(payload = {}) {
         throw httpError(404, "destination_or_hotel_not_found", { query: possibleQuery });
       }
 
-      // Prefer hotel-targeted search if hotel match quality is at least as good as region.
+      // Prefer region for ambiguous/equal text matches; only pick hotel when
+      // explicitly requested or when hotel confidence is clearly stronger.
       const regionScore = Number(ranked[0]?.score ?? -Infinity);
       const hotelScore = Number(rankedHotels[0]?.score ?? -Infinity);
-      const shouldPickHotel = pickedHotel && hotelScore >= regionScore;
+      const isExactRegionMatch =
+        picked &&
+        (normalizeText(picked?.name) === target ||
+          normalizeText(picked?.full_name || picked?.name) === target);
+      const shouldPickHotel =
+        Boolean(pickedHotel) &&
+        (
+          !picked ||
+          (destinationIntent === "hotel" && hotelScore >= regionScore) ||
+          (!isExactRegionMatch &&
+            hotelScore - regionScore >= HOTEL_SCORE_LEAD_TO_OVERRIDE_REGION)
+        );
 
       if (shouldPickHotel) {
-        const hidValue = pickedHotel?.hid ?? pickedHotel?.id ?? null;
-        if (!hidValue) {
+        const hidValue = pickedHotel?.hid ?? null;
+        const idValue = pickedHotel?.id ?? null;
+        if (!hidValue && !idValue) {
           throw httpError(404, "hotel_not_found", { query: possibleQuery });
         }
         delete cloned.region_id;
         delete cloned.query;
         delete cloned.ids;
-        cloned.hids = [hidValue];
+        delete cloned.hids;
+        if (hidValue) {
+          cloned.hids = [hidValue];
+        } else {
+          cloned.ids = [idValue];
+        }
         return {
           payload: cloned,
           resolvedRegion: null,
@@ -195,6 +328,14 @@ function buildSerpRequest(payload = {}) {
   delete body.filters;
   body.language = normalizeLanguage(body.language);
   body.currency = (body.currency || "EUR").trim() || "EUR";
+  if (Array.isArray(body.ids)) {
+    body.ids = sanitizeHotelIds(body.ids);
+    if (!body.ids.length) delete body.ids;
+  }
+  if (Array.isArray(body.hids)) {
+    body.hids = sanitizeHotelHids(body.hids);
+    if (!body.hids.length) delete body.hids;
+  }
 
   if (!body.checkin || !body.checkout) {
     throw httpError(400, "checkin & checkout are required (YYYY-MM-DD)");

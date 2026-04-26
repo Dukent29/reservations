@@ -44,17 +44,26 @@
   <section class="workspace__content booking-view">
     <section class="card booking-panel">
       <div class="booking-intro">
-        <div>
-          <p class="muted" style="margin:0">Jeton de pré‑réservation</p>
-          <code class="booking-token">{{ tokenDisplay }}</code>
+        <div class="booking-intro__actions">
+          <button
+            class="booking-icon-btn"
+            type="button"
+            aria-label="Rafraîchir le formulaire"
+            title="Rafraîchir le formulaire"
+            @click="fetchBookingForm"
+          >
+            <i class="pi pi-refresh" aria-hidden="true"></i>
+          </button>
+          <button
+            type="button"
+            class="booking-help-btn"
+            aria-label="Aide"
+            title="Rafraîchir le formulaire"
+            data-tip="Rafraîchir le formulaire"
+          >
+            ?
+          </button>
         </div>
-        <button
-          class="secondary mini"
-          type="button"
-          @click="fetchBookingForm"
-        >
-          Rafraîchir le formulaire
-        </button>
       </div>
       <div
         class="booking-status muted"
@@ -63,18 +72,18 @@
         {{ statusMessage }}
       </div>
 
+      <div class="booking-support-banner">
+        <i class="pi pi-phone booking-support-banner__icon" aria-hidden="true"></i>
+        <span>
+          Besoin d'aide pour votre réservation ?
+          <a href="tel:+33235082249">02 35 08 22 49</a>
+        </span>
+      </div>
+
       <div
-        v-if="partnerOrderId || hotelSummary || stayCards.length"
+        v-if="hotelSummary || stayCards.length"
         class="booking-summary"
       >
-        <div class="summary-row">
-          <div>
-            <p class="muted" style="margin:0">ID de commande partenaire</p>
-            <code class="booking-token">
-              {{ partnerOrderId || '-' }}
-            </code>
-          </div>
-        </div>
         <div class="summary-row">
           <div>
             <p class="muted" style="margin:0">Hôtel</p>
@@ -101,9 +110,43 @@
 
       <section class="card booking-form" aria-live="polite">
         <h3>Récapitulatif & paiement</h3>
+        <div
+          v-if="isMobileStepFlow"
+          class="mobile-booking-steps"
+          role="tablist"
+          aria-label="Étapes de réservation"
+        >
+          <button
+            type="button"
+            class="mobile-booking-steps__btn"
+            :class="{ 'mobile-booking-steps__btn--active': mobileStep === 1 }"
+            @click="backToFormStep"
+          >
+            1. Informations client
+          </button>
+          <button
+            type="button"
+            class="mobile-booking-steps__btn"
+            :class="{ 'mobile-booking-steps__btn--active': mobileStep === 2 }"
+            @click="goToPaymentStep"
+          >
+            2. Paiement
+          </button>
+        </div>
         <form class="booking-details-form" @submit.prevent>
           <div class="booking-payment-layout">
-            <div class="booking-payment-layout__left">
+            <div
+              v-if="showPaymentSection"
+              class="booking-payment-layout__left"
+            >
+              <button
+                v-if="isMobileStepFlow"
+                type="button"
+                class="secondary mini mobile-step-back"
+                @click="backToFormStep"
+              >
+                ← Modifier les informations client
+              </button>
               <div class="payment-summary-card">
                 <p class="muted" style="margin:0;">
                   Vous êtes sur le point de payer le produit suivant :
@@ -134,6 +177,43 @@
                   Vérifiez bien les dates, le nombre de voyageurs et le montant avant
                   de poursuivre le paiement.
                 </p>
+                <div class="promo-box" aria-live="polite">
+                  <label class="promo-box__field">
+                    Code promo
+                    <span class="promo-box__row">
+                      <input
+                        v-model="promoCodeInput"
+                        type="text"
+                        placeholder="SUMMER10"
+                        :disabled="promoLoading || !partnerOrderId"
+                      />
+                      <button
+                        type="button"
+                        class="secondary mini"
+                        :disabled="promoLoading || !promoCodeInput.trim() || !partnerOrderId"
+                        @click="applyPromo"
+                      >
+                        {{ promoLoading ? '...' : 'Appliquer' }}
+                      </button>
+                    </span>
+                  </label>
+                  <p v-if="appliedPromo" class="promo-box__success">
+                    {{ appliedPromo.code }} applique :
+                    -{{ formatPrice(appliedPromo.discount_amount, appliedPromo.currency_code) }}
+                  </p>
+                  <p v-if="promoMessage" class="promo-box__message" :class="{ 'promo-box__message--error': promoMessageType === 'error' }">
+                    {{ promoMessage }}
+                  </p>
+                  <button
+                    v-if="appliedPromo"
+                    type="button"
+                    class="promo-box__clear"
+                    :disabled="promoLoading"
+                    @click="removePromo"
+                  >
+                    Retirer le code promo
+                  </button>
+                </div>
               </div>
               <div class="payment-and-client__column">
                   <h4 class="payment-and-client__title">Méthode de paiement</h4>
@@ -333,8 +413,28 @@
                         </RouterLink>.
                       </span>
                     </label>
+                    <label
+                      class="conditions-acceptance"
+                      :class="{ 'conditions-acceptance--invalid': showPrivacyError }"
+                    >
+                      <input
+                        v-model="privacyAccepted"
+                        type="checkbox"
+                      />
+                      <span>
+                        J'ai lu et j'accepte la
+                        <RouterLink
+                          class="conditions-link"
+                          to="/politique-de-confidentialite"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          politique de confidentialité
+                        </RouterLink>.
+                      </span>
+                    </label>
                     <p v-if="showValidationHelp" class="validation-help">
-                      Veuillez remplir les champs obligatoires (*) et accepter les conditions.
+                      Veuillez remplir les champs obligatoires (*) et accepter les conditions ainsi que la politique de confidentialité.
                     </p>
                     <button
                       type="button"
@@ -346,14 +446,37 @@
                     </button>
                   </div>
 
-                  <div v-if="paymentMethod === 'paypal'" class="card" style="margin-top: .75rem;">
-                    <div v-if="!paypalReady" class="muted">Chargement PayPal…</div>
+                  <div v-if="paymentMethod === 'paypal'" class="card paypal-panel">
+                    <div v-if="!canUsePayPal" class="paypal-gate" aria-live="polite">
+                      <div class="paypal-gate__badge">
+                        <i class="pi pi-lock" aria-hidden="true"></i>
+                        PayPal verrouille
+                      </div>
+                      <h5 class="paypal-gate__title">Validez d'abord votre dossier de reservation</h5>
+                      <p class="paypal-gate__text">
+                        Le bouton PayPal apparait uniquement apres validation des champs
+                        obligatoires et acceptation des conditions de reservation.
+                      </p>
+                      <ul class="paypal-gate__list">
+                        <li
+                          v-for="issue in paypalGateIssues"
+                          :key="issue"
+                          class="paypal-gate__item"
+                        >
+                          {{ issue }}
+                        </li>
+                      </ul>
+                    </div>
+                    <div v-else-if="!paypalReady" class="muted">Chargement PayPal…</div>
                     <div v-else id="paypal-buttons"></div>
                   </div>
                 </div>
             </div>
 
-            <aside class="booking-payment-layout__right">
+            <aside
+              v-if="showClientSection"
+              class="booking-payment-layout__right"
+            >
               <div class="payment-and-client">
 
                 <div class="payment-and-client__column">
@@ -480,6 +603,21 @@
                       </button>
                     </div>
                   </div>
+                  <div
+                    v-if="isMobileStepFlow"
+                    class="mobile-step-continue"
+                  >
+                    <p v-if="showMobileStepValidation" class="validation-help">
+                      Veuillez remplir les champs obligatoires (*) avant de passer au paiement.
+                    </p>
+                    <button
+                      type="button"
+                      class="primary"
+                      @click="goToPaymentStep"
+                    >
+                      Continuer vers le paiement
+                    </button>
+                  </div>
                 </div>
               </div>
             </aside>
@@ -494,6 +632,7 @@
         <pre>booking/form etg: {{ formatDebug(debugBookingFormEtg) }}</pre>
         <pre>booking/form error: {{ formatDebug(debugBookingFormErr) }}</pre>
         <pre>kotan extern: {{ formatDebug(debugSystempay) }}</pre>
+        <pre>promo: {{ formatDebug(debugPromo) }}</pre>
         <pre>floa deal request: {{ formatDebug(debugFloaReq) }}</pre>
         <pre>floa deal response: {{ formatDebug(debugFloaRes) }}</pre>
         <pre>floa deal error: {{ formatDebug(debugFloaErr) }}</pre>
@@ -504,11 +643,13 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   requestBookingForm,
   createKotanExternPayment,
+  validatePromoCode,
+  clearPromoCode,
 } from '../services/bookingApi.js'
 import { API_BASE, safeJsonFetch } from '../services/httpClient.js'
 
@@ -517,7 +658,8 @@ const route = useRoute()
 const PREBOOK_SUMMARY_KEY = 'booking:lastPrebook'
 const MARKUP_PERCENT = 10
 const CONDITIONS_VERSION = 'booking_conditions_v1'
-const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID
+const PRIVACY_POLICY_VERSION = 'privacy_policy_v1'
+const MOBILE_STEP_MAX_WIDTH = 900
 
 const statusMessage = ref('')
 const statusType = ref('info')
@@ -526,6 +668,11 @@ const loading = ref(false)
 const partnerOrderId = ref('')
 const hotelSummary = ref(null)
 const stayCards = ref([])
+const appliedPromo = ref(null)
+const promoCodeInput = ref('')
+const promoLoading = ref(false)
+const promoMessage = ref('')
+const promoMessageType = ref('info')
 
 const traveller = ref({
   civility: '',
@@ -546,8 +693,13 @@ const paymentMethod = ref('floa')
 const floaProduct = ref('')
 const payLoading = ref(false)
 const paypalReady = ref(false)
+const paypalClientId = ref('')
 const conditionsAccepted = ref(false)
+const privacyAccepted = ref(false)
 const submitAttempted = ref(false)
+const mobileFormStepAttempted = ref(false)
+const isMobileStepFlow = ref(false)
+const mobileStep = ref(1)
 
 const autofillEnabled = ref(false)
 const autofillLoading = ref(false)
@@ -557,9 +709,11 @@ const debugBookingFormRes = ref(null)
 const debugBookingFormErr = ref(null)
 const debugBookingFormEtg = ref(null)
 const debugSystempay = ref(null)
+const debugPromo = ref(null)
 const debugFloaReq = ref(null)
 const debugFloaRes = ref(null)
 const debugFloaErr = ref(null)
+let mobileStepResizeHandler = null
 
 const storedPrebookSummary = ref(null)
 const storedPrebookPayload = ref(null)
@@ -572,9 +726,13 @@ const token = computed(
     '',
 )
 
-const tokenDisplay = computed(() => token.value || '-')
-
 const primaryPriceText = computed(() => {
+  if (appliedPromo.value?.final_amount != null) {
+    return formatPrice(
+      appliedPromo.value.final_amount,
+      appliedPromo.value.currency_code,
+    )
+  }
   if (!stayCards.value.length) return ''
   return stayCards.value[0]?.price || ''
 })
@@ -617,8 +775,49 @@ const showConditionsError = computed(
   () => submitAttempted.value && !conditionsAccepted.value,
 )
 
+const showPrivacyError = computed(
+  () => submitAttempted.value && !privacyAccepted.value,
+)
+
 const showValidationHelp = computed(
-  () => submitAttempted.value && (missingRequiredFields.value.length > 0 || !conditionsAccepted.value),
+  () => submitAttempted.value && (
+    missingRequiredFields.value.length > 0 ||
+    !conditionsAccepted.value ||
+    !privacyAccepted.value
+  ),
+)
+
+const canUsePayPal = computed(
+  () =>
+    conditionsAccepted.value &&
+    privacyAccepted.value &&
+    missingRequiredFields.value.length === 0,
+)
+
+const paypalGateIssues = computed(() => {
+  const issues = []
+  if (missingRequiredFields.value.length > 0) {
+    issues.push('Completez les informations client obligatoires.')
+  }
+  if (!conditionsAccepted.value) {
+    issues.push('Acceptez les conditions de reservation pour activer PayPal.')
+  }
+  if (!privacyAccepted.value) {
+    issues.push('Acceptez la politique de confidentialite pour activer PayPal.')
+  }
+  return issues
+})
+
+const showClientSection = computed(
+  () => !isMobileStepFlow.value || mobileStep.value === 1,
+)
+
+const showPaymentSection = computed(
+  () => !isMobileStepFlow.value || mobileStep.value === 2,
+)
+
+const showMobileStepValidation = computed(
+  () => mobileFormStepAttempted.value && missingRequiredFields.value.length > 0,
 )
 
 function setStatus(message, type = 'info') {
@@ -627,17 +826,48 @@ function setStatus(message, type = 'info') {
 }
 
 function showFieldError(fieldKey) {
-  return submitAttempted.value && missingRequiredFields.value.includes(fieldKey)
+  return (submitAttempted.value || mobileFormStepAttempted.value) &&
+    missingRequiredFields.value.includes(fieldKey)
 }
 
-async function fetchAutofillConfig() {
+function syncMobileStepFlow() {
+  if (typeof window === 'undefined') return
+  isMobileStepFlow.value = window.innerWidth <= MOBILE_STEP_MAX_WIDTH
+  if (!isMobileStepFlow.value) {
+    mobileStep.value = 1
+    mobileFormStepAttempted.value = false
+  }
+}
+
+function backToFormStep() {
+  mobileStep.value = 1
+}
+
+function goToPaymentStep() {
+  mobileFormStepAttempted.value = true
+  if (missingRequiredFields.value.length > 0) {
+    setStatus(
+      'Veuillez compléter les champs obligatoires avant de passer au paiement.',
+      'error',
+    )
+    return
+  }
+  mobileStep.value = 2
+  setStatus('Choisissez maintenant votre méthode de paiement.', 'info')
+}
+
+async function fetchFrontendConfig() {
   try {
     const { statusCode, data } = await safeJsonFetch(`${API_BASE}/api/config`)
-    if (statusCode === 200 && data && data.autofill === true) {
-      autofillEnabled.value = true
+    if (statusCode === 200 && data && typeof data === 'object') {
+      autofillEnabled.value = data.autofill === true
+      const clientId = String(data.paypalClientId || '').trim()
+      if (clientId) {
+        paypalClientId.value = clientId
+      }
     }
   } catch (_) {
-    // Config fetch failure: keep autofill disabled
+    // Config fetch failure: keep current defaults
   }
 }
 
@@ -724,6 +954,61 @@ function formatPrice(amount, currency) {
     }).format(num)
   } catch {
     return `${num} ${currency || ''}`.trim()
+  }
+}
+
+function setPromoMessage(message, type = 'info') {
+  promoMessage.value = message || ''
+  promoMessageType.value = type
+}
+
+async function applyPromo() {
+  const code = promoCodeInput.value.trim()
+  if (!code || promoLoading.value) return
+  if (!partnerOrderId.value) {
+    setPromoMessage("Chargez d'abord le formulaire de reservation.", 'error')
+    return
+  }
+  promoLoading.value = true
+  setPromoMessage('')
+  try {
+    const payload = {
+      code,
+      partner_order_id: partnerOrderId.value,
+    }
+    const email = String(traveller.value.email || '').trim()
+    if (email) payload.user_email = email
+    const response = await validatePromoCode(payload)
+    appliedPromo.value = response?.promo || null
+    debugPromo.value = response
+    if (appliedPromo.value) {
+      promoCodeInput.value = appliedPromo.value.code || code.toUpperCase()
+      setPromoMessage('Code promo applique.', 'info')
+    }
+  } catch (err) {
+    appliedPromo.value = null
+    debugPromo.value = {
+      message: err?.message || String(err || ''),
+      detail: err?._detail || null,
+    }
+    setPromoMessage('Code promo invalide ou expire.', 'error')
+  } finally {
+    promoLoading.value = false
+  }
+}
+
+async function removePromo() {
+  if (!partnerOrderId.value || promoLoading.value) return
+  promoLoading.value = true
+  try {
+    await clearPromoCode(partnerOrderId.value)
+    appliedPromo.value = null
+    promoCodeInput.value = ''
+    setPromoMessage('Code promo retire.', 'info')
+  } catch (err) {
+    setPromoMessage('Impossible de retirer le code promo.', 'error')
+  } finally {
+    promoLoading.value = false
   }
 }
 
@@ -1152,11 +1437,43 @@ function submitExternPaymentForm(action, externPaymentData) {
   form.submit()
 }
 
-function loadPayPalSdk() {
+function persistBookingCustomerSnapshot({
+  partnerId,
+  civility,
+  firstName,
+  lastName,
+  fullName,
+  email,
+  phone,
+}) {
+  if (typeof window === 'undefined') return
+  const ss = window.sessionStorage
+  if (!ss) return
+
+  ss.setItem('booking:lastPartnerOrderId', String(partnerId || '').trim())
+  ss.setItem(
+    'booking:lastCustomer',
+    JSON.stringify({
+      civility,
+      firstName,
+      lastName,
+      fullName,
+      email,
+      phone,
+    }),
+  )
+}
+
+async function loadPayPalSdk() {
   if (typeof window === 'undefined') return
 
-  if (!PAYPAL_CLIENT_ID) {
-    setStatus('PayPal indisponible: VITE_PAYPAL_CLIENT_ID manquant.', 'error')
+  if (!paypalClientId.value) {
+    await fetchFrontendConfig()
+  }
+
+  const clientId = String(paypalClientId.value || '').trim()
+  if (!clientId) {
+    setStatus('PayPal indisponible: PAYPAL_CLIENT_ID manquant côté serveur.', 'error')
     return
   }
 
@@ -1179,7 +1496,7 @@ function loadPayPalSdk() {
   const script = window.document.createElement('script')
   const currency = 'EUR'
   script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(
-    PAYPAL_CLIENT_ID,
+    clientId,
   )}&currency=${currency}&intent=capture&components=buttons`
   script.async = true
   script.setAttribute('data-paypal-sdk', '1')
@@ -1192,8 +1509,18 @@ function loadPayPalSdk() {
   window.document.head.appendChild(script)
 }
 
+function buildConditionsAcceptancePayload() {
+  return {
+    accepted: true,
+    conditions_version: CONDITIONS_VERSION,
+    privacy_policy_accepted: true,
+    privacy_policy_version: PRIVACY_POLICY_VERSION,
+    accepted_at_client: new Date().toISOString(),
+  }
+}
+
 async function renderPayPalButtons() {
-  if (!paypalReady.value || typeof window === 'undefined' || !window.paypal) return
+  if (!paypalReady.value || !canUsePayPal.value || typeof window === 'undefined' || !window.paypal) return
 
   const container = window.document.getElementById('paypal-buttons')
   if (!container) return
@@ -1204,13 +1531,26 @@ async function renderPayPalButtons() {
       createOrder: async () => {
         const ctx = buildCustomerContext()
         if (!ctx.ok) throw new Error(ctx.error)
+        if (!conditionsAccepted.value) {
+          throw new Error('Vous devez accepter les conditions avant de payer avec PayPal.')
+        }
+        if (!privacyAccepted.value) {
+          throw new Error('Vous devez accepter la politique de confidentialité avant de payer avec PayPal.')
+        }
+        if (missingRequiredFields.value.length > 0) {
+          throw new Error('Veuillez completer les champs obligatoires avant de payer avec PayPal.')
+        }
 
         const { statusCode, data } = await safeJsonFetch(
           `${API_BASE}/api/payments/paypal/order`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ partner_order_id: ctx.partnerId }),
+            body: JSON.stringify({
+              partner_order_id: ctx.partnerId,
+              customer_email: ctx.email,
+              conditions_acceptance: buildConditionsAcceptancePayload(),
+            }),
           },
         )
         if (statusCode !== 200 || !data?.orderId) {
@@ -1261,6 +1601,16 @@ async function startPayment(forcedMethod) {
 
   const method = forcedMethod || currentMethod
 
+  persistBookingCustomerSnapshot({
+    partnerId,
+    civility,
+    firstName,
+    lastName,
+    fullName,
+    email,
+    phone,
+  })
+
   // Kotan extern payment path (carte, Cofidis, or Floa bank → redirect to externPayment)
   if (
     method === 'systempay' ||
@@ -1269,16 +1619,6 @@ async function startPayment(forcedMethod) {
     method === 'floa'
   ) {
     try {
-      if (typeof window !== 'undefined') {
-        const ss = window.sessionStorage
-        if (ss) {
-          ss.setItem('booking:lastPartnerOrderId', partnerId)
-          ss.setItem(
-            'booking:lastCustomer',
-            JSON.stringify({ civility, fullName, email, phone }),
-          )
-        }
-      }
       const isCofidis = method === 'cofidis'
       const isFloa = method === 'floa'
       const isApplePay = method === 'applepay'
@@ -1314,11 +1654,7 @@ async function startPayment(forcedMethod) {
       const createPayload = {
         partner_order_id: partnerId,
         customer: kotanCustomer,
-        conditions_acceptance: {
-          accepted: true,
-          conditions_version: CONDITIONS_VERSION,
-          accepted_at_client: new Date().toISOString(),
-        },
+        conditions_acceptance: buildConditionsAcceptancePayload(),
       }
       if (isCofidis) createPayload.payment_variant = 'cofidis'
       if (isFloa) createPayload.payment_variant = 'floa'
@@ -1386,9 +1722,22 @@ function handlePrimaryAction() {
     )
     return
   }
+  if (!privacyAccepted.value) {
+    setStatus(
+      'Vous devez accepter la politique de confidentialité avant de poursuivre le paiement.',
+      'error',
+    )
+    return
+  }
   if (paymentMethod.value === 'paypal') {
+    const context = buildCustomerContext()
+    if (!context.ok) {
+      setStatus(context.error, 'error')
+      return
+    }
+    persistBookingCustomerSnapshot(context)
     setStatus('Utilisez les boutons PayPal ci-dessous pour payer.', 'info')
-    loadPayPalSdk()
+    void loadPayPalSdk()
     return
   }
   if (isFloaPayment.value) {
@@ -1399,19 +1748,28 @@ function handlePrimaryAction() {
 }
 
 watch(paymentMethod, (method) => {
-  if (method === 'paypal') loadPayPalSdk()
+  if (method === 'paypal' && canUsePayPal.value) void loadPayPalSdk()
 })
 
-watch([paypalReady, paymentMethod], async () => {
-  if (paymentMethod.value === 'paypal' && paypalReady.value) {
+watch(canUsePayPal, (enabled) => {
+  if (enabled && paymentMethod.value === 'paypal') void loadPayPalSdk()
+})
+
+watch([paypalReady, paymentMethod, canUsePayPal], async () => {
+  if (paymentMethod.value === 'paypal' && paypalReady.value && canUsePayPal.value) {
     await nextTick()
     renderPayPalButtons()
   }
 })
 
 onMounted(() => {
+  syncMobileStepFlow()
+  if (typeof window !== 'undefined') {
+    mobileStepResizeHandler = () => syncMobileStepFlow()
+    window.addEventListener('resize', mobileStepResizeHandler)
+  }
   loadPrebookSummaryFromSession()
-  fetchAutofillConfig()
+  fetchFrontendConfig()
   if (token.value) {
     fetchBookingForm()
   } else {
@@ -1420,6 +1778,13 @@ onMounted(() => {
       'error',
     )
   }
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined' && mobileStepResizeHandler) {
+    window.removeEventListener('resize', mobileStepResizeHandler)
+  }
+  mobileStepResizeHandler = null
 })
 </script>
 
@@ -1459,17 +1824,166 @@ onMounted(() => {
   gap: 1rem;
 }
 
+.booking-support-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.8rem 0.95rem;
+  border-radius: 1rem;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 0.9rem;
+}
+
+.booking-support-banner__icon {
+  font-size: 1rem;
+}
+
+.booking-support-banner a {
+  color: #7c2d12;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.booking-support-banner a:hover,
+.booking-support-banner a:focus-visible {
+  text-decoration: underline;
+}
+
+.mobile-booking-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0.55rem 0 0.75rem;
+}
+
+.mobile-booking-steps__btn {
+  width: auto;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: #f8fafc;
+  color: #334155;
+  padding: 0.5rem 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.mobile-booking-steps__btn--active {
+  border-color: rgba(165, 20, 30, 0.45);
+  background: rgba(165, 20, 30, 0.08);
+  color: #7f1d1d;
+}
+
+.mobile-step-back {
+  width: auto;
+  max-width: max-content;
+  margin-bottom: 0.55rem;
+}
+
+.mobile-step-continue {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
 .booking-intro {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 1rem;
 }
 
-.booking-token {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    'Liberation Mono', 'Courier New', monospace;
-  font-size: 0.8rem;
+.booking-intro__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.booking-icon-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  min-width: 2.2rem;
+  padding: 0;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: #eef2f7;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.booking-icon-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.booking-icon-btn:focus-visible {
+  outline: 2px solid rgba(165, 20, 30, 0.3);
+  outline-offset: 2px;
+}
+
+.booking-help-btn {
+  position: relative;
+  width: 1.9rem;
+  height: 1.9rem;
+  min-width: 1.9rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: #f1f5f9;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: help;
+}
+
+.booking-help-btn:hover,
+.booking-help-btn:focus-visible {
+  color: #334155;
+  border-color: rgba(148, 163, 184, 0.75);
+  background: #e2e8f0;
+}
+
+.booking-help-btn:focus-visible {
+  outline: 2px solid rgba(148, 163, 184, 0.3);
+  outline-offset: 2px;
+}
+
+.booking-help-btn::after {
+  content: attr(data-tip);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.45rem);
+  width: max-content;
+  max-width: min(240px, 72vw);
+  padding: 0.42rem 0.55rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.booking-help-btn:hover::after,
+.booking-help-btn:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .booking-status.error {
@@ -1533,6 +2047,11 @@ onMounted(() => {
   gap: 1rem;
 }
 
+.booking-payment-layout__left,
+.booking-payment-layout__right {
+  min-width: 0;
+}
+
 .booking-payment-layout__right {
   display: flex;
   flex-direction: column;
@@ -1580,12 +2099,17 @@ onMounted(() => {
   gap: 0.4rem;
   font-size: 0.9rem;
   color: #0f172a;
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: normal;
+  line-height: 1.35;
 }
 
 .payment-method-card__right {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  flex: 0 0 auto;
 }
 
 .payment-method-card__brands {
@@ -1676,6 +2200,55 @@ onMounted(() => {
   margin: 0.65rem 0 0;
   font-size: 0.7rem;
   color: #9ca3af;
+}
+
+.promo-box {
+  margin-top: 0.8rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.promo-box__field {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.promo-box__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.promo-box__row input {
+  min-width: 0;
+  text-transform: uppercase;
+}
+
+.promo-box__success,
+.promo-box__message {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #166534;
+}
+
+.promo-box__message--error {
+  color: #b91c1c;
+}
+
+.promo-box__clear {
+  justify-self: start;
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #376bb0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: underline;
 }
 
 .payment-primary-action {
@@ -1821,6 +2394,53 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
+.paypal-panel {
+  margin-top: 0.75rem;
+}
+
+.paypal-gate {
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.25rem 0.1rem;
+}
+
+.paypal-gate__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.paypal-gate__title {
+  margin: 0;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.paypal-gate__text {
+  margin: 0;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.paypal-gate__list {
+  margin: 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.35rem;
+  color: #0f172a;
+}
+
+.paypal-gate__item {
+  line-height: 1.4;
+}
+
 .floa-accordion {
   margin-top: 0.35rem;
   overflow: hidden;
@@ -1905,5 +2525,100 @@ onMounted(() => {
 .floa-plan--active .floa-plan__title,
 .floa-plan--active .floa-plan__meta {
   color: #ffffff;
+}
+
+@media (max-width: 1100px) {
+  .booking-payment-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .booking-payment-layout__right {
+    order: -1;
+  }
+}
+
+@media (max-width: 768px) {
+  .booking-view {
+    margin-top: 1rem;
+    gap: 0.75rem;
+  }
+
+  .booking-panel {
+    gap: 0.75rem;
+  }
+
+  .booking-intro {
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-card {
+    padding: 0.65rem;
+  }
+
+  .booking-form .row {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .payment-summary-card {
+    padding: 0.75rem 0.8rem;
+  }
+
+  .payment-summary-card__amount {
+    font-size: 1.15rem;
+  }
+
+  .payment-method-card {
+    padding: 0.6rem 0.7rem;
+  }
+
+  .payment-method-card__header {
+    align-items: flex-start;
+    gap: 0.55rem;
+  }
+
+  .payment-method-card__title {
+    font-size: 0.84rem;
+  }
+
+  .payment-method-card__hint {
+    font-size: 0.72rem;
+  }
+
+  .payment-method-card__logo {
+    height: 24px;
+    max-width: 84px;
+  }
+
+  .conditions-summary {
+    padding: 0.65rem 0.75rem;
+  }
+
+  .conditions-summary__title {
+    font-size: 0.82rem;
+  }
+
+  .conditions-summary__list {
+    font-size: 0.77rem;
+    gap: 0.3rem;
+  }
+
+  .conditions-acceptance {
+    font-size: 0.76rem;
+  }
+
+  .floa-plan {
+    flex: 1 1 100%;
+  }
+
+  .booking-help-btn::after {
+    display: none;
+  }
 }
 </style>

@@ -1,3 +1,15 @@
+<!--
+  EtgOrdersView
+  =============
+  Internal operations view for completed ETG / RateHawk supplier orders.
+
+  Main responsibilities:
+  - Load completed supplier orders for the active ETG environment.
+  - Display order IDs, partner references, dates, status and amounts.
+  - Surface ETG environment and partner configuration so test/prod data is clear.
+  - Help diagnose host allowlist and supplier access errors.
+-->
+
 <template>
   <section class="workspace__content etg-orders-view">
     <section class="card">

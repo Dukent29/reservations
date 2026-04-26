@@ -8,6 +8,7 @@ const payotaClient = require("../src/lib/payotaClient");
 const db = require("../utils/db");
 const { savePayment, parseAmount, getPrebookSummary, insertApiLog } = require("../utils/repo");
 const paypalClient = require("../src/lib/paypalClient");
+const promoCodeModel = require("../models/promoCodeModel");
 
 const MARKUP_PERCENT = 10;
 const KOTAN_EXTERN_PAYMENT_URL = process.env.KOTAN_EXTERN_PAYMENT_URL || "https://kotan-voyages.com/externPayment";
@@ -109,6 +110,10 @@ function findHotelFromPrebookSummary(prebookSummary) {
     payloadHotel?.category ??
     payloadHotel?.rg_ext?.class
   );
+  const normalizedStars =
+    Number.isFinite(stars) && stars > 0
+      ? Math.max(1, Math.min(5, Math.round(stars > 5 && stars <= 10 ? stars / 2 : stars)))
+      : null;
 
   return {
     name: hotelName || "Hotel",
@@ -125,7 +130,7 @@ function findHotelFromPrebookSummary(prebookSummary) {
       "",
     zipcode: payloadHotel?.postal_code || "",
     country: normalizeCountry(summary?.hotel?.country || payloadHotel?.country || payloadHotel?.country_name || "FR"),
-    stars: Number.isFinite(stars) && stars > 0 ? stars : null,
+    stars: normalizedStars,
     checkIn: summary?.stay?.checkin || "",
     checkOut: summary?.stay?.checkout || "",
     rooms: Array.isArray(summary?.stay?.guests) ? summary.stay.guests.length : 1,
@@ -313,15 +318,14 @@ async function createHotelDeal(req, res, next) {
         throw httpError(400, "invalid_amount_in_booking_form", { tried_candidates: candidates, booking_form: bf });
       }
     }
-    const prebookSummary = bf.prebook_token ? await getPrebookSummary(bf.prebook_token) : null;
-    const summaryAmount = Number(prebookSummary?.summary?.room?.price ?? prebookSummary?.room?.price);
-    const formPricingAmount = Number(bf?.form?.pricing?.total_amount);
+    const promoPricing = await promoCodeModel.resolvePayableAmount(
+      bf,
+      customer.email || null,
+    );
     const resolvedAmount =
-      Number.isFinite(summaryAmount) && summaryAmount > 0
-        ? summaryAmount
-        : Number.isFinite(formPricingAmount) && formPricingAmount > 0
-          ? formPricingAmount
-          : applyMarkupAmount(amount);
+      Number.isFinite(Number(promoPricing?.amount)) && Number(promoPricing.amount) > 0
+        ? Number(promoPricing.amount)
+        : applyMarkupAmount(amount);
     const currency = bf.currency_code || "EUR";
 
     const resolvedAmountCents = Math.round(resolvedAmount * 100);
@@ -436,7 +440,7 @@ async function createHotelDeal(req, res, next) {
       amount: resolvedAmount,
       currencyCode: currency,
       externalReference: dealReference,
-      payload: { deal, eligibility, customer: safeCustomer },
+      payload: { deal, eligibility, customer: safeCustomer, promo: promoPricing?.promo || null },
     });
 
     res.json({
@@ -645,12 +649,18 @@ async function createKotanExternPayment(req, res, next) {
     if (!isAcceptedFlag(conditions_acceptance?.accepted)) {
       throw httpError(400, "conditions_acceptance_required");
     }
+    if (!isAcceptedFlag(conditions_acceptance?.privacy_policy_accepted)) {
+      throw httpError(400, "privacy_policy_acceptance_required");
+    }
 
     const conditionsAcceptanceProof = {
       accepted_at_server: new Date().toISOString(),
       ip: getRequestIp(req),
       user_agent: String(req.headers?.["user-agent"] || "").trim() || null,
       conditions_version: String(conditions_acceptance?.conditions_version || "booking_conditions_v1").trim(),
+      privacy_policy_version: String(
+        conditions_acceptance?.privacy_policy_version || "privacy_policy_v1"
+      ).trim(),
       accepted_at_client:
         typeof conditions_acceptance?.accepted_at_client === "string" &&
         conditions_acceptance.accepted_at_client.trim()
@@ -669,7 +679,14 @@ async function createKotanExternPayment(req, res, next) {
     const guestChildren = resolvedPassengers.filter((p) => String(p?.type || "").toLowerCase() === "child").length;
     const guestBabies = resolvedPassengers.filter((p) => String(p?.type || "").toLowerCase() === "baby").length;
 
-    const amountTotal = deriveTotalAmount({ prebookSummary, bookingFormRow: bf });
+    const promoPricing = await promoCodeModel.resolvePayableAmount(
+      bf,
+      customer.email || null,
+    );
+    const amountTotal =
+      Number.isFinite(Number(promoPricing?.amount)) && Number(promoPricing.amount) > 0
+        ? Number(promoPricing.amount)
+        : deriveTotalAmount({ prebookSummary, bookingFormRow: bf });
     if (!Number.isFinite(amountTotal) || amountTotal <= 0) {
       throw httpError(400, "unable_to_resolve_total_amount");
     }
@@ -784,6 +801,7 @@ async function createKotanExternPayment(req, res, next) {
         endpoint: KOTAN_EXTERN_PAYMENT_URL,
         extern_payment_data: externPaymentData,
         conditions_acceptance_proof: conditionsAcceptanceProof,
+        promo: promoPricing?.promo || null,
       },
     });
 
@@ -985,16 +1003,45 @@ async function getKotanExternPaymentInfo(req, res, next) {
     next(httpError(502, "KOTAN_EXTERN_INFO_FAILED", error.message || String(error || "")));
   }
 }
+
 // POST /api/payments/paypal/order
 async function createPayPalOrder(req, res, next) {
   try {
-    const { partner_order_id } = req.body || {};
+    const { partner_order_id, conditions_acceptance, customer_email } = req.body || {};
     if (!partner_order_id) throw httpError(400, "partner_order_id is required");
+    if (!isAcceptedFlag(conditions_acceptance?.accepted)) {
+      throw httpError(400, "conditions_acceptance_required");
+    }
+    if (!isAcceptedFlag(conditions_acceptance?.privacy_policy_accepted)) {
+      throw httpError(400, "privacy_policy_acceptance_required");
+    }
+
+    const conditionsAcceptanceProof = {
+      accepted_at_server: new Date().toISOString(),
+      ip: getRequestIp(req),
+      user_agent: String(req.headers?.["user-agent"] || "").trim() || null,
+      conditions_version: String(conditions_acceptance?.conditions_version || "booking_conditions_v1").trim(),
+      privacy_policy_version: String(
+        conditions_acceptance?.privacy_policy_version || "privacy_policy_v1"
+      ).trim(),
+      accepted_at_client:
+        typeof conditions_acceptance?.accepted_at_client === "string" &&
+        conditions_acceptance.accepted_at_client.trim()
+          ? conditions_acceptance.accepted_at_client.trim()
+          : null,
+    };
 
     const bf = await getBookingFormByPartnerOrderId(partner_order_id);
     const prebookSummary = bf.prebook_token ? await getPrebookSummary(bf.prebook_token) : null;
 
-    const amountTotal = deriveTotalAmount({ prebookSummary, bookingFormRow: bf });
+    const promoPricing = await promoCodeModel.resolvePayableAmount(
+      bf,
+      customer_email || null,
+    );
+    const amountTotal =
+      Number.isFinite(Number(promoPricing?.amount)) && Number(promoPricing.amount) > 0
+        ? Number(promoPricing.amount)
+        : deriveTotalAmount({ prebookSummary, bookingFormRow: bf });
     if (!Number.isFinite(amountTotal) || amountTotal <= 0) {
       throw httpError(400, "unable_to_resolve_total_amount");
     }
@@ -1026,7 +1073,11 @@ async function createPayPalOrder(req, res, next) {
       amount: amountTotal,
       currencyCode: currency,
       externalReference: order.id, // PayPal orderId
-      payload: { order },
+      payload: {
+        order,
+        conditions_acceptance_proof: conditionsAcceptanceProof,
+        promo: promoPricing?.promo || null,
+      },
     });
 
     res.json({ status: "ok", orderId: order.id, order });

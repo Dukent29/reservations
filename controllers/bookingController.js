@@ -8,17 +8,58 @@ const httpError = require("../src/utils/httpError");
 const {
   saveBookingForm,
   saveBooking,
+  getPrebookSummary,
   parseAmount,
   insertApiLog,
+  updateBookingVoucherState,
+  createAdminNotification,
 } = require("../utils/repo");
 const db = require("../utils/db");
+const { queueVoucherEmailJob } = require("../services/voucherEmailService");
+const promoCodeModel = require("../models/promoCodeModel");
+const {
+  normalizeVoucherLanguage,
+  downloadVoucherPdfWithRetry,
+} = require("../services/etgVoucherClient");
 
 const KOTAN_EXTERN_INFO_URL = process.env.KOTAN_EXTERN_INFO_URL || "";
 const KOTAN_EXTERN_ACCEPT_SELF_SIGNED =
   String(process.env.KOTAN_EXTERN_ACCEPT_SELF_SIGNED || "").toLowerCase() ===
   "true";
+const ETG_BOOKING_CONTACT_EMAIL = String(
+  process.env.ETG_BOOKING_CONTACT_EMAIL || "kotanvoyages@outlook.com",
+).trim();
 
 const DEFAULT_PRICE_INCREASE_PERCENT = 10;
+const ETG_VOUCHER_AUTO_REQUEUE_WINDOWS_MINUTES = String(
+  process.env.ETG_VOUCHER_AUTO_REQUEUE_WINDOWS_MINUTES || "2,5,6",
+)
+  .split(",")
+  .map((value) => Number.parseInt(String(value).trim(), 10))
+  .filter((value) => Number.isFinite(value) && value > 0);
+const ETG_VOUCHER_AUTO_MAX_CYCLES = Math.max(
+  1,
+  Number.parseInt(process.env.ETG_VOUCHER_AUTO_MAX_CYCLES, 10) || 4,
+);
+
+function buildEtgBookingPayload(payload) {
+  if (!ETG_BOOKING_CONTACT_EMAIL) return payload;
+
+  return {
+    ...payload,
+    user: {
+      ...(payload.user || {}),
+      email: ETG_BOOKING_CONTACT_EMAIL,
+    },
+    supplier_data:
+      payload.supplier_data && typeof payload.supplier_data === "object"
+        ? {
+            ...payload.supplier_data,
+            email: ETG_BOOKING_CONTACT_EMAIL,
+          }
+        : payload.supplier_data,
+  };
+}
 
 function applyMarkupAmount(amount, percent) {
   const num = Number(amount);
@@ -26,6 +67,132 @@ function applyMarkupAmount(amount, percent) {
   const markup = Number(percent);
   const ratio = Number.isFinite(markup) ? 1 + markup / 100 : 1;
   return Math.round(num * ratio * 100) / 100;
+}
+
+function toSafeInlineFilename(filename, fallback) {
+  const raw = String(filename || fallback || "voucher.pdf").trim();
+  return raw.replace(/["\r\n]/g, "_") || "voucher.pdf";
+}
+
+function getVoucherAutoDelayMs(nextCycle) {
+  if (!ETG_VOUCHER_AUTO_REQUEUE_WINDOWS_MINUTES.length) {
+    return 2 * 60 * 1000;
+  }
+  const index = Math.max(
+    0,
+    Math.min(
+      ETG_VOUCHER_AUTO_REQUEUE_WINDOWS_MINUTES.length - 1,
+      nextCycle - 2,
+    ),
+  );
+  return ETG_VOUCHER_AUTO_REQUEUE_WINDOWS_MINUTES[index] * 60 * 1000;
+}
+
+function buildVoucherHttpError(error, partnerOrderId) {
+  const code = String(error?.message || "voucher_retrieve_failed");
+  const statusCode = Number(error?.statusCode || error?.http || 0);
+  const details = {
+    partner_order_id: partnerOrderId,
+  };
+
+  if (error?.details && typeof error.details === "object") {
+    Object.assign(details, error.details);
+  }
+  if (error?.debug && typeof error.debug === "object") {
+    details.etg = error.debug;
+  }
+
+  if (error?.retryable) {
+    return httpError(409, code, { ...details, retryable: true });
+  }
+  if (code === "order_not_found") {
+    return httpError(404, code, details);
+  }
+  if (statusCode >= 400) {
+    return httpError(statusCode, code, details);
+  }
+  return httpError(502, code, details);
+}
+
+async function fetchVoucherForBooking(partnerOrderId, options = {}) {
+  const language = normalizeVoucherLanguage(options.language);
+
+  await updateBookingVoucherState(partnerOrderId, {
+    voucherStatus: "queued",
+    voucherAttempts: 0,
+    voucherLastError: null,
+  }).catch((error) => {
+    console.error(
+      "[voucher] failed to persist queued state:",
+      error?.message || String(error),
+    );
+  });
+
+  return downloadVoucherPdfWithRetry(partnerOrderId, language, {
+    onAttempt: async ({ attempt, status, error, filename }) => {
+      const fields = {
+        voucherStatus: status,
+        voucherAttempts: attempt,
+        voucherLastError: error ? String(error.message || error) : null,
+        voucherLastAttemptAt: new Date().toISOString(),
+      };
+
+      if (filename) {
+        fields.voucherFilename = filename;
+      }
+      if (status === "ready") {
+        fields.voucherReadyAt = new Date().toISOString();
+      }
+
+      await updateBookingVoucherState(partnerOrderId, fields).catch((dbError) => {
+        console.error(
+          "[voucher] failed to persist attempt state:",
+          dbError?.message || String(dbError),
+        );
+      });
+    },
+  });
+}
+
+function queueVoucherRetrieval({ partnerOrderId, language = "fr", cycle = 1 }) {
+  const run = async () => {
+    try {
+      await fetchVoucherForBooking(partnerOrderId, { language });
+    } catch (error) {
+      console.warn(
+        "[voucher] retrieval cycle failed",
+        JSON.stringify({
+          partnerOrderId,
+          cycle,
+          retryable: Boolean(error?.retryable),
+          error: error?.message || String(error),
+        }),
+      );
+
+      const nextCycle = cycle + 1;
+      if (!error?.retryable || nextCycle > ETG_VOUCHER_AUTO_MAX_CYCLES) {
+        return;
+      }
+
+      const delayMs = getVoucherAutoDelayMs(nextCycle);
+      setTimeout(() => {
+        queueVoucherRetrieval({
+          partnerOrderId,
+          language,
+          cycle: nextCycle,
+        });
+      }, delayMs);
+    }
+  };
+
+  setImmediate(() => {
+    run().catch((error) => {
+      console.error(
+        "[voucher] background retrieval failed:",
+        error?.message || String(error),
+      );
+    });
+  });
 }
 
 /**
@@ -214,6 +381,12 @@ async function startBooking(req, res, next) {
   try {
     const body = req.body || {};
     const payload = bookingModel.buildBookingStartPayload(body);
+    const customerEmail = String(payload.user?.email || "").trim().toLowerCase() || null;
+    const mainGuest = Array.isArray(payload.rooms?.[0]?.guests)
+      ? payload.rooms[0].guests[0] || {}
+      : {};
+    const customerName =
+      `${mainGuest.first_name || ""} ${mainGuest.last_name || ""}`.trim() || null;
 
     // Enforce that payment has been successfully completed before calling ETG (unless payment_check_deactive=true).
     const partnerOrderId = payload.partner?.partner_order_id || null;
@@ -419,6 +592,20 @@ async function startBooking(req, res, next) {
       }
     }
 
+    let appliedPromo = null;
+    try {
+      appliedPromo = await promoCodeModel.getAppliedPromoForBooking(
+        partnerOrderId,
+        customerEmail,
+      );
+    } catch (promoError) {
+      if (promoError && (promoError.statusCode || promoError.http)) {
+        throw promoError;
+      }
+      console.error("[booking/start] promo revalidation failed:", promoError.message);
+      throw httpError(500, "promo_revalidation_failed");
+    }
+
     // ETG finds the  dorder by partner_order_id; the order is created only when we called booking/form first.
     // We need book_hash so ETG can tie the finish to the same prebook; load from DB if not in body.
     if (!payload.book_hash && !payload.prebook_token) {
@@ -449,9 +636,13 @@ async function startBooking(req, res, next) {
       });
     }
 
+    const etgPayload = buildEtgBookingPayload(payload);
+
+    const paymentType = payload.payment_type || {};
+
     let start;
     try {
-      start = await bookingModel.startBookingProcess(payload);
+      start = await bookingModel.startBookingProcess(etgPayload);
     } catch (etgErr) {
       const code = etgErr && etgErr.message ? String(etgErr.message) : "";
       if (code === "order_not_found") {
@@ -474,7 +665,6 @@ async function startBooking(req, res, next) {
     try {
       const etgOrderId = start?.order_id || start?.id || null;
       const user = payload.user || {};
-      const paymentType = payload.payment_type || {};
       const status = start?.status || "pending";
 
       await saveBooking({
@@ -485,13 +675,54 @@ async function startBooking(req, res, next) {
         userEmail: user.email || null,
         userPhone: user.phone || null,
         userName:
-          `${user.first_name || ""} ${user.last_name || ""}`.trim() || null,
+          customerName ||
+          `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+          null,
         amount: paymentType.amount,
         currencyCode: paymentType.currency_code,
         raw: start,
       });
+      if (appliedPromo) {
+        await promoCodeModel.recordPromoUsage({
+          partnerOrderId,
+          userId: customerEmail,
+          bookingId: etgOrderId || null,
+          metadata: { source: "booking_start" },
+        });
+      }
     } catch (e) {
       console.error("[DB] saveBooking failed:", e.message);
+    }
+
+    createAdminNotification({
+      kind: "booking_created",
+      title: "Nouvelle reservation",
+      message: customerName
+        ? `${customerName} a finalise la reservation ${partnerOrderId}.`
+        : `Nouvelle reservation ${partnerOrderId} finalisee.`,
+      entityType: "booking",
+      entityKey: partnerOrderId,
+      payload: {
+        partner_order_id: partnerOrderId,
+        user_email: customerEmail,
+        user_name: customerName,
+        amount: paymentType.amount || null,
+        currency_code: paymentType.currency_code || null,
+      },
+    });
+
+    queueVoucherRetrieval({
+      partnerOrderId,
+      language: payload.language || "fr",
+    });
+
+    if (customerEmail) {
+      queueVoucherEmailJob({
+        partnerOrderId,
+        customerEmail,
+        customerName,
+        language: payload.language || "fr",
+      });
     }
 
     const responseData = { status: "ok", start };
@@ -536,6 +767,66 @@ async function checkBooking(req, res, next) {
     res.json({ status: "ok", check });
   } catch (error) {
     next(error);
+  }
+}
+
+async function downloadVoucher(req, res, next) {
+  const logRequest = {
+    method: req.method || "GET",
+    url: req.originalUrl || req.url || "/api/booking/voucher",
+    query: req.query || {},
+  };
+
+  try {
+    const { partner_order_id, language = "fr" } = req.query || {};
+    const voucher = await fetchVoucherForBooking(partner_order_id, { language });
+
+    res.setHeader("Content-Type", voucher.contentType || "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${toSafeInlineFilename(
+        voucher.filename,
+        `bedtrip-voucher-${partner_order_id}.pdf`,
+      )}"`,
+    );
+
+    await insertApiLog({
+      endpoint: "GET /api/booking/voucher",
+      request: logRequest,
+      response: {
+        status: "ok",
+        partner_order_id,
+        filename: voucher.filename,
+        content_type: voucher.contentType,
+        size: voucher.buffer?.length || 0,
+      },
+      statusCode: 200,
+    });
+
+    return res.send(voucher.buffer);
+  } catch (error) {
+    const wrappedError = buildVoucherHttpError(
+      error,
+      req.query?.partner_order_id,
+    );
+    const statusCode = wrappedError.statusCode || wrappedError.http || 500;
+
+    await insertApiLog({
+      endpoint: "GET /api/booking/voucher",
+      request: logRequest,
+      response: {
+        error: wrappedError.message || "voucher_retrieve_failed",
+        code: error?.code || wrappedError.message,
+        ...(wrappedError.details && typeof wrappedError.details === "object"
+          ? wrappedError.details
+          : {}),
+      },
+      statusCode,
+    }).catch((e) =>
+      console.error("[DB] booking/voucher api_log failed:", e.message),
+    );
+
+    next(wrappedError);
   }
 }
 
@@ -589,6 +880,10 @@ async function getBookingStatus(req, res, next) {
       [partner_order_id],
     );
     const bookingForm = bookingFormResult.rows[0] || null;
+    const prebookSummary =
+      bookingForm?.prebook_token
+        ? await getPrebookSummary(bookingForm.prebook_token)
+        : null;
 
     // Simple synthesized status for frontend convenience
     let combinedStatus = "unknown";
@@ -601,6 +896,22 @@ async function getBookingStatus(req, res, next) {
       combinedStatus = paymentStatus;
     }
 
+    const voucher = booking
+      ? {
+          status: booking.voucher_status || null,
+          attempts: Number(booking.voucher_attempts || 0),
+          last_error: booking.voucher_last_error || null,
+          ready_at: booking.voucher_ready_at || null,
+          filename: booking.voucher_filename || null,
+        }
+      : {
+          status: null,
+          attempts: 0,
+          last_error: null,
+          ready_at: null,
+          filename: null,
+        };
+
     const responseData = {
       status: "ok",
       partner_order_id,
@@ -608,6 +919,8 @@ async function getBookingStatus(req, res, next) {
       booking,
       payment,
       booking_form: bookingForm,
+      prebook_summary: prebookSummary,
+      voucher,
     };
     await insertApiLog({
       endpoint: "GET /api/booking/status",
@@ -733,6 +1046,8 @@ module.exports = {
   bookingForm,
   startBooking,
   checkBooking,
+  fetchVoucherForBooking,
+  downloadVoucher,
   getBookingStatus,
   listReservations,
 };
